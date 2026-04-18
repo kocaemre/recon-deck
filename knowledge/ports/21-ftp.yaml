@@ -1,0 +1,51 @@
+schema_version: 1
+port: 21
+service: ftp
+protocol: tcp
+risk: high
+quick_facts:
+  - "FTP transmits credentials in cleartext unless wrapped in TLS (FTPS)"
+  - "Anonymous login is the first thing to try"
+  - "Look for writable directories that may allow webshell upload"
+checks:
+  - key: ftp-anonymous-login
+    label: "Tested anonymous login (anonymous / anonymous)"
+  - key: ftp-banner-version
+    label: "Captured FTP banner / version string"
+  - key: ftp-list-files
+    label: "Listed files and noted writable directories"
+  - key: ftp-known-vuln-check
+    label: "Checked banner against known FTP CVEs"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "Anonymous login attempt"
+    template: "ftp -nv {IP} {PORT}"
+  - label: "nmap FTP scripts"
+    template: "nmap -p{PORT} --script=ftp-anon,ftp-bounce,ftp-syst,ftp-vsftpd-backdoor {IP}"
+  - label: "Hydra brute force"
+    template: "hydra -L users.txt -P passwords.txt ftp://{IP}:{PORT}"
+default_creds:
+  - username: anonymous
+    password: anonymous
+    notes: "Classic anonymous login — also try empty password"
+  - username: anonymous
+    password: ""
+    notes: "Some servers accept anonymous with no password"
+  - username: ftp
+    password: ftp
+    notes: "Default on some embedded devices"
+known_vulns:
+  - match: "vsFTPd 2.3.4"
+    note: "Backdoor — smiley-face username triggers bind shell on tcp/6200 (CVE-2011-2523)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+  - match: "ProFTPD 1.3.5"
+    note: "Mod_copy RCE (CVE-2015-3306)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+resources:
+  - title: "21 - Pentesting FTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+    author: HackTricks
+  - title: "FTP Default Credentials"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
+    author: SecLists

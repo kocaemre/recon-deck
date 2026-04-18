@@ -1,0 +1,22 @@
+schema_version: 1
+port: 143
+service: imap
+protocol: tcp
+risk: medium
+quick_facts:
+  - "Cleartext IMAP — credentials sniffable"
+  - "CAPABILITY response often leaks server software/version"
+checks:
+  - key: imap-banner
+    label: "Captured IMAP banner / CAPABILITY"
+  - key: imap-creds
+    label: "Tested credentials"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "nmap IMAP scripts"
+    template: "nmap -p{PORT} --script=imap-capabilities,imap-ntlm-info,imap-brute {IP}"
+resources:
+  - title: "143 - Pentesting IMAP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-imap"
+    author: HackTricks

@@ -1,0 +1,25 @@
+schema_version: 1
+port: 111
+service: rpcbind
+protocol: tcp
+risk: medium
+aliases:
+  - portmapper
+  - sunrpc
+quick_facts:
+  - "Lists registered RPC programs — often points to NFS, NIS, mountd"
+  - "Useful pivot to find NFS exports on port 2049"
+checks:
+  - key: rpcbind-list-programs
+    label: "Listed RPC programs via rpcinfo"
+  - key: rpcbind-nfs-exports
+    label: "Followed up on NFS / mountd if listed"
+commands:
+  - label: "rpcinfo enumerate"
+    template: "rpcinfo -p {IP}"
+  - label: "nmap RPC scripts"
+    template: "nmap -p{PORT} --script=rpcinfo,nfs-showmount {IP}"
+resources:
+  - title: "111 - Pentesting Portmapper"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rpcbind"
+    author: HackTricks

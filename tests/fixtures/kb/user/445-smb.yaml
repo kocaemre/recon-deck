@@ -1,0 +1,13 @@
+schema_version: 1
+port: 445
+service: smb
+protocol: tcp
+risk: critical
+aliases:
+  - microsoft-ds
+commands:
+  - label: "User-override: enum4linux-ng"
+    template: "enum4linux-ng -A {IP}"
+resources:
+  - title: "User notes — internal SMB playbook"
+    url: "https://example.internal/smb-playbook"

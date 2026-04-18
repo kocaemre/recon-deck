@@ -1,0 +1,8 @@
+schema_version: 1
+port: 80
+service: http
+protocol: tcp
+risk: medium
+resources:
+  - title: "Malicious link"
+    url: "javascript:alert(1)"

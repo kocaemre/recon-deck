@@ -1,0 +1,38 @@
+schema_version: 1
+port: 5985
+service: winrm
+protocol: tcp
+risk: high
+aliases:
+  - wsman
+  - http-wsman
+quick_facts:
+  - "WinRM = remote PowerShell — credentials grant interactive shell"
+  - "5985 = HTTP, 5986 = HTTPS"
+  - "evil-winrm is the canonical exploitation tool"
+checks:
+  - key: winrm-port-open
+    label: "Confirmed WinRM listening on 5985/5986"
+  - key: winrm-creds
+    label: "Tested discovered credentials"
+  - key: winrm-shell-access
+    label: "Obtained interactive shell via evil-winrm"
+commands:
+  - label: "nmap WinRM"
+    template: "nmap -p{PORT} --script=http-wsdiscover,http-wsman {IP}"
+  - label: "crackmapexec WinRM spray"
+    template: "crackmapexec winrm {IP} -u users.txt -p passwords.txt"
+  - label: "evil-winrm shell"
+    template: "evil-winrm -i {IP} -u administrator -p 'password'"
+default_creds:
+  - username: administrator
+    password: administrator
+    notes: "Weak admin password reuse"
+known_vulns:
+  - match: "Windows WinRM"
+    note: "Credential reuse + lateral movement primary use case"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/5985-5986-pentesting-winrm"
+resources:
+  - title: "5985 - Pentesting WinRM"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/5985-5986-pentesting-winrm"
+    author: HackTricks

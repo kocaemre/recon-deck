@@ -1,0 +1,12 @@
+schema_version: 1
+port: 80
+service: http
+protocol: tcp
+risk: medium
+commands:
+  - label: "Bad placeholder"
+    template: "nmap {FOO} {IP}"
+resources:
+  - title: "HTTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks

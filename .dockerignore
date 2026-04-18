@@ -1,0 +1,20 @@
+# Excluded from Docker build context to keep the build fast and the image small.
+
+# From .gitignore
+.planning/
+node_modules/
+*.log
+.DS_Store
+data/
+*.db
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Build / VCS / dev-tooling not needed at build time
+.git/
+.github/
+.claude/
+tests/
+prd.md
+ARCHITECTURE.md

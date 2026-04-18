@@ -1,0 +1,46 @@
+schema_version: 1
+port: 443
+service: https
+protocol: tcp
+risk: low
+aliases:
+  - ssl/http
+  - ssl/https
+  - http-ssl
+quick_facts:
+  - "Same web recon as port 80 plus TLS introspection"
+  - "Cert SAN/CN often reveals additional virtual hosts and internal names"
+  - "Check for HTTP/2, HSTS, TLS 1.0/1.1 deprecation, weak ciphers"
+checks:
+  - key: https-cert-inspect
+    label: "Inspected certificate (CN, SANs, expiry, issuer)"
+  - key: https-tls-config
+    label: "Reviewed TLS versions and cipher suites"
+  - key: https-vhost-enum
+    label: "Enumerated virtual hosts via cert SANs and Host header"
+  - key: https-dir-bruteforce
+    label: "Ran directory and file brute force"
+  - key: https-cve-scan
+    label: "Checked server banner against known CVEs"
+commands:
+  - label: "Inspect TLS certificate"
+    template: "openssl s_client -connect {IP}:{PORT} -servername {HOST} </dev/null 2>/dev/null | openssl x509 -text -noout"
+  - label: "TLS scan (sslscan)"
+    template: "sslscan {IP}:{PORT}"
+  - label: "Quick fingerprint"
+    template: "whatweb https://{IP}:{PORT}"
+  - label: "nmap HTTPS scripts"
+    template: "nmap -p{PORT} --script=ssl-cert,ssl-enum-ciphers,http-headers {IP}"
+  - label: "gobuster directory brute force (HTTPS)"
+    template: "gobuster dir -u https://{IP}:{PORT} -k -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+known_vulns:
+  - match: "OpenSSL 1.0.1"
+    note: "Heartbleed (CVE-2014-0160) memory disclosure"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+resources:
+  - title: "80,443 - Pentesting Web Methodology"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks
+  - title: "TLS Cheatsheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"
+    author: OWASP

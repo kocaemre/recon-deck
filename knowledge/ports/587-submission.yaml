@@ -1,0 +1,26 @@
+schema_version: 1
+port: 587
+service: submission
+protocol: tcp
+risk: medium
+aliases:
+  - smtp-submission
+quick_facts:
+  - "Mail submission with STARTTLS — auth required for relay"
+  - "Same enumeration as port 25 plus STARTTLS upgrade"
+checks:
+  - key: submission-banner
+    label: "Captured submission banner / EHLO response"
+  - key: submission-starttls
+    label: "Verified STARTTLS upgrade and post-TLS commands"
+  - key: submission-creds
+    label: "Tested credentials via AUTH"
+commands:
+  - label: "STARTTLS via openssl"
+    template: "openssl s_client -connect {IP}:{PORT} -starttls smtp"
+  - label: "nmap submission scripts"
+    template: "nmap -p{PORT} --script=smtp-commands,smtp-enum-users,smtp-brute {IP}"
+resources:
+  - title: "25,465,587 - Pentesting SMTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    author: HackTricks

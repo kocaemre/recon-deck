@@ -1,0 +1,52 @@
+schema_version: 1
+port: 80
+service: http
+protocol: tcp
+risk: medium
+aliases:
+  - www
+  - http-alt
+quick_facts:
+  - "Always fingerprint the web server, framework, and CMS first"
+  - "Check robots.txt, sitemap.xml, and common admin paths"
+  - "Run a directory brute force in parallel with manual exploration"
+checks:
+  - key: http-banner-fingerprint
+    label: "Identified server / framework / language stack"
+  - key: http-robots-sitemap
+    label: "Reviewed robots.txt and sitemap.xml"
+  - key: http-vhost-enum
+    label: "Tested for virtual hosts / Host header routing"
+  - key: http-dir-bruteforce
+    label: "Ran directory and file brute force"
+  - key: http-default-creds
+    label: "Tried default credentials on any login pages"
+  - key: http-cve-scan
+    label: "Checked banner / version against known CVEs"
+commands:
+  - label: "Quick fingerprint"
+    template: "whatweb http://{IP}:{PORT}"
+  - label: "Headers + banner"
+    template: "curl -sI http://{IP}:{PORT}/"
+  - label: "nikto baseline scan"
+    template: "nikto -h http://{IP}:{PORT}"
+  - label: "gobuster directory brute force"
+    template: "gobuster dir -u http://{IP}:{PORT} -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+  - label: "ffuf with extensions"
+    template: "ffuf -u http://{IP}:{PORT}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -e .php,.txt,.html"
+  - label: "vhost discovery"
+    template: "ffuf -u http://{IP}:{PORT}/ -H 'Host: FUZZ.{HOST}' -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fs 0"
+known_vulns:
+  - match: "Apache 2.4.49"
+    note: "Path traversal + RCE (CVE-2021-41773)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+  - match: "Apache 2.4.50"
+    note: "Path traversal patch bypass (CVE-2021-42013)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+resources:
+  - title: "80,443 - Pentesting Web Methodology"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks
+  - title: "SecLists Web-Content"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Discovery/Web-Content"
+    author: SecLists

@@ -1,0 +1,27 @@
+schema_version: 1
+port: 389
+service: ldap
+protocol: tcp
+risk: medium
+quick_facts:
+  - "Anonymous bind often reveals naming context and user attributes"
+  - "Pair with port 88 — both indicate a Domain Controller"
+  - "Look for userPassword and unicodePwd hashes in returned attributes"
+checks:
+  - key: ldap-anonymous-bind
+    label: "Tested anonymous bind"
+  - key: ldap-naming-context
+    label: "Identified naming contexts (defaultNamingContext)"
+  - key: ldap-user-enum
+    label: "Enumerated users / groups"
+commands:
+  - label: "Anonymous bind base info"
+    template: "ldapsearch -H ldap://{IP}:{PORT} -x -s base -b '' '(objectClass=*)'"
+  - label: "Enumerate users"
+    template: "ldapsearch -H ldap://{IP}:{PORT} -x -b 'DC=example,DC=local' '(objectClass=user)'"
+  - label: "nmap LDAP scripts"
+    template: "nmap -p{PORT} --script=ldap-rootdse,ldap-search,ldap-novell-getpass {IP}"
+resources:
+  - title: "389 - Pentesting LDAP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    author: HackTricks

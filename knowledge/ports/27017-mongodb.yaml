@@ -1,0 +1,42 @@
+schema_version: 1
+port: 27017
+service: mongodb
+protocol: tcp
+risk: high
+aliases:
+  - mongo
+quick_facts:
+  - "Default install often has no authentication"
+  - "Bind-all + no auth = data dump from anywhere"
+  - "MongoDB 3.6+ binds to localhost by default; older versions don't"
+checks:
+  - key: mongodb-no-auth
+    label: "Tested unauthenticated connection"
+  - key: mongodb-version
+    label: "Captured MongoDB version via serverStatus"
+  - key: mongodb-list-dbs
+    label: "Listed databases and collections"
+  - key: mongodb-creds
+    label: "Tested default / discovered credentials"
+commands:
+  - label: "Connect via mongosh"
+    template: "mongosh mongodb://{IP}:{PORT}"
+  - label: "Legacy mongo client"
+    template: "mongo {IP}:{PORT}"
+  - label: "nmap MongoDB scripts"
+    template: "nmap -p{PORT} --script=mongodb-info,mongodb-databases {IP}"
+default_creds:
+  - username: ""
+    password: ""
+    notes: "Default unauthenticated install"
+  - username: admin
+    password: admin
+    notes: "Common weak admin"
+known_vulns:
+  - match: "MongoDB"
+    note: "Unauthenticated remote access on default install pre-3.6"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/27017-27018-mongodb"
+resources:
+  - title: "27017 - Pentesting MongoDB"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/27017-27018-mongodb"
+    author: HackTricks

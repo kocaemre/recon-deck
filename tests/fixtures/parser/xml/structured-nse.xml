@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Structured-NSE fixture for UI-11 / PARSE-03: ssl-cert (elem + nested table) on 443, plain http-title on 80, smb-os-discovery (3 elems) in hostscript. -->
+<nmaprun scanner="nmap" args="nmap -sV -sC 10.10.10.42" start="1712100000" version="7.94" xmloutputversion="1.05">
+  <host starttime="1712100001" endtime="1712100090">
+    <status state="up" reason="echo-reply" reason_ttl="64"/>
+    <address addr="10.10.10.42" addrtype="ipv4"/>
+    <hostnames><hostname name="structured.test" type="user"/></hostnames>
+    <ports>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack" reason_ttl="64"/>
+        <service name="http" product="Apache httpd" version="2.4.52" method="probed" conf="10"/>
+        <script id="http-title" output="Welcome to sample"/>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack" reason_ttl="64"/>
+        <service name="http" tunnel="ssl" product="Apache httpd" version="2.4.52" method="probed" conf="10"/>
+        <script id="ssl-cert" output="Subject: commonName=structured.test/organizationName=Test Co">
+          <elem key="subject">CN=structured.test, O=Test Co</elem>
+          <elem key="issuer">CN=Test CA, O=Test Co</elem>
+          <table key="extensions">
+            <elem key="DNS">structured.test</elem>
+            <elem key="IP">10.10.10.42</elem>
+          </table>
+        </script>
+      </port>
+      <port protocol="tcp" portid="445">
+        <state state="open" reason="syn-ack" reason_ttl="64"/>
+        <service name="microsoft-ds"/>
+      </port>
+    </ports>
+    <hostscript>
+      <script id="smb-os-discovery" output="OS: Windows 10 Pro&#xa;Computer name: DESKTOP-XYZ&#xa;NetBIOS computer name: DESKTOP-XYZ">
+        <elem key="OS">Windows 10 Pro</elem>
+        <elem key="Computer name">DESKTOP-XYZ</elem>
+        <elem key="NetBIOS computer name">DESKTOP-XYZ</elem>
+      </script>
+    </hostscript>
+  </host>
+  <runstats><finished time="1712100090" timestr="" elapsed="89" summary="" exit="success"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

@@ -1,0 +1,24 @@
+schema_version: 1
+port: 995
+service: pop3s
+protocol: tcp
+risk: medium
+aliases:
+  - ssl/pop3
+quick_facts:
+  - "POP3 over implicit TLS"
+  - "Same vectors as 110 once TLS is established"
+checks:
+  - key: pop3s-banner
+    label: "Captured POP3S banner via openssl s_client"
+  - key: pop3s-creds
+    label: "Tested credentials"
+commands:
+  - label: "openssl s_client"
+    template: "openssl s_client -connect {IP}:{PORT}"
+  - label: "nmap POP3S scripts"
+    template: "nmap -p{PORT} --script=pop3-capabilities,ssl-cert,ssl-enum-ciphers {IP}"
+resources:
+  - title: "110,995 - Pentesting POP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-pop"
+    author: HackTricks

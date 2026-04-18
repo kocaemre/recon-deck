@@ -1,0 +1,25 @@
+schema_version: 1
+port: 135
+service: msrpc
+protocol: tcp
+risk: medium
+aliases:
+  - epmap
+  - dcerpc
+quick_facts:
+  - "Microsoft RPC endpoint mapper — leaks bound interfaces"
+  - "Pair with 139/445 for full Windows enumeration"
+checks:
+  - key: msrpc-list-endpoints
+    label: "Listed RPC endpoints via rpcdump"
+  - key: msrpc-iface-enum
+    label: "Identified high-value interfaces (lsarpc, samr, winreg)"
+commands:
+  - label: "impacket-rpcdump"
+    template: "impacket-rpcdump @{IP} -port {PORT}"
+  - label: "nmap msrpc scripts"
+    template: "nmap -p{PORT} --script=msrpc-enum {IP}"
+resources:
+  - title: "135 - Pentesting MSRPC"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/135-pentesting-msrpc"
+    author: HackTricks

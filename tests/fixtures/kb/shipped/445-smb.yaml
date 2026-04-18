@@ -1,0 +1,33 @@
+schema_version: 1
+port: 445
+service: smb
+protocol: tcp
+risk: high
+aliases:
+  - microsoft-ds
+  - cifs
+quick_facts:
+  - "SMB exposes Windows file sharing and named pipes."
+  - "Look for null sessions and signing requirements."
+checks:
+  - key: smb-null-session
+    label: "Try null session"
+  - key: smb-signing
+    label: "Check SMB signing requirement"
+commands:
+  - label: "Enumerate shares (null session)"
+    template: "smbclient -L //{IP}/ -N"
+  - label: "nmap SMB scripts"
+    template: "nmap -p {PORT} --script=smb-os-discovery,smb-enum-shares {IP}"
+default_creds:
+  - username: guest
+    password: ""
+    notes: "Anonymous/null session — often disabled but worth a try."
+known_vulns:
+  - match: "Windows Server 2008"
+    note: "Eternal Blue (MS17-010) candidate."
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+resources:
+  - title: "445 - Pentesting SMB"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    author: HackTricks

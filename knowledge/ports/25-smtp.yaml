@@ -1,0 +1,26 @@
+schema_version: 1
+port: 25
+service: smtp
+protocol: tcp
+risk: medium
+quick_facts:
+  - "VRFY / EXPN / RCPT can leak valid usernames"
+  - "Open relay tests catch misconfigured servers"
+checks:
+  - key: smtp-banner
+    label: "Captured SMTP banner"
+  - key: smtp-user-enum
+    label: "Tested user enumeration via VRFY/EXPN/RCPT"
+  - key: smtp-open-relay
+    label: "Tested open relay"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "nmap SMTP enum"
+    template: "nmap -p{PORT} --script=smtp-commands,smtp-enum-users,smtp-open-relay {IP}"
+  - label: "smtp-user-enum VRFY"
+    template: "smtp-user-enum -M VRFY -U /usr/share/seclists/Usernames/Names/names.txt -t {IP} -p {PORT}"
+resources:
+  - title: "25 - Pentesting SMTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    author: HackTricks

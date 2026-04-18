@@ -1,0 +1,10 @@
+schema_version: 1
+port: 80
+service: http
+protocol: tcp
+risk: medium
+resources:
+  - title: "HTTP enumeration"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks
+    description: "copied prose here — should be rejected by Zod .strict()"

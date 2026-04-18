@@ -1,0 +1,50 @@
+schema_version: 1
+port: 8080
+service: http-proxy
+protocol: tcp
+risk: medium
+aliases:
+  - http-alt
+  - tomcat
+  - jenkins
+quick_facts:
+  - "Common alt-HTTP — often hosts Tomcat, Jenkins, or admin consoles"
+  - "Test Host header proxy abuse and CONNECT method"
+  - "Tomcat manager / Jenkins script console = RCE if creds reused"
+checks:
+  - key: http-proxy-fingerprint
+    label: "Identified application (Tomcat, Jenkins, generic proxy, etc.)"
+  - key: http-proxy-open-relay
+    label: "Tested for open proxy / CONNECT method abuse"
+  - key: http-proxy-default-creds
+    label: "Tried default app credentials (tomcat/tomcat, admin/admin)"
+  - key: http-proxy-dir-bruteforce
+    label: "Ran directory brute force on the application"
+commands:
+  - label: "Quick fingerprint"
+    template: "whatweb http://{IP}:{PORT}"
+  - label: "Headers + banner"
+    template: "curl -sI http://{IP}:{PORT}/"
+  - label: "Test as proxy"
+    template: "curl -x {IP}:{PORT} http://{HOST}/"
+  - label: "nmap proxy scripts"
+    template: "nmap -p{PORT} --script=http-open-proxy,http-title,http-enum {IP}"
+  - label: "gobuster directory brute force"
+    template: "gobuster dir -u http://{IP}:{PORT} -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+default_creds:
+  - username: tomcat
+    password: tomcat
+    notes: "Tomcat manager default"
+  - username: admin
+    password: admin
+    notes: "Generic web admin default"
+  - username: jenkins
+    password: jenkins
+    notes: "Jenkins default on some installs"
+resources:
+  - title: "8080 - Pentesting Web Methodology"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks
+  - title: "Tomcat - Pentesting"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/tomcat"
+    author: HackTricks

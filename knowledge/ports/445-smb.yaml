@@ -1,0 +1,62 @@
+schema_version: 1
+port: 445
+service: smb
+protocol: tcp
+risk: high
+aliases:
+  - microsoft-ds
+  - netbios-ssn
+quick_facts:
+  - "SMB exposes Windows file sharing, named pipes, and IPC$"
+  - "Always check null sessions, signing requirement, and SMBv1 status"
+  - "EternalBlue (MS17-010) is a default check on legacy Windows"
+checks:
+  - key: smb-null-session
+    label: "Tested null session (anonymous IPC$ access)"
+  - key: smb-signing
+    label: "Checked SMB signing requirement (disabled = relay candidate)"
+  - key: smb-version
+    label: "Identified SMB dialect (v1/v2/v3) and OS version"
+  - key: smb-enum-shares
+    label: "Enumerated shares and access permissions"
+  - key: smb-eternalblue
+    label: "Tested for MS17-010 EternalBlue"
+  - key: smb-enum-users
+    label: "Enumerated users via RID cycling"
+commands:
+  - label: "Enumerate shares (null session)"
+    template: "smbclient -L //{IP}/ -N"
+  - label: "nmap SMB scripts"
+    template: "nmap -p{PORT} --script=smb-os-discovery,smb-enum-shares,smb-enum-users,smb-vuln-ms17-010 {IP}"
+  - label: "enum4linux-ng"
+    template: "enum4linux-ng -A {IP}"
+  - label: "smbmap shares + permissions"
+    template: "smbmap -H {IP} -P {PORT}"
+  - label: "crackmapexec enumerate"
+    template: "crackmapexec smb {IP} -u '' -p ''"
+  - label: "rpcclient null session"
+    template: "rpcclient -U '' -N {IP}"
+default_creds:
+  - username: guest
+    password: ""
+    notes: "Anonymous/null session — often disabled but worth a try"
+  - username: administrator
+    password: ""
+    notes: "Empty password sometimes works on misconfigured installs"
+known_vulns:
+  - match: "Windows Server 2008"
+    note: "EternalBlue (MS17-010) — wormable SMBv1 RCE"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+  - match: "Samba 3.0"
+    note: "Username map script command injection (CVE-2007-2447)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+  - match: "Samba 4.5"
+    note: "SambaCry / EternalRed (CVE-2017-7494) RCE via writable share"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+resources:
+  - title: "445 - Pentesting SMB"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    author: HackTricks
+  - title: "NetBIOS / SMB Cheatsheet"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/137-138-139-pentesting-netbios"
+    author: HackTricks

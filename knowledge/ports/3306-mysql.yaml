@@ -1,0 +1,48 @@
+schema_version: 1
+port: 3306
+service: mysql
+protocol: tcp
+risk: high
+quick_facts:
+  - "Try root with empty password — common on dev installs"
+  - "Banner reveals MySQL/MariaDB version for CVE mapping"
+  - "INTO OUTFILE can write files if FILE privilege is granted"
+checks:
+  - key: mysql-banner-version
+    label: "Captured MySQL banner / version"
+  - key: mysql-default-creds
+    label: "Tested default credentials (root/empty, root/root)"
+  - key: mysql-info-schema
+    label: "Listed databases via information_schema if logged in"
+  - key: mysql-file-priv
+    label: "Checked FILE privilege for read/write file primitives"
+commands:
+  - label: "Banner / version"
+    template: "nmap -p{PORT} --script=mysql-info {IP}"
+  - label: "Try root no password"
+    template: "mysql -h {IP} -P {PORT} -u root"
+  - label: "nmap MySQL brute"
+    template: "nmap -p{PORT} --script=mysql-brute,mysql-empty-password,mysql-users,mysql-databases {IP}"
+  - label: "Hydra brute force"
+    template: "hydra -L users.txt -P passwords.txt mysql://{IP}:{PORT}"
+default_creds:
+  - username: root
+    password: ""
+    notes: "Default on fresh installs and many dev environments"
+  - username: root
+    password: root
+    notes: "Common weak password"
+  - username: mysql
+    password: mysql
+    notes: "Service account on some distros"
+known_vulns:
+  - match: "MySQL 5.5"
+    note: "Auth bypass via memcmp() race (CVE-2012-2122)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mysql"
+resources:
+  - title: "3306 - Pentesting MySQL"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mysql"
+    author: HackTricks
+  - title: "MySQL Default Credentials"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
+    author: SecLists

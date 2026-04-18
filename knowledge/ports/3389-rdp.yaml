@@ -1,0 +1,48 @@
+schema_version: 1
+port: 3389
+service: rdp
+protocol: tcp
+risk: high
+aliases:
+  - ms-wbt-server
+  - msrdp
+quick_facts:
+  - "Always check for BlueKeep (CVE-2019-0708) on Windows 7 / 2008 R2"
+  - "NLA disabled allows pre-auth fingerprinting"
+  - "Try common credentials slowly to avoid lockout"
+checks:
+  - key: rdp-version-fingerprint
+    label: "Identified RDP server OS/version"
+  - key: rdp-nla-status
+    label: "Checked NLA (Network Level Authentication) requirement"
+  - key: rdp-bluekeep
+    label: "Tested for BlueKeep (CVE-2019-0708)"
+  - key: rdp-creds
+    label: "Tested default / discovered credentials"
+commands:
+  - label: "nmap RDP scripts"
+    template: "nmap -p{PORT} --script=rdp-enum-encryption,rdp-vuln-ms12-020,rdp-ntlm-info {IP}"
+  - label: "BlueKeep scanner"
+    template: "nmap -p{PORT} --script=rdp-vuln-ms17-010 {IP}"
+  - label: "crackmapexec RDP"
+    template: "crackmapexec rdp {IP} -u users.txt -p passwords.txt"
+  - label: "xfreerdp connection"
+    template: "xfreerdp /u:administrator /p:password /v:{IP}:{PORT}"
+default_creds:
+  - username: administrator
+    password: administrator
+    notes: "Common weak admin password"
+  - username: administrator
+    password: ""
+    notes: "Empty password sometimes works on lab/dev hosts"
+known_vulns:
+  - match: "Windows 7"
+    note: "BlueKeep wormable RCE (CVE-2019-0708)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+  - match: "Windows Server 2008"
+    note: "BlueKeep + ms12-020 DoS"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+resources:
+  - title: "3389 - Pentesting RDP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+    author: HackTricks

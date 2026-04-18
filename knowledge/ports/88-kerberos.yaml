@@ -1,0 +1,29 @@
+schema_version: 1
+port: 88
+service: kerberos
+protocol: tcp
+risk: high
+aliases:
+  - kerberos-sec
+quick_facts:
+  - "Port 88 == Active Directory Domain Controller (almost always)"
+  - "kerbrute for username enumeration without lockout risk"
+  - "AS-REP roasting works on accounts with pre-auth disabled"
+checks:
+  - key: kerberos-realm-id
+    label: "Identified Kerberos realm / domain name"
+  - key: kerberos-user-enum
+    label: "Enumerated valid usernames via kerbrute"
+  - key: kerberos-asreproast
+    label: "Tested AS-REP roasting on enumerated users"
+commands:
+  - label: "nmap Kerberos enum"
+    template: "nmap -p{PORT} --script=krb5-enum-users --script-args krb5-enum-users.realm='EXAMPLE.LOCAL' {IP}"
+  - label: "kerbrute userenum"
+    template: "kerbrute userenum -d EXAMPLE.LOCAL --dc {IP} usernames.txt"
+  - label: "GetNPUsers (impacket)"
+    template: "impacket-GetNPUsers EXAMPLE.LOCAL/ -dc-ip {IP} -usersfile users.txt -no-pass"
+resources:
+  - title: "88 - Pentesting Kerberos"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-kerberos-88"
+    author: HackTricks

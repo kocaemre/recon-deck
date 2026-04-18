@@ -1,0 +1,31 @@
+schema_version: 1
+port: 5900
+service: vnc
+protocol: tcp
+risk: high
+quick_facts:
+  - "Often deployed without auth or with short shared password"
+  - "vncviewer for interactive access; vncsnapshot for non-interactive screenshot"
+checks:
+  - key: vnc-no-auth
+    label: "Tested unauthenticated access"
+  - key: vnc-version
+    label: "Captured VNC version / auth scheme"
+  - key: vnc-creds
+    label: "Tested credentials"
+commands:
+  - label: "nmap VNC scripts"
+    template: "nmap -p{PORT} --script=vnc-info,vnc-title,vnc-brute {IP}"
+  - label: "vncviewer connect"
+    template: "vncviewer {IP}:{PORT}"
+default_creds:
+  - username: ""
+    password: password
+    notes: "Common weak shared password"
+  - username: ""
+    password: vnc
+    notes: "Default on some installs"
+resources:
+  - title: "5900 - Pentesting VNC"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-vnc"
+    author: HackTricks

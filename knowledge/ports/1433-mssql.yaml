@@ -1,0 +1,51 @@
+schema_version: 1
+port: 1433
+service: mssql
+protocol: tcp
+risk: high
+aliases:
+  - ms-sql-s
+  - ms-sql
+quick_facts:
+  - "sa account is the SQL Server superuser — test sa/sa, sa/empty"
+  - "xp_cmdshell yields RCE when enabled and you have sysadmin"
+  - "Impersonation (EXECUTE AS) often allows privilege escalation"
+checks:
+  - key: mssql-banner-version
+    label: "Captured MSSQL version and instance name"
+  - key: mssql-default-creds
+    label: "Tested default credentials (sa/sa, sa/empty)"
+  - key: mssql-xp-cmdshell
+    label: "Checked xp_cmdshell availability"
+  - key: mssql-linked-servers
+    label: "Enumerated linked servers and impersonation paths"
+commands:
+  - label: "nmap MSSQL info"
+    template: "nmap -p{PORT} --script=ms-sql-info,ms-sql-empty-password {IP}"
+  - label: "Connect via impacket"
+    template: "impacket-mssqlclient sa@{IP} -port {PORT} -windows-auth"
+  - label: "sqsh client"
+    template: "sqsh -S {IP}:{PORT} -U sa"
+  - label: "nmap MSSQL brute"
+    template: "nmap -p{PORT} --script=ms-sql-brute,ms-sql-xp-cmdshell {IP}"
+default_creds:
+  - username: sa
+    password: sa
+    notes: "Most common weak SQL Server password"
+  - username: sa
+    password: ""
+    notes: "Empty SA password on misconfigured installs"
+  - username: sa
+    password: password
+    notes: "Common weak password"
+known_vulns:
+  - match: "Microsoft SQL Server"
+    note: "xp_cmdshell command execution when enabled with sysadmin role"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mssql-microsoft-sql-server"
+resources:
+  - title: "1433 - Pentesting MSSQL"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mssql-microsoft-sql-server"
+    author: HackTricks
+  - title: "MSSQL Default Credentials"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
+    author: SecLists

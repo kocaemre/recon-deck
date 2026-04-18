@@ -1,0 +1,46 @@
+schema_version: 1
+port: 1521
+service: oracle
+protocol: tcp
+risk: high
+aliases:
+  - oracle-tns
+  - tns
+quick_facts:
+  - "Oracle TNS listener — first enumerate the SID, then attack creds"
+  - "Default accounts (system/manager, sys/change_on_install) often unchanged"
+  - "odat is the standard tool for end-to-end Oracle attacks"
+checks:
+  - key: oracle-tns-version
+    label: "Identified TNS listener version"
+  - key: oracle-sid-enum
+    label: "Enumerated valid SIDs"
+  - key: oracle-default-creds
+    label: "Tested default account credentials"
+  - key: oracle-tns-poison
+    label: "Checked for TNS poisoning (CVE-2012-1675) on legacy versions"
+commands:
+  - label: "nmap Oracle TNS scripts"
+    template: "nmap -p{PORT} --script=oracle-tns-version,oracle-sid-brute {IP}"
+  - label: "odat all checks"
+    template: "odat all -s {IP} -p {PORT}"
+  - label: "SID brute force (odat)"
+    template: "odat sidguesser -s {IP} -p {PORT}"
+default_creds:
+  - username: system
+    password: manager
+    notes: "Classic Oracle default"
+  - username: sys
+    password: change_on_install
+    notes: "Default DBA account"
+  - username: scott
+    password: tiger
+    notes: "Sample schema account, often left enabled"
+known_vulns:
+  - match: "Oracle TNS Listener"
+    note: "TNS Poisoning attack (CVE-2012-1675) on unpatched listeners"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener"
+resources:
+  - title: "1521 - Pentesting Oracle Listener"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener"
+    author: HackTricks

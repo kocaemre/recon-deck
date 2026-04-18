@@ -1,0 +1,24 @@
+schema_version: 1
+port: 110
+service: pop3
+protocol: tcp
+risk: medium
+quick_facts:
+  - "Cleartext mail retrieval — credentials sniffable"
+  - "USER probe distinguishes valid vs invalid accounts on some servers"
+checks:
+  - key: pop3-banner
+    label: "Captured POP3 banner"
+  - key: pop3-user-enum
+    label: "Tested USER probe for username enumeration"
+  - key: pop3-creds
+    label: "Tested credentials"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "nmap POP3 scripts"
+    template: "nmap -p{PORT} --script=pop3-capabilities,pop3-ntlm-info,pop3-brute {IP}"
+resources:
+  - title: "110 - Pentesting POP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-pop"
+    author: HackTricks

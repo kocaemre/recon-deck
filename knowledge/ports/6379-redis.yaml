@@ -1,0 +1,43 @@
+schema_version: 1
+port: 6379
+service: redis
+protocol: tcp
+risk: high
+quick_facts:
+  - "Often deployed without authentication — try connecting unauthenticated"
+  - "CONFIG SET dir + dbfilename can write SSH keys or webshells"
+  - "Slave replication abuse yields RCE on Redis 4.x+"
+checks:
+  - key: redis-no-auth
+    label: "Tested unauthenticated access (PING / INFO)"
+  - key: redis-version-info
+    label: "Captured Redis version via INFO"
+  - key: redis-config-write
+    label: "Checked write primitives via CONFIG SET dir / dbfilename"
+  - key: redis-master-slave-rce
+    label: "Considered master-slave replication RCE (Redis 4.x+)"
+commands:
+  - label: "Connect unauthenticated"
+    template: "redis-cli -h {IP} -p {PORT}"
+  - label: "INFO + version"
+    template: "redis-cli -h {IP} -p {PORT} INFO"
+  - label: "nmap Redis info"
+    template: "nmap -p{PORT} --script=redis-info,redis-brute {IP}"
+default_creds:
+  - username: ""
+    password: ""
+    notes: "Default install requires no authentication"
+  - username: ""
+    password: foobared
+    notes: "Old Redis default test password"
+known_vulns:
+  - match: "Redis 4"
+    note: "Master-slave replication module load → RCE"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+  - match: "Redis"
+    note: "Unauthenticated CONFIG SET dir + SSH key write for code execution"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+resources:
+  - title: "6379 - Pentesting Redis"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+    author: HackTricks

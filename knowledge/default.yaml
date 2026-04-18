@@ -1,0 +1,26 @@
+schema_version: 1
+port: 0
+service: unknown
+protocol: tcp
+risk: info
+quick_facts:
+  - "Unknown service — manual recon required"
+  - "Start with banner grab and version detection before deeper probes"
+checks:
+  - key: default-banner-grab
+    label: "Captured service banner"
+  - key: default-nmap-version-scan
+    label: "Ran nmap -sV for service/version identification"
+  - key: default-google-fingerprint
+    label: "Searched fingerprint/banner online for known service"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "Version scan"
+    template: "nmap -sV -p{PORT} {IP}"
+  - label: "Aggressive scan"
+    template: "nmap -A -p{PORT} {IP}"
+resources:
+  - title: "Pentesting Methodology"
+    url: "https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-methodology"
+    author: HackTricks

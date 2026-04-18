@@ -1,0 +1,31 @@
+schema_version: 1
+port: 23
+service: telnet
+protocol: tcp
+risk: high
+quick_facts:
+  - "Cleartext protocol — credentials sniffable on the wire"
+  - "Banner often reveals device model and firmware version"
+checks:
+  - key: telnet-banner
+    label: "Captured telnet banner"
+  - key: telnet-default-creds
+    label: "Tested default device credentials"
+commands:
+  - label: "Connect"
+    template: "telnet {IP} {PORT}"
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "nmap telnet brute"
+    template: "nmap -p{PORT} --script=telnet-brute,telnet-encryption {IP}"
+default_creds:
+  - username: root
+    password: root
+    notes: "Common on embedded devices"
+  - username: admin
+    password: admin
+    notes: "Routers / IoT default"
+resources:
+  - title: "23 - Pentesting Telnet"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-telnet"
+    author: HackTricks

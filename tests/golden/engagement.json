@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0",
+  "recon_deck_version": "0.0.0-test",
+  "engagement": {
+    "id": 1,
+    "name": "box.htb (10.10.10.5)",
+    "created_at": "2026-04-17T09:00:00.000Z",
+    "updated_at": "2026-04-17T10:30:00.000Z",
+    "source": "autorecon",
+    "raw_input": "example.zip"
+  },
+  "scan": {
+    "target": {
+      "ip": "10.10.10.5",
+      "hostname": "box.htb"
+    },
+    "scannedAt": "2026-04-17T10:00:00.000Z",
+    "source": "autorecon",
+    "ports": [
+      {
+        "port": 53,
+        "protocol": "udp",
+        "state": "open",
+        "service": "domain",
+        "scripts": []
+      },
+      {
+        "port": 80,
+        "protocol": "tcp",
+        "state": "open",
+        "service": "http",
+        "product": "Apache",
+        "version": "2.4.52",
+        "scripts": [
+          {
+            "id": "http-title",
+            "output": "<script>alert(1)</script> Site Title"
+          }
+        ]
+      },
+      {
+        "port": 443,
+        "protocol": "tcp",
+        "state": "open",
+        "service": "https",
+        "product": "nginx",
+        "version": "1.18",
+        "tunnel": "ssl",
+        "scripts": [
+          {
+            "id": "ssl-cert",
+            "output": "Subject: CN=box.htb"
+          }
+        ],
+        "arFiles": [
+          {
+            "filename": "tcp_443_https_curl.txt",
+            "content": "HTTP/1.1 200 OK"
+          }
+        ],
+        "arCommands": [
+          {
+            "label": "nikto",
+            "template": "nikto -h {IP}:{PORT}"
+          }
+        ]
+      }
+    ],
+    "hostScripts": [
+      {
+        "id": "smb-os-discovery",
+        "output": "OS: Windows Server 2019"
+      }
+    ],
+    "os": {
+      "name": "Linux 5.x",
+      "accuracy": 95
+    },
+    "warnings": [
+      "skipped sctp port 9999"
+    ]
+  },
+  "checklist": {
+    "53/udp": {
+      "dns-axfr": {
+        "checked": true,
+        "toggled_at": "2026-04-17T10:30:00.000Z"
+      }
+    },
+    "80/tcp": {
+      "http-dir-listing": {
+        "checked": true,
+        "toggled_at": "2026-04-17T10:30:00.000Z"
+      }
+    },
+    "443/tcp": {
+      "ssl-cert-check": {
+        "checked": false,
+        "toggled_at": "2026-04-17T10:30:00.000Z"
+      }
+    }
+  },
+  "notes": {
+    "80/tcp": "Looked at main page, see screenshot-01.png in HackTricks folder"
+  }
+}

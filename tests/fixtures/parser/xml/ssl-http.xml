@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" args="nmap -sV -p 8443 10.10.10.5" start="1712000000" version="7.94" xmloutputversion="1.05">
+  <host starttime="1712000001" endtime="1712000050">
+    <status state="up" reason="echo-reply" reason_ttl="64"/>
+    <address addr="10.10.10.5" addrtype="ipv4"/>
+    <ports>
+      <port protocol="tcp" portid="8443">
+        <state state="open" reason="syn-ack" reason_ttl="64"/>
+        <service name="http" tunnel="ssl" product="nginx" version="1.18.0" method="probed" conf="10"/>
+      </port>
+    </ports>
+  </host>
+  <runstats><finished time="1712000050" timestr="Wed Apr  1 00:00:50 2026" elapsed="49" summary="" exit="success"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

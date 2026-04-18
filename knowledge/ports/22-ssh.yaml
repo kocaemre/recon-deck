@@ -1,0 +1,48 @@
+schema_version: 1
+port: 22
+service: ssh
+protocol: tcp
+risk: medium
+quick_facts:
+  - "Banner usually leaks OpenSSH version — map to known CVEs"
+  - "Try username enumeration on OpenSSH < 7.7 (CVE-2018-15473)"
+  - "Check for password vs key-only authentication"
+checks:
+  - key: ssh-banner-version
+    label: "Captured SSH banner / OpenSSH version"
+  - key: ssh-auth-methods
+    label: "Enumerated supported auth methods (password vs publickey)"
+  - key: ssh-username-enum
+    label: "Tested username enumeration (CVE-2018-15473) if OpenSSH < 7.7"
+  - key: ssh-weak-creds
+    label: "Tested common credentials / brute force"
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+  - label: "Enumerate auth methods"
+    template: "ssh -v -o PreferredAuthentications=none -o StrictHostKeyChecking=no root@{IP} -p {PORT}"
+  - label: "nmap SSH scripts"
+    template: "nmap -p{PORT} --script=ssh2-enum-algos,ssh-auth-methods,ssh-hostkey {IP}"
+  - label: "Hydra brute force"
+    template: "hydra -L users.txt -P passwords.txt ssh://{IP}:{PORT}"
+default_creds:
+  - username: root
+    password: root
+    notes: "Default on many embedded/IoT devices"
+  - username: admin
+    password: admin
+    notes: "Common on appliances"
+known_vulns:
+  - match: "OpenSSH 7.2"
+    note: "Username enumeration via timing (CVE-2016-6210)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+  - match: "OpenSSH 7.7"
+    note: "Username enumeration via auth_request (CVE-2018-15473)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+resources:
+  - title: "22 - Pentesting SSH"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    author: HackTricks
+  - title: "SSH Default Credentials"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
+    author: SecLists

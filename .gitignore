@@ -1,0 +1,19 @@
+.planning/
+node_modules/
+*.log
+.DS_Store
+# SQLite database file (runtime artifact, volume-mounted in Docker)
+data/
+*.db
+# Next.js build output
+.next/
+# TypeScript incremental build cache
+*.tsbuildinfo
+# Next.js generated type declarations
+next-env.d.ts
+
+# Local tooling cache (worktrees, MCP state)
+.claude/
+
+# Local notes (untracked drafts)
+prd.md

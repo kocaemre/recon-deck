@@ -1,0 +1,7 @@
+# Nmap 7.94 scan initiated Wed Apr  1 00:00:00 2026 as: nmap -sU -p 53 -oN udp.nmap 10.10.10.5
+Nmap scan report for 10.10.10.5
+Host is up (0.015s latency).
+PORT   STATE         SERVICE
+53/udp open|filtered domain
+
+# Nmap done at Wed Apr  1 00:00:49 2026 -- 1 IP address (1 host up) scanned in 49.12 seconds

@@ -1,0 +1,26 @@
+schema_version: 1
+port: 636
+service: ldaps
+protocol: tcp
+risk: medium
+aliases:
+  - ssl/ldap
+quick_facts:
+  - "LDAP over TLS — same enumeration vectors as 389 once TLS is established"
+  - "Required for LDAP password operations on modern AD"
+checks:
+  - key: ldaps-cert-inspect
+    label: "Inspected LDAPS certificate (CN reveals DC name)"
+  - key: ldaps-anonymous-bind
+    label: "Tested anonymous bind over LDAPS"
+commands:
+  - label: "openssl s_client cert grab"
+    template: "openssl s_client -connect {IP}:{PORT}"
+  - label: "ldapsearch over LDAPS"
+    template: "ldapsearch -H ldaps://{IP}:{PORT} -x -s base -b '' '(objectClass=*)'"
+  - label: "nmap LDAPS scripts"
+    template: "nmap -p{PORT} --script=ldap-rootdse,ssl-cert {IP}"
+resources:
+  - title: "389,636 - Pentesting LDAP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    author: HackTricks

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>box.htb (10.10.10.5) — Recon Deck Report</title>
+<style>
+body { font-family: Georgia, 'Times New Roman', serif; color: #111; background: #fff; max-width: 900px; margin: 0 auto; padding: 2rem; }
+h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 0.25rem; }
+h3 { font-size: 0.95rem; margin-top: 1rem; color: #444; }
+pre, code { font-family: Menlo, Monaco, 'Courier New', monospace; font-size: 0.85rem; background: #f5f5f5; border: 1px solid #e5e5e5; border-radius: 3px; }
+pre { padding: 0.75rem; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+code { padding: 0.1em 0.3em; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 0.4rem 0.75rem; text-align: left; }
+th { background: #f0f0f0; font-weight: bold; }
+.check-done { color: #0a0; }
+.check-pending { color: #888; }
+section.port-section { break-inside: avoid-page; margin-bottom: 2rem; }
+@media print { body { padding: 0; } .no-print { display: none; } }
+</style>
+</head>
+<body>
+<header>
+<h1>box.htb (10.10.10.5)</h1>
+<p><strong>Target:</strong> <code>10.10.10.5</code> (box.htb)</p>
+<p><strong>OS:</strong> Linux 5.x</p>
+<p><strong>Coverage:</strong> 67% (2/3)</p>
+</header>
+<h2>Ports</h2>
+<table>
+<thead><tr><th>Port</th><th>Proto</th><th>Service</th><th>Version</th><th>Done</th></tr></thead>
+<tbody>
+<tr><td>53</td><td>udp</td><td>domain</td><td></td><td>1/1</td></tr>
+<tr><td>80</td><td>tcp</td><td>http</td><td>Apache 2.4.52</td><td>1/1</td></tr>
+<tr><td>443</td><td>tcp</td><td>https</td><td>nginx 1.18</td><td>0/1</td></tr>
+</tbody>
+</table>
+<section class="port-section">
+<h2>Port 53/udp — domain</h2>
+<h3>Commands</h3>
+<ul>
+<li><strong>dig axfr:</strong> <code>dig axfr @10.10.10.5 box.htb</code></li>
+</ul>
+<h3>Checklist</h3>
+<ul>
+<li><span class="check-done">▣</span> Attempt zone transfer (AXFR)</li>
+</ul>
+</section>
+<section class="port-section">
+<h2>Port 80/tcp — http (Apache 2.4.52)</h2>
+<h3>NSE Output</h3>
+<div><strong>http-title</strong></div><pre>&lt;script&gt;alert(1)&lt;/script&gt; Site Title</pre>
+<h3>Commands</h3>
+<ul>
+<li><strong>gobuster dir:</strong> <code>gobuster dir -u http://10.10.10.5:80/</code></li>
+</ul>
+<h3>Checklist</h3>
+<ul>
+<li><span class="check-done">▣</span> Check for directory listing</li>
+</ul>
+<h3>Notes</h3>
+<pre>Looked at main page, see screenshot-01.png in HackTricks folder</pre>
+</section>
+<section class="port-section">
+<h2>Port 443/tcp — https (nginx 1.18)</h2>
+<h3>NSE Output</h3>
+<div><strong>ssl-cert</strong></div><pre>Subject: CN=box.htb</pre>
+<h3>AutoRecon Files</h3>
+<div><strong>tcp_443_https_curl.txt</strong></div><pre>HTTP/1.1 200 OK</pre>
+<h3>Commands</h3>
+<ul>
+<li><strong>openssl s_client:</strong> <code>openssl s_client -connect 10.10.10.5:443</code></li>
+</ul>
+<h3>AutoRecon Commands</h3>
+<ul>
+<li><strong>nikto:</strong> <code>nikto -h 10.10.10.5:443</code></li>
+</ul>
+<h3>Checklist</h3>
+<ul>
+<li><span class="check-pending">□</span> Inspect TLS certificate</li>
+</ul>
+</section>
+<section class="host-scripts-section" style="break-inside: avoid-page;">
+<h2>Host Scripts</h2>
+<div><strong>smb-os-discovery</strong></div><pre>OS: Windows Server 2019</pre>
+</section>
+</body>
+</html>

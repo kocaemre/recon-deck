@@ -1,0 +1,16 @@
+# Nmap 7.94 scan initiated Wed Apr  1 00:00:00 2026 as: nmap -sV -sC -oN scan.nmap 10.10.10.5
+Nmap scan report for 10.10.10.5
+Host is up (0.015s latency).
+Not shown: 999 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+80/tcp open  http    Apache httpd 2.4.52
+| http-title: Example Domain
+|_http-server-header: Apache/2.4.52
+
+Host script results:
+| smb-os-discovery:
+|   OS: Windows 10 Pro 19042
+|_  Computer name: HOST01
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Wed Apr  1 00:00:49 2026 -- 1 IP address (1 host up) scanned in 49.12 seconds

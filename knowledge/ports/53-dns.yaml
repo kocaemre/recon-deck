@@ -1,0 +1,28 @@
+schema_version: 1
+port: 53
+service: dns
+protocol: tcp
+risk: medium
+quick_facts:
+  - "Try AXFR (zone transfer) first — high-value disclosure"
+  - "Subdomain brute force reveals unlinked services"
+checks:
+  - key: dns-zone-transfer
+    label: "Tested DNS zone transfer (AXFR)"
+  - key: dns-version
+    label: "Captured DNS version (version.bind chaos)"
+  - key: dns-subdomain-enum
+    label: "Enumerated subdomains"
+commands:
+  - label: "Zone transfer"
+    template: "dig @{IP} {HOST} AXFR"
+  - label: "Version chaos record"
+    template: "dig @{IP} version.bind chaos txt"
+  - label: "nmap DNS scripts"
+    template: "nmap -p{PORT} --script=dns-zone-transfer,dns-recursion,dns-cache-snoop {IP}"
+  - label: "dnsenum subdomain"
+    template: "dnsenum --dnsserver {IP} {HOST}"
+resources:
+  - title: "53 - Pentesting DNS"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-dns"
+    author: HackTricks

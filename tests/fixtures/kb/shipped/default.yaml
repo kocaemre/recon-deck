@@ -1,0 +1,22 @@
+schema_version: 1
+port: 0
+service: unknown
+protocol: tcp
+risk: info
+aliases: []
+quick_facts:
+  - "No port-specific guidance available — fall back to generic enumeration."
+checks:
+  - key: generic-banner-grab
+    label: "Capture banner with nc"
+  - key: generic-nmap-version
+    label: "Run nmap -sV --version-all"
+commands:
+  - label: "nmap version detection"
+    template: "nmap -sV -p {PORT} {IP}"
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+resources:
+  - title: "Pentesting Network Services"
+    url: "https://book.hacktricks.xyz/network-services-pentesting"
+    author: HackTricks

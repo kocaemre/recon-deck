@@ -1,0 +1,45 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test & KB Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Unit tests (includes TEST-04 shipped KB validation)
+        run: npm test
+      - name: KB lint (placeholder allowlist, URL scheme, command denylist)
+        run: npx tsx scripts/lint-kb.ts
+
+  bundle-size:
+    name: Bundle Size Check (OPS-07, warn-only)
+    runs-on: ubuntu-latest
+    # Warn-only per ARCHITECTURE.md "Bundle Size Strategy" + REQUIREMENTS.md OPS-07.
+    # A regression emits a ::warning:: annotation but does not block the PR.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build with bundle analyzer
+        run: ANALYZE=true npm run build
+      - name: Check bundle size against 2 MB budget
+        run: node scripts/ci/check-bundle-size.mjs

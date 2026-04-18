@@ -1,0 +1,25 @@
+schema_version: 1
+port: 465
+service: smtps
+protocol: tcp
+risk: medium
+aliases:
+  - ssl/smtp
+  - smtp-ssl
+quick_facts:
+  - "SMTP wrapped in implicit TLS"
+  - "Same enumeration vectors as port 25 once TLS is established"
+checks:
+  - key: smtps-banner
+    label: "Captured SMTPS banner via openssl s_client"
+  - key: smtps-tls-config
+    label: "Reviewed TLS version and cipher suite"
+commands:
+  - label: "openssl s_client"
+    template: "openssl s_client -connect {IP}:{PORT}"
+  - label: "nmap SMTPS scripts"
+    template: "nmap -p{PORT} --script=smtp-commands,ssl-cert,ssl-enum-ciphers {IP}"
+resources:
+  - title: "25 - Pentesting SMTP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    author: HackTricks

@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * recon-deck is dark-mode-only in v1.0 (UI-06).
+ * All CSS custom properties are set directly at :root — no .dark class switching.
+ * Color palette matches Phase 4 UI-SPEC (zinc-950 background, zinc-900 card,
+ * green-500 accent, red-500 destructive).
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo,
+    monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-code-surface: var(--code-surface);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* Dark theme — UI-SPEC Phase 4 color contract.
+   * zinc-950/900/800 base, green-500 accent, red-500 destructive.
+   * Matches shadcn neutral dark palette. */
+  --background: #09090b;        /* zinc-950 */
+  --foreground: #fafafa;        /* zinc-50 */
+  --card: #18181b;              /* zinc-900 */
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #22c55e;           /* green-500 */
+  --primary-foreground: #09090b;
+  --secondary: #27272a;         /* zinc-800 */
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;             /* zinc-800 */
+  --muted-foreground: #a1a1aa;  /* zinc-400 */
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;       /* red-500 */
+  --destructive-foreground: #fafafa;
+  --border: #27272a;            /* zinc-800 */
+  --input: #27272a;
+  --ring: #22c55e;              /* green-500 focus ring */
+
+  /* Custom surface for command code blocks (slightly distinct from card) */
+  --code-surface: #1c1c1f;
+
+  --radius: 0.5rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}

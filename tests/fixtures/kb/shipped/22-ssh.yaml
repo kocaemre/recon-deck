@@ -1,0 +1,13 @@
+schema_version: 1
+port: 22
+service: ssh
+protocol: tcp
+risk: medium
+aliases: []
+commands:
+  - label: "Banner grab"
+    template: "nc -nv {IP} {PORT}"
+resources:
+  - title: "22 - Pentesting SSH"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    author: HackTricks

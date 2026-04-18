@@ -1,0 +1,27 @@
+schema_version: 1
+port: 2049
+service: nfs
+protocol: tcp
+risk: high
+quick_facts:
+  - "List exports first via showmount -e"
+  - "no_root_squash exports allow root file write -> SUID + privesc"
+  - "Often paired with port 111 (rpcbind)"
+checks:
+  - key: nfs-list-exports
+    label: "Listed NFS exports via showmount"
+  - key: nfs-mount-test
+    label: "Tested mounting available exports"
+  - key: nfs-no-root-squash
+    label: "Checked no_root_squash on writable exports"
+commands:
+  - label: "List exports"
+    template: "showmount -e {IP}"
+  - label: "Mount export"
+    template: "mount -t nfs {IP}:/path /mnt/nfs"
+  - label: "nmap NFS scripts"
+    template: "nmap -p{PORT} --script=nfs-ls,nfs-showmount,nfs-statfs {IP}"
+resources:
+  - title: "2049 - Pentesting NFS"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/nfs-service-pentesting"
+    author: HackTricks

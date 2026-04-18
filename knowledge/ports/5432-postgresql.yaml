@@ -1,0 +1,48 @@
+schema_version: 1
+port: 5432
+service: postgresql
+protocol: tcp
+risk: high
+aliases:
+  - postgres
+quick_facts:
+  - "Default superuser is `postgres` — always test postgres/postgres"
+  - "COPY FROM PROGRAM can yield RCE if you have superuser"
+  - "pg_read_server_files / lo_import for file read primitives"
+checks:
+  - key: postgres-banner-version
+    label: "Captured PostgreSQL version"
+  - key: postgres-default-creds
+    label: "Tested default credentials (postgres/postgres, postgres/empty)"
+  - key: postgres-list-dbs
+    label: "Listed databases via \\l"
+  - key: postgres-superuser-rce
+    label: "Tested COPY FROM PROGRAM RCE if superuser"
+commands:
+  - label: "Connect as postgres"
+    template: "psql -h {IP} -p {PORT} -U postgres"
+  - label: "nmap PostgreSQL scripts"
+    template: "nmap -p{PORT} --script=pgsql-brute {IP}"
+  - label: "Hydra brute force"
+    template: "hydra -L users.txt -P passwords.txt postgres://{IP}:{PORT}"
+default_creds:
+  - username: postgres
+    password: postgres
+    notes: "Default on many installs"
+  - username: postgres
+    password: ""
+    notes: "Trust auth misconfiguration"
+  - username: admin
+    password: admin
+    notes: "Application-specific defaults"
+known_vulns:
+  - match: "PostgreSQL 9.3"
+    note: "COPY FROM PROGRAM RCE for superuser (intended feature, not CVE)"
+    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-postgresql"
+resources:
+  - title: "5432 - Pentesting PostgreSQL"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-postgresql"
+    author: HackTricks
+  - title: "PostgreSQL Default Credentials"
+    url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
+    author: SecLists

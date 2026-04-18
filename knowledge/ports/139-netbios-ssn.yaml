@@ -1,0 +1,32 @@
+schema_version: 1
+port: 139
+service: netbios-ssn
+protocol: tcp
+risk: high
+aliases:
+  - netbios
+quick_facts:
+  - "NetBIOS Session Service — usually paired with port 445"
+  - "Older transport for SMB; same enumeration toolkit applies"
+  - "Often indicates a legacy Windows host"
+checks:
+  - key: netbios-name-enum
+    label: "Enumerated NetBIOS names (workstation, domain, server roles)"
+  - key: netbios-null-session
+    label: "Tested null session via NetBIOS transport"
+  - key: netbios-shares
+    label: "Listed shares accessible over NetBIOS"
+commands:
+  - label: "nmblookup NetBIOS names"
+    template: "nmblookup -A {IP}"
+  - label: "enum4linux-ng full enumeration"
+    template: "enum4linux-ng -A {IP}"
+  - label: "nmap NetBIOS scripts"
+    template: "nmap -p{PORT} --script=nbstat,smb-os-discovery {IP}"
+resources:
+  - title: "137-138-139 - Pentesting NetBIOS"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/137-138-139-pentesting-netbios"
+    author: HackTricks
+  - title: "445 - Pentesting SMB"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    author: HackTricks
