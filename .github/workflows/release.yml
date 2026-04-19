@@ -41,10 +41,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           # Semver-driven tags from the git tag. Given v1.2.3:
-          #   → ghcr.io/0xemrek/recon-deck:1.2.3
-          #   → ghcr.io/0xemrek/recon-deck:1.2
-          #   → ghcr.io/0xemrek/recon-deck:1
-          #   → ghcr.io/0xemrek/recon-deck:latest
+          #   → ghcr.io/kocaemre/recon-deck:1.2.3
+          #   → ghcr.io/kocaemre/recon-deck:1.2
+          #   → ghcr.io/kocaemre/recon-deck:1
+          #   → ghcr.io/kocaemre/recon-deck:latest
           # For v0.x.x: major-version tag is disabled to avoid an unstable "0".
           tags: |
             type=semver,pattern={{version}}

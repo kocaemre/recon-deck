@@ -9,7 +9,7 @@ recon-deck is a single-user, self-hosted, offline tool. This document describes 
 If you find a security issue, please report it through one of these channels:
 
 - **Email:** emrekoca2003@gmail.com
-- **GitHub Security Advisories:** <https://github.com/0xemrek/recon-deck/security/advisories/new>
+- **GitHub Security Advisories:** <https://github.com/kocaemre/recon-deck/security/advisories/new>
 
 This is a solo-maintainer project, not an enterprise offering. Expected response is best-effort within 7 days. Please do not disclose publicly before the maintainer has had a chance to respond.
 
@@ -119,10 +119,10 @@ This verbatim rationale is pinned at the top of `next.config.mjs` so it stays vi
 
 ## Container Supply-Chain Posture
 
-- Image is published to `ghcr.io/0xemrek/recon-deck` via tag-triggered GitHub Actions (`.github/workflows/release.yml`).
+- Image is published to `ghcr.io/kocaemre/recon-deck` via tag-triggered GitHub Actions (`.github/workflows/release.yml`).
 - Multi-arch manifest (`linux/amd64`, `linux/arm64`) built with `docker/build-push-action@v6`.
 - Authentication uses the ambient `GITHUB_TOKEN` with `packages: write` — no long-lived PAT.
-- OCI label `org.opencontainers.image.source=https://github.com/0xemrek/recon-deck` auto-links the image to the source repo on GitHub for provenance verification.
+- OCI label `org.opencontainers.image.source=https://github.com/kocaemre/recon-deck` auto-links the image to the source repo on GitHub for provenance verification.
 - Cosign / sigstore signing is a v1.1 hardening item.
 
 ---
@@ -133,10 +133,10 @@ Once you've pulled the image, these commands confirm the default-deny postures:
 
 ```bash
 # Runs as non-root (UID 1000, USER node)
-docker inspect ghcr.io/0xemrek/recon-deck:1.0.0 | jq '.[0].Config.User'
+docker inspect ghcr.io/kocaemre/recon-deck:1.0.0 | jq '.[0].Config.User'
 # → "node"
 
-docker run --rm ghcr.io/0xemrek/recon-deck:1.0.0 id -u
+docker run --rm ghcr.io/kocaemre/recon-deck:1.0.0 id -u
 # → 1000
 
 # Host-header middleware rejects a bad Host header with HTTP 421

@@ -266,7 +266,7 @@ Do **not** open a public issue or PR for a security vulnerability. Follow the
 coordinated-disclosure steps in [`SECURITY.md`](SECURITY.md):
 
 - Email: `emrekoca2003@gmail.com`
-- GitHub Security Advisories: <https://github.com/0xemrek/recon-deck/security/advisories/new>
+- GitHub Security Advisories: <https://github.com/kocaemre/recon-deck/security/advisories/new>
 
 Expected response is best-effort within 7 days. Please wait for a response
 before disclosing publicly.

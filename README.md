@@ -19,7 +19,7 @@ docker run -p 127.0.0.1:3000:3000 \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
-  ghcr.io/0xemrek/recon-deck
+  ghcr.io/kocaemre/recon-deck
 ```
 
 Open <http://localhost:3000>, paste nmap output, see cards.
@@ -46,7 +46,7 @@ docker run -p 3000:3000 \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
   -e RECON_DECK_TRUSTED_HOSTS=192.168.1.10:3000 \
-  ghcr.io/0xemrek/recon-deck
+  ghcr.io/kocaemre/recon-deck
 ```
 
 Replace `192.168.1.10:3000` with the host:port your LAN clients will use. `RECON_DECK_TRUSTED_HOSTS` is comma-separated — expand it for every additional host you want to reach the app from.
@@ -61,7 +61,7 @@ recon-deck ships a curated knowledge base under `/app/knowledge` inside the imag
 
 ```bash
 # One-off override: add a custom entry for port 445/smb
-docker run ... -v $(pwd)/my-kb:/kb ... ghcr.io/0xemrek/recon-deck
+docker run ... -v $(pwd)/my-kb:/kb ... ghcr.io/kocaemre/recon-deck
 ```
 
 Your YAML files in `/kb/ports/*.yaml` are loaded at startup and take precedence over shipped entries with the same port/service. See [CONTRIBUTING.md](CONTRIBUTING.md) for the schema, denylist rules, and placeholder syntax.
@@ -118,7 +118,7 @@ Full version pins live in `package.json`. The image is a single multi-stage `nod
 For local hacking outside the container:
 
 ```bash
-git clone https://github.com/0xemrek/recon-deck
+git clone https://github.com/kocaemre/recon-deck
 cd recon-deck
 npm install
 npm run dev

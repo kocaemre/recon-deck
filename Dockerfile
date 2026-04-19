@@ -96,7 +96,7 @@ EXPOSE 3000
 
 # OCI label auto-links image to GitHub repo (package-to-repo visibility,
 # auto-inherits repo permissions) [CITED: GitHub Packages docs].
-LABEL org.opencontainers.image.source=https://github.com/0xemrek/recon-deck
+LABEL org.opencontainers.image.source=https://github.com/kocaemre/recon-deck
 LABEL org.opencontainers.image.description="From nmap output to an actionable, port-aware recon checklist in under 30 seconds — offline, single-binary self-host."
 LABEL org.opencontainers.image.licenses=MIT
 
