@@ -33,6 +33,22 @@ a discussion issue first so scope is aligned before code is written.
 
 ---
 
+## v2.x Future Considerations
+
+These are larger directions on the long horizon — not scoped, not committed,
+not happening before v1.x feature work is complete. Listed here so users know
+the maintainer is aware of the request and has a view on it.
+
+| Direction                                            | What it might look like                                                                                                                                                                                                                                                                                                                                       | Constraints that must hold                                                                                                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local-LLM-assisted enrichment (opt-in, offline)       | A small, user-supplied local model (Ollama, llama.cpp, or a self-hosted endpoint the user explicitly configures) suggesting commands, summarising NSE script output, or proposing checklist items derived from the existing KB entries. Default off. Surfaced only when the user enables it and points the app at a model endpoint they control. | Must preserve OPS-03 (no outbound HTTP from the recon-deck process — model lives on user's machine or LAN). Must not bundle a model into the Docker image. Must surface clearly when an inference is AI-derived vs. KB-derived. Must not auto-execute suggestions. |
+
+If a clean, bounded design for this emerges (small local model, opt-in,
+offline, well-labelled outputs), it becomes a real v2 candidate. Until then
+this is a direction, not a plan.
+
+---
+
 ## Out of Scope
 
 These are items recon-deck will **not** add. The exclusion is deliberate and
@@ -44,7 +60,7 @@ stays shippable.
 | Running scans (nmap, gobuster, etc.)     | **Won't add.**          | recon-deck is post-scan workflow only. It competes with nothing, complements AutoRecon/HackTricks. Running scans would duplicate AutoRecon's job, expand the threat model, and force long-running background processes into a tool designed around synchronous render. |
 | Multi-user / team collaboration          | **Won't add.**          | Single-user self-hosted tool by design. Multi-user requires auth, RBAC, per-user state scoping, share links, conflict resolution — every one of those items expands the maintenance surface 10x and violates the "runs locally in a container" core posture. |
 | Authentication / login / users           | **Won't add.**          | Local tool. Auth adds friction and threat surface for no benefit. If you need multi-user, run multiple containers behind a reverse proxy you control. |
-| AI / LLM / exploit suggestions           | **Not planned for v1.x.** | The v1.0 product is deterministic and offline on purpose. LLM integration would mandate network egress (violating OPS-03), add hallucination risk to a security workflow, and is not what the user base has asked for. Revisit in v2.x only if a clear, bounded offline use case emerges. |
+| AI / LLM / exploit suggestions           | **Not in v1.x.** Direction noted for v2.x — see [v2.x Future Considerations](#v2x-future-considerations). | The v1.0 product is deterministic and offline on purpose. A v2 path may exist via a user-supplied local model (Ollama / self-hosted endpoint), opt-in, with AI-derived output clearly labelled — but this is a v2 design problem, not a v1.x backlog item. |
 | Mobile app / mobile-first UI             | **Won't add.**          | Pentesting happens on laptops. Mobile recon is rare, the UI wouldn't fit, and the browsers-in-scope targeting (Chromium + Firefox last 2 majors) excludes mobile Safari anyway. |
 | Cloud-hosted / SaaS version              | **Won't add.**          | Self-hosted is the entire distribution model. A hosted offering would require auth, billing, multi-tenant isolation, and a separate threat model — an entirely different project. |
 | PostgreSQL or non-SQLite DB              | **Won't add.**          | Would kill self-host simplicity. SQLite is the whole reason the Docker image is one file, one process, one volume. |
@@ -89,18 +105,23 @@ server because there is no central-server design.
 
 ### "Can you add AI / LLM / exploit suggestions?"
 
-**Not in v1.x.** recon-deck is deterministic and fully offline — the server
-process makes zero outbound HTTP requests (see OPS-03 in
-[`SECURITY.md`](SECURITY.md)). Adding an LLM integration would either require
-outbound network egress (breaking the offline guarantee) or ship a bundled
-model (breaking the < 200 MB Docker image target). It would also introduce
-hallucination risk into a security workflow, which is the wrong direction for
-the tool's trust profile.
+**Not in v1.x — but on the v2 horizon.** recon-deck v1 is deterministic and
+fully offline by design: the server process makes zero outbound HTTP requests
+(see OPS-03 in [`SECURITY.md`](SECURITY.md)). For v1.x, that posture is firm.
 
-If a clear, bounded, fully-offline LLM use case emerges in v2.x discussions —
-for example, a small local model offering command synthesis from an existing
-KB entry, gated behind a user-enabled opt-in — it may be reconsidered then.
-For v1.x it is a firm no.
+For v2.x, the direction is open under strict constraints. A viable design
+looks like this: the user supplies their own local model (Ollama, llama.cpp,
+or a self-hosted endpoint they configure), opt-in by default, with every
+AI-derived suggestion clearly labelled and never auto-executed. The recon-deck
+process itself never reaches a third-party API and never bundles a model into
+the Docker image — the offline guarantee survives. See
+[v2.x Future Considerations](#v2x-future-considerations) for the constraint
+list this design would have to satisfy.
+
+If you want to influence what this looks like, open a discussion issue with a
+concrete workflow you'd want enriched (e.g. "summarise NSE script output for
+this port", "propose checklist items for this service banner") rather than a
+generic "add AI" request.
 
 ### "Is there a mobile version / mobile app?"
 
