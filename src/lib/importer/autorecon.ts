@@ -232,18 +232,28 @@ export async function importAutoRecon(
   }
 
   // ----- 1. Locate required TCP XML (full preferred, quick fallback) -----
-  const fullEntry = Object.values(zip.files).find(
-    (f) =>
-      !f.dir &&
-      (f.name.endsWith("/scans/xml/_full_tcp_nmap.xml") ||
-        f.name === "scans/xml/_full_tcp_nmap.xml"),
+  // P1-G follow-up: multi-IP zips put each `<ip>/` under its own results/
+  // root, so the same _full_tcp_nmap.xml suffix shows up multiple times.
+  // Collect every match — the first becomes the primary import path
+  // (existing per-port AR file / manual-command logic), and the rest are
+  // walked at the end to populate scan.hosts[] without re-running the
+  // expensive AR collection routines.
+  const isFullTcp = (name: string): boolean =>
+    name.endsWith("/scans/xml/_full_tcp_nmap.xml") ||
+    name === "scans/xml/_full_tcp_nmap.xml";
+  const isQuickTcp = (name: string): boolean =>
+    name.endsWith("/scans/xml/_quick_tcp_nmap.xml") ||
+    name === "scans/xml/_quick_tcp_nmap.xml";
+
+  const allFullEntries = Object.values(zip.files).filter(
+    (f) => !f.dir && isFullTcp(f.name),
   );
-  const quickEntry = Object.values(zip.files).find(
-    (f) =>
-      !f.dir &&
-      (f.name.endsWith("/scans/xml/_quick_tcp_nmap.xml") ||
-        f.name === "scans/xml/_quick_tcp_nmap.xml"),
+  const allQuickEntries = Object.values(zip.files).filter(
+    (f) => !f.dir && isQuickTcp(f.name),
   );
+
+  const fullEntry = allFullEntries[0];
+  const quickEntry = allQuickEntries[0];
 
   const tcpEntry = fullEntry ?? quickEntry;
   if (!tcpEntry) {
@@ -259,6 +269,30 @@ export async function importAutoRecon(
     tcpEntry.name,
     /xml\/_(?:full|quick)_tcp_nmap\.xml$/,
   );
+
+  // Tally extra TCP XMLs (full preferred over quick, but if a host only has
+  // _quick we'll use that). Filter out the entry already chosen as primary.
+  const secondaryEntries: JSZip.JSZipObject[] = [];
+  const claimedNames = new Set<string>([tcpEntry.name]);
+  for (const e of allFullEntries) {
+    if (!claimedNames.has(e.name)) {
+      secondaryEntries.push(e);
+      claimedNames.add(e.name);
+    }
+  }
+  // For hosts where only _quick exists, fall back to that. Detect by base.
+  const fullBaseNames = new Set(
+    allFullEntries.map((e) =>
+      deriveScansBase(e.name, /xml\/_full_tcp_nmap\.xml$/),
+    ),
+  );
+  for (const e of allQuickEntries) {
+    const base = deriveScansBase(e.name, /xml\/_quick_tcp_nmap\.xml$/);
+    if (!fullBaseNames.has(base) && !claimedNames.has(e.name)) {
+      secondaryEntries.push(e);
+      claimedNames.add(e.name);
+    }
+  }
 
   // ----- 2. Parse TCP XML -----
   const tcpXmlString = await readEntryAsString(
@@ -557,6 +591,39 @@ export async function importAutoRecon(
     content: sourceXmlForRetainment,
     encoding: "utf8",
   });
+
+  // ----- 8. P1-G follow-up: append secondary hosts from multi-IP zips.
+  //         Each extra `_full_tcp_nmap.xml` (or `_quick_*` when full is
+  //         absent) becomes another ParsedHost on scan.hosts. Per-port AR
+  //         data and engagement-level artifacts stay scoped to the primary
+  //         host — multi-IP AR data merge is out of scope for now.
+  if (secondaryEntries.length > 0) {
+    scan.warnings.push(
+      `AutoRecon multi-IP zip detected — ${secondaryEntries.length} ` +
+        `secondary host${secondaryEntries.length === 1 ? "" : "s"} ` +
+        "imported (ports + scripts only; per-host AR data not merged).",
+    );
+    for (const entry of secondaryEntries) {
+      try {
+        const xmlString = await readEntryAsString(
+          entry,
+          MAX_REQUIRED_ENTRY_SIZE,
+          budget,
+        );
+        const secondaryScan = parseNmapXml(xmlString);
+        // parseNmapXml always returns hosts.length >= 1; copy the first
+        // (and typically only) host into our aggregate.
+        for (const ph of secondaryScan.hosts) {
+          scan.hosts.push(ph);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        scan.warnings.push(
+          `AutoRecon: failed to parse secondary host "${entry.name}" — ${msg}`,
+        );
+      }
+    }
+  }
 
   return { scan, arFiles, arCommands, arArtifacts };
 }
