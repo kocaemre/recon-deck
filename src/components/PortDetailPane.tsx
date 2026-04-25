@@ -85,7 +85,7 @@ export function PortDetailPane({
       {/* Left column */}
       <div className="flex flex-col gap-4">
         {exploitQuery && (
-          <ExploitsSection key={`exploits-${portId}`} query={exploitQuery} />
+          <ExploitsSection key={`exploits-${exploitQuery}`} query={exploitQuery} />
         )}
 
         {userCommands.length > 0 && (
@@ -378,8 +378,11 @@ function safeHostname(url: string): string {
 /**
  * P2: searchsploit-backed exploit lookup. Fires only when the operator
  * clicks "Lookup exploits" — searchsploit shell-out is up to 5 s wall
- * time, too slow for an auto-fire. Results aren't cached across port
- * switches; the parent's `key` reset gives each port a fresh state.
+ * time, too slow for an auto-fire. Per-query results live in a module-
+ * level Map so jumping back to the same port (or to another port that
+ * happens to share product+version) returns instantly without another
+ * subprocess. Cache survives across port switches but resets on full
+ * page reload — that's the right TTL for an interactive recon session.
  */
 interface ExploitHit {
   id: string;
@@ -390,8 +393,15 @@ interface ExploitHit {
   url?: string;
 }
 
+const exploitCache = new Map<string, ExploitHit[]>();
+
 function ExploitsSection({ query }: { query: string }) {
-  const [hits, setHits] = useState<ExploitHit[] | null>(null);
+  // P2 follow-up: seed state from the cache so a port switch back into a
+  // previously-looked-up product surfaces results without re-hitting
+  // searchsploit. Cache key is the verbatim query string (already trimmed
+  // by engagement page derivation).
+  const cached = exploitCache.get(query) ?? null;
+  const [hits, setHits] = useState<ExploitHit[] | null>(cached);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -410,7 +420,11 @@ function ExploitsSection({ query }: { query: string }) {
         setHits(null);
         return;
       }
-      setHits(Array.isArray(body.hits) ? body.hits : []);
+      const next = Array.isArray(body.hits)
+        ? (body.hits as ExploitHit[])
+        : [];
+      exploitCache.set(query, next);
+      setHits(next);
     } catch (err) {
       setError((err as Error).message ?? "Lookup failed.");
       setHits(null);
