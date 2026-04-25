@@ -17,8 +17,9 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { RotateCw, Search } from "lucide-react";
 import { toast } from "sonner";
+import { RescanModal } from "@/components/RescanModal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,6 +105,7 @@ export function EngagementHeader({
   const [hostname, setHostname] = useState(targetHostname ?? "");
   const [ipError, setIpError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [rescanOpen, setRescanOpen] = useState(false);
   const router = useRouter();
   const prevIpRef = useRef(targetIp);
   const prevHostnameRef = useRef(targetHostname ?? "");
@@ -264,6 +266,26 @@ export function EngagementHeader({
           ))}
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRescanOpen(true)}
+            className="inline-flex items-center gap-1.5"
+            style={{
+              height: 24,
+              padding: "0 10px",
+              borderRadius: 5,
+              background: "var(--bg-2)",
+              color: "var(--fg-muted)",
+              fontSize: 11.5,
+              fontWeight: 500,
+              border: "1px solid var(--border)",
+              cursor: "pointer",
+            }}
+            title="Re-import nmap output and reconcile ports"
+          >
+            <RotateCw size={11} />
+            Re-import
+          </button>
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
@@ -451,6 +473,15 @@ export function EngagementHeader({
           <ProgressLine done={doneChecks} total={totalChecks} height={4} />
         </div>
       </div>
+
+      {/* P1-G PR 1: re-import modal. Mounted at the header so the trigger
+          button can pop it without prop-drilling through the engagement
+          page tree. */}
+      <RescanModal
+        engagementId={engagementId}
+        open={rescanOpen}
+        onOpenChange={setRescanOpen}
+      />
 
       {/* P1-F PR 4: host selector — only rendered when the engagement has
           more than one host. Single-host engagements keep the legacy

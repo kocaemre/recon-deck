@@ -26,6 +26,7 @@ export {
   user_commands,
   wordlist_overrides,
   hosts,
+  scan_history,
   type Engagement,
   type Port,
   type PortScript,
@@ -37,6 +38,7 @@ export {
   type UserCommand,
   type WordlistOverride,
   type Host,
+  type ScanHistory,
 } from "./schema";
 export type {
   FullEngagement,
@@ -94,3 +96,8 @@ export {
   isValidWordlistKey,
 } from "./wordlists-repo";
 export { listHostsForEngagement, getPrimaryHost } from "./hosts-repo";
+export {
+  listScanHistory,
+  rescanEngagement,
+  type RescanResult,
+} from "./scan-history-repo";

@@ -57,6 +57,13 @@
       "when": 1777700000000,
       "tag": "0007_add-hosts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1777800000000,
+      "tag": "0008_add-scan-history",
+      "breakpoints": true
     }
   ]
 }

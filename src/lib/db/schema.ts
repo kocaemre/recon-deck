@@ -142,11 +142,67 @@ export const ports = sqliteTable(
     host_id: integer("host_id").references(() => hosts.id, {
       onDelete: "cascade",
     }),
+
+    /**
+     * P1-G PR 1: scan_history.id of the scan that first observed this port.
+     * Backfilled by migration 0008 to the engagement's inaugural scan row;
+     * never updated after insert.
+     */
+    first_seen_scan_id: integer("first_seen_scan_id").references(
+      () => scan_history.id,
+    ),
+
+    /**
+     * P1-G PR 1: scan_history.id of the most recent re-import that still
+     * saw this port open. Equals first_seen_scan_id until a re-import
+     * touches it.
+     */
+    last_seen_scan_id: integer("last_seen_scan_id").references(
+      () => scan_history.id,
+    ),
+
+    /**
+     * P1-G PR 1: nullable; set to scan_history.id of the re-import that
+     * first failed to observe the port (i.e. the port has gone quiet
+     * since this scan). UI can surface "closed since <date>" badges.
+     */
+    closed_at_scan_id: integer("closed_at_scan_id").references(
+      () => scan_history.id,
+    ),
   },
   (t) => [
     index("ports_engagement_id_idx").on(t.engagement_id),
     index("ports_host_id_idx").on(t.host_id),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// scan_history (v2 P1-G: track every nmap re-import per engagement)
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per nmap import against an engagement. The first row mirrors the
+ * engagement's inaugural scan (auto-inserted at createFromScan time and
+ * backfilled for legacy engagements by migration 0008). Subsequent rows
+ * are produced by the `/api/engagements/[id]/rescan` route.
+ *
+ * `ports.first_seen_scan_id`, `ports.last_seen_scan_id`,
+ * `ports.closed_at_scan_id` correlate ports to their lifecycle inside this
+ * history. PR 2 will surface these in a diff UI.
+ */
+export const scan_history = sqliteTable(
+  "scan_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    engagement_id: integer("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    raw_input: text("raw_input").notNull(),
+    source: text("source").notNull(),
+    scanned_at: text("scanned_at"),
+    created_at: text("created_at").notNull(),
+  },
+  (t) => [index("scan_history_engagement_id_idx").on(t.engagement_id)],
 );
 
 // ---------------------------------------------------------------------------
@@ -564,3 +620,6 @@ export type WordlistOverride = typeof wordlist_overrides.$inferSelect;
 
 /** Row type for the hosts table. */
 export type Host = typeof hosts.$inferSelect;
+
+/** Row type for the scan_history table. */
+export type ScanHistory = typeof scan_history.$inferSelect;

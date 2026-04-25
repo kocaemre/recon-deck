@@ -28,6 +28,7 @@ import {
   port_evidence,
   findings as findingsTable,
   hosts,
+  scan_history,
 } from "./schema";
 import type { ParsedScan } from "../parser/types";
 import type { FullEngagement, EngagementSummary, PortWithDetails } from "./types";
@@ -131,6 +132,23 @@ export function createFromScan(
       .returning({ id: engagements.id, name: engagements.name })
       .get();
 
+    // P1-G PR 1: insert the inaugural scan_history row before any port writes
+    // so newly-inserted ports can carry first_seen_scan_id / last_seen_scan_id
+    // = inaugural.id. Existing engagements were backfilled by migration 0008;
+    // every fresh createFromScan call writes its own scan_history row here.
+    const inauguralScan = tx
+      .insert(scan_history)
+      .values({
+        engagement_id: eng.id,
+        raw_input: rawInput,
+        source: scan.source,
+        scanned_at: scan.scannedAt ?? null,
+        created_at: now,
+      })
+      .returning({ id: scan_history.id })
+      .get();
+    const inauguralScanId = inauguralScan.id;
+
     // P1-F PR 2: insert one row per ParsedHost. The first host is marked
     // primary and mirrors the legacy engagements.target_ip/target_hostname/
     // os_* columns. AR data (per-port files, manual commands, screenshots)
@@ -175,6 +193,10 @@ export function createFromScan(
             version: p.version ?? null,
             tunnel: p.tunnel ?? null,
             extrainfo: p.extrainfo ?? null,
+            // P1-G PR 1: every new port belongs to the inaugural scan_history
+            // row of this engagement. last_seen will advance on re-imports.
+            first_seen_scan_id: inauguralScanId,
+            last_seen_scan_id: inauguralScanId,
           })
           .returning({ id: ports.id })
           .get();
