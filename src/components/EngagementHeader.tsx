@@ -15,6 +15,7 @@
  */
 
 import { useState, useRef } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
@@ -69,6 +70,15 @@ interface EngagementHeaderProps {
   addresses?: Array<{ addr: string; addrtype: string; vendor?: string }>;
   /** v2: secondary hostnames (PTR + user) — first hostname already shown via targetHostname. */
   hostnames?: Array<{ name: string; type: string }>;
+  /** P1-F PR 4: every host in the engagement — drives the host selector row. */
+  hosts?: Array<{
+    id: number;
+    ip: string;
+    hostname: string | null;
+    is_primary: boolean;
+  }>;
+  /** P1-F PR 4: id of the currently-selected host (driven by `?host=<id>`). */
+  activeHostId?: number | null;
 }
 
 export function EngagementHeader({
@@ -87,6 +97,8 @@ export function EngagementHeader({
   finishedAt,
   addresses,
   hostnames,
+  hosts,
+  activeHostId,
 }: EngagementHeaderProps) {
   const [ip, setIp] = useState(targetIp);
   const [hostname, setHostname] = useState(targetHostname ?? "");
@@ -415,6 +427,59 @@ export function EngagementHeader({
           <ProgressLine done={doneChecks} total={totalChecks} height={4} />
         </div>
       </div>
+
+      {/* P1-F PR 4: host selector — only rendered when the engagement has
+          more than one host. Single-host engagements keep the legacy
+          two-row header verbatim. Each chip is a `Link` to `?host=<id>`,
+          which triggers a soft RSC re-render so the heatmap re-scopes. */}
+      {hosts && hosts.length > 1 && (
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
+          <Label>Hosts</Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {hosts.map((h) => {
+              const isActive = activeHostId === h.id;
+              const display = h.hostname ? `${h.hostname} (${h.ip})` : h.ip;
+              return (
+                <Link
+                  key={h.id}
+                  href={`/engagements/${engagementId}?host=${h.id}`}
+                  scroll={false}
+                  className="mono"
+                  style={{
+                    fontSize: 11.5,
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+                    background: isActive ? "var(--bg-3)" : "var(--bg-2)",
+                    color: isActive ? "var(--accent)" : "var(--fg-muted)",
+                    textDecoration: "none",
+                    fontWeight: isActive ? 600 : 500,
+                  }}
+                  title={
+                    h.is_primary
+                      ? `Primary host · ${h.ip}`
+                      : `Switch to ${h.ip}`
+                  }
+                >
+                  {display}
+                  {h.is_primary && (
+                    <span
+                      style={{
+                        marginLeft: 4,
+                        color: "var(--accent)",
+                        fontSize: 9,
+                      }}
+                      aria-label="primary host"
+                    >
+                      ★
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -477,6 +477,10 @@ export function listSummaries(db: Db): EngagementSummary[] {
       source: engagements.source,
       created_at: engagements.created_at,
       port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
+      // P1-F PR 4: host_count surfaces in the sidebar as a "N hosts" chip
+      // when > 1. Single-host engagements still render the legacy compact
+      // row (no chip) — the Sidebar component branches on host_count > 1.
+      host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
     })
     .from(engagements)
     .orderBy(desc(engagements.created_at))

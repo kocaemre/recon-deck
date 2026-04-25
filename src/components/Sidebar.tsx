@@ -200,6 +200,7 @@ export function Sidebar({ engagements }: SidebarProps) {
                     name={e.name}
                     ip={e.target_ip}
                     portCount={e.port_count}
+                    hostCount={e.host_count}
                     createdAt={e.created_at}
                     done={e.done}
                     total={e.total}
@@ -243,6 +244,7 @@ function SidebarRow({
   name,
   ip,
   portCount,
+  hostCount,
   createdAt,
   done,
   total,
@@ -252,6 +254,7 @@ function SidebarRow({
   name: string;
   ip: string;
   portCount: number;
+  hostCount: number;
   createdAt: string;
   done: number;
   total: number;
@@ -298,6 +301,15 @@ function SidebarRow({
         <span className="truncate" style={{ minWidth: 0 }}>
           {ip}
         </span>
+        {/* P1-F PR 4: multi-host engagements show "Nh" host count chip
+            (kept compact to fit the existing meta row width). Single-host
+            engagements omit the chip — visual layout unchanged. */}
+        {hostCount > 1 && (
+          <>
+            <span>·</span>
+            <span style={{ color: "var(--accent)" }}>{hostCount}h</span>
+          </>
+        )}
         <span>·</span>
         <span>{portCount}p</span>
         <span>·</span>

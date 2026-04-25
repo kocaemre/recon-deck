@@ -74,4 +74,6 @@ export type EngagementSummary = Pick<
   "id" | "name" | "target_ip" | "target_hostname" | "source" | "created_at"
 > & {
   port_count: number;
+  /** P1-F PR 4: number of hosts in the engagement (≥1 always). */
+  host_count: number;
 };

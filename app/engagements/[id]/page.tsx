@@ -58,9 +58,13 @@ function interpolateCommand(
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ host?: string }>;
 }
 
-export default async function EngagementPage({ params }: PageProps) {
+export default async function EngagementPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id: idStr } = await params;
   const id = parseInt(idStr, 10);
   if (isNaN(id)) notFound();
@@ -72,6 +76,20 @@ export default async function EngagementPage({ params }: PageProps) {
   // same {WORDLIST_*} resolution.
   const wordlistOverrides = getWordlistOverridesMap(db);
 
+  // P1-F PR 4: resolve the active host from `?host=<id>` search param.
+  // Fallback chain: explicit param → primary host → first host (defensive).
+  // Single-host engagements ignore the param entirely; the active host is
+  // simply the only host. Multi-host engagements use the param to drive the
+  // header chip selector and filter the heatmap.
+  const { host: hostParam } = await searchParams;
+  const requestedHostId = hostParam ? parseInt(hostParam, 10) : NaN;
+  const activeHost =
+    engagement.hosts.find((h) => h.id === requestedHostId) ??
+    engagement.hosts.find((h) => h.is_primary) ??
+    engagement.hosts[0];
+  const activeHostId = activeHost?.id ?? null;
+  const isMultiHost = engagement.hosts.length > 1;
+
   let warnings: string[] = [];
   try {
     warnings = JSON.parse(engagement.warnings_json);
@@ -79,7 +97,12 @@ export default async function EngagementPage({ params }: PageProps) {
     warnings = [];
   }
 
-  const sortedPorts = [...engagement.ports].sort((a, b) => a.port - b.port);
+  // P1-F PR 4: filter ports to the active host. host_id was backfilled by
+  // migration 0007 so every port has one; the `?? null` fallback only
+  // triggers if a future code path forgets to set it.
+  const sortedPorts = [...engagement.ports]
+    .filter((p) => activeHostId === null || p.host_id === activeHostId)
+    .sort((a, b) => a.port - b.port);
 
   let totalChecks = 0;
   let doneChecks = 0;
@@ -194,6 +217,15 @@ export default async function EngagementPage({ params }: PageProps) {
     }
   }
 
+  // P1-F PR 4: command interpolation now uses the *active host's* IP and
+  // hostname rather than the legacy engagements.target_ip column. For
+  // single-host engagements activeHost === primary host so this is the same
+  // value; for multi-host engagements the operator-selected host drives
+  // {IP}/{HOST} resolution. Fallback to legacy columns is defensive — every
+  // engagement has at least one host after migration 0007.
+  const targetIp = activeHost?.ip ?? engagement.target_ip;
+  const targetHostname = activeHost?.hostname ?? engagement.target_hostname;
+
   const portData = sortedPorts.map((p) => {
     const kbEntry = matchPort(kb, p.port, p.service ?? undefined);
 
@@ -201,9 +233,9 @@ export default async function EngagementPage({ params }: PageProps) {
       label: cmd.label,
       command: interpolateCommand(
         cmd.template,
-        engagement.target_ip,
+        targetIp,
         p.port,
-        engagement.target_hostname,
+        targetHostname,
         wordlistOverrides,
       ),
     }));
@@ -214,9 +246,9 @@ export default async function EngagementPage({ params }: PageProps) {
       label: u.label,
       command: interpolateCommand(
         u.template,
-        engagement.target_ip,
+        targetIp,
         p.port,
-        engagement.target_hostname,
+        targetHostname,
         wordlistOverrides,
       ),
     }));
@@ -249,9 +281,9 @@ export default async function EngagementPage({ params }: PageProps) {
       label: cmd.label,
       command: interpolateCommand(
         cmd.template,
-        engagement.target_ip,
+        targetIp,
         p.port,
-        engagement.target_hostname,
+        targetHostname,
         wordlistOverrides,
       ),
     }));
@@ -349,12 +381,19 @@ export default async function EngagementPage({ params }: PageProps) {
         name={engagement.name}
         source={engagement.source}
         createdAt={engagement.created_at}
-        targetIp={engagement.target_ip}
-        targetHostname={engagement.target_hostname}
+        targetIp={targetIp}
+        targetHostname={targetHostname}
         portCount={sortedPorts.length}
         totalChecks={totalChecks}
         doneChecks={doneChecks}
         riskCounts={riskCounts}
+        hosts={engagement.hosts.map((h) => ({
+          id: h.id,
+          ip: h.ip,
+          hostname: h.hostname,
+          is_primary: h.is_primary,
+        }))}
+        activeHostId={activeHostId}
         scanner={reparsed?.scanner}
         extraPorts={reparsed?.extraPorts}
         finishedAt={reparsed?.runstats?.finishedAt}
