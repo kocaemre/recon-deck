@@ -2,7 +2,7 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP importer + P2 searchsploit MVP bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), DIST Bun binary (büyük, ayrı oturum).
+> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP importer + P2 searchsploit MVP bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), Docker UX iyileştirmeleri (install one-liner + compose). **DIST/Bun binary roadmap'ten çıkarıldı** — Docker yeterli, Bun + Next.js bleeding edge ve maliyet/fayda düşük.
 >
 > Test durumu: **397/397 yeşil**, TypeScript: 0 hata.
 
@@ -440,27 +440,17 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 
 ---
 
-### DIST — Bun binary build pipeline
+### DIST — Docker UX iyileştirmeleri
 
-**Amaç:** Docker yerine tek dosya executable. OSCP öğrencisinin Kali VM'inde sıfır-bağımlılık çalışsın.
+**Amaç:** Docker zaten çalışıyor (`ghcr.io/kocaemre/recon-deck`). Pentester onboarding sürtünmesini düşürmek için keşfedilebilirlik + tek-komut kurulum.
 
 **Adımlar:**
-1. `package.json`'a `"bun-build"` scripti ekle: `bun build app/server.js --compile --target=bun-linux-x64 --outfile dist/recon-deck-linux-x64`
-2. Next.js standalone build → bun ile sarma (custom server.js gerekebilir)
-3. better-sqlite3 → `bun:sqlite` swap (DB layer'da feature flag: runtime'a göre adapter seç)
-4. GitHub Actions workflow (`.github/workflows/release.yml`):
-   - 4 platform (linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64) için bun build
-   - GitHub Releases'a upload
-   - Cosign signing (zaten v1.1 candidate listesinde)
-5. README'de install one-liner:
-   ```bash
-   curl -sSL https://github.com/.../install.sh | sh
-   # veya
-   wget https://github.com/.../recon-deck-linux-x64 && chmod +x recon-deck-linux-x64 && ./recon-deck-linux-x64
-   ```
-6. Docker'ı kaldırma — server/lab kullanımı için kalsın
+1. `install.sh` repo root'una — `docker run -d -v ~/.recon-deck/data:/data -p 3000:3000 ghcr.io/kocaemre/recon-deck:latest` arka planda çalıştırır + browser açar
+2. `docker-compose.yml` repo root'una — persistent volume + port mapping + restart policy
+3. README quickstart section: "Kali'de 30 saniyede" başlıklı, üç yol (one-liner, compose, manuel docker run)
+4. GitHub Releases'da version'lanmış image tag'i (latest yanında v2.0, v2.1 gibi)
 
-**Risk:** better-sqlite3 → bun:sqlite migration'ı sıkıntı çıkarabilir (SQL syntax aynı ama API farklı). Fallback: pkg/nexe kullan, Bun atla.
+**Out of scope (artık):** Bun binary build pipeline. Docker + Compose pentester ihtiyacını fazlasıyla karşılıyor; Bun + Next.js bleeding edge ve maintenance yükü değer önerisini aşıyordu.
 
 ---
 
@@ -481,13 +471,13 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 **Sıradaki seçenekler (kalanlar):**
 1. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder. Düşük öncelik.
 2. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror, dual-write çalışıyor). Schema temizliği için migration 0009 + cascade gerekir; pragmatik retain.
-3. **DIST — Bun binary build** — büyük, ayrı oturum (better-sqlite3 → bun:sqlite + 4 platform CI workflow).
+3. **DIST — Docker UX** — install.sh + docker-compose.yml + README quickstart. Küçük iş, ~30 dk.
 4. **searchsploit cache** — şu an her tıkta shell-out. Per-port cache (memory veya DB) eklenebilir; minor.
 5. **P2 ek lookup'lar** — NVD CVE local mirror, vulners local DB, KB known_vulns auto-match. searchsploit'a benzer pattern.
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
-**DIST (Bun binary) — ayrı oturum: Next.js standalone + Bun build, 4 platform CI workflow.**
+**DIST (Docker UX) — küçük iş: install.sh + docker-compose.yml + README quickstart. Bun binary roadmap'ten çıkarıldı.**
 
 **Test komutları (her görev sonu):**
 ```bash
@@ -513,7 +503,7 @@ nohup npx next dev -p 3030 > /tmp/nextdev.log 2>&1 &
 - **PR 3 — AR multi-IP importer scope:** AutoRecon zip'i `results/<ip>/...` yapısında multi-IP olabilir. PR 3'te tam destek mi (zip'i her IP için ayrı host olarak parse), yoksa **defer** edip PR 3'ü sadece view-model + export'a indirgeyip AR multi-IP'i ayrı küçük PR'a mı bırakalım? Defer daha güvenli çünkü AR multi-IP fixture'ı yok, yeni edge-case'ler çıkar; tam destek daha "tam" hisseder. Önerim: **defer.** PR 3 kapsamı = sadece view-model + 3 export + report page + testler.
 - **PR 3 — JSON export shape breaking change:** Mevcut JSON export `ports: [...]` top-level. Multi-host shape'inde `hosts: [{ports: [...]}]` olmalı. SysReptor/PwnDoc gibi downstream tüketici varsa breaking change. Önerim: `export_version: 2` field'ı ekle + eski `ports` field'ını compat için **bilinçli olarak retain et** (= `hosts.flatMap(h => h.ports)`).
 - **PR 4 — `engagements.target_ip/target_hostname` sonu:** PR 4'te UI host selector eklenince bu kolonlar deprecate. Tamamen kaldır mı (migration 0008 + cascade), yoksa retain edip "primary host'un mirror'ı" olarak documente et mi? Kaldırmak temiz ama migration cost'u var; retain etmek dual-write ile kalır (createFromScan + updateTarget zaten yazıyor).
-- **better-sqlite3 → bun:sqlite migration'ı:** Bun binary için kritik. Adapter pattern mı, yoksa branch'ler mi?
+- ~~**better-sqlite3 → bun:sqlite migration'ı**~~ — Bun binary roadmap'ten çıkarıldığı için artık gerekli değil; better-sqlite3 ile kalınıyor.
 - **port_evidence MAX_FILE_SIZE:** 4 MB mı 8 MB mı? Pentester clipboard paste'i 1-2 MB olur genelde, 4 MB cap mantıklı.
 - **Scan history vs raw_input:** P1-G mevcut `engagement.raw_input`'u koruyor mu, yoksa scan_history'ye taşıyıp engagement'tan kolonu kaldırıyor mu?
 - **searchsploit cache TTL:** P2 candidate — exploit lookup cache invalidate süresi (1 hafta? manual refresh?). exploitdb haftalık update.
