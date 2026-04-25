@@ -21,14 +21,17 @@ describe("XSS fixture test (TEST-05)", () => {
   ];
 
   const componentDir = path.resolve(__dirname, "../../src/components");
-  const portCardPath = path.join(componentDir, "PortCard.tsx");
+  // Modern IDE redesign extracted the port detail body from PortCard into
+  // PortDetailPane (heatmap layout). XSS invariants now live in PortDetailPane
+  // for the per-port NSE render path.
+  const portDetailPanePath = path.join(componentDir, "PortDetailPane.tsx");
   const engagementPagePath = path.resolve(
     __dirname,
     "../../app/engagements/[id]/page.tsx",
   );
   // Phase 07-04 (UI-11) extracted the per-script render path into
-  // StructuredScriptOutput, which is consumed by both PortCard (per-port
-  // NSE) and HostScriptCard (host-level findings). The XSS-safety
+  // StructuredScriptOutput, which is consumed by both the port detail pane
+  // (per-port NSE) and HostScriptCard (host-level findings). The XSS-safety
   // invariants now live in StructuredScriptOutput; keep the literal
   // assertions there so a regression in either render branch is caught.
   const structuredScriptOutputPath = path.join(
@@ -37,8 +40,8 @@ describe("XSS fixture test (TEST-05)", () => {
   );
   const hostScriptCardPath = path.join(componentDir, "HostScriptCard.tsx");
 
-  it("PortCard.tsx does NOT contain dangerouslySetInnerHTML", () => {
-    const source = fs.readFileSync(portCardPath, "utf8");
+  it("PortDetailPane.tsx does NOT contain dangerouslySetInnerHTML", () => {
+    const source = fs.readFileSync(portDetailPanePath, "utf8");
     expect(source).not.toContain("dangerouslySetInnerHTML");
   });
 
@@ -47,13 +50,13 @@ describe("XSS fixture test (TEST-05)", () => {
     expect(source).not.toContain("dangerouslySetInnerHTML");
   });
 
-  it("PortCard delegates per-script render to StructuredScriptOutput (UI-11 / Phase 07-04)", () => {
-    // The per-script <pre>{s.output}</pre> block was extracted into
-    // <StructuredScriptOutput script={s} /> in Phase 07-04. PortCard now
-    // ONLY renders the delegation; the actual XSS-safe text node lives in
-    // StructuredScriptOutput (asserted separately below).
-    const source = fs.readFileSync(portCardPath, "utf8");
-    expect(source).toContain("<StructuredScriptOutput key={s.id} script={s}");
+  it("PortDetailPane delegates per-script render to StructuredScriptOutput", () => {
+    // The per-script <pre>{s.output}</pre> block lives behind
+    // <StructuredScriptOutput script={s} />. PortDetailPane only renders the
+    // delegation; the actual XSS-safe text node lives in StructuredScriptOutput
+    // (asserted separately below).
+    const source = fs.readFileSync(portDetailPanePath, "utf8");
+    expect(source).toContain("<StructuredScriptOutput script={s} />");
   });
 
   it("StructuredScriptOutput renders NSE output via React text node interpolation", () => {
@@ -93,9 +96,9 @@ describe("XSS fixture test (TEST-05)", () => {
     for (const payload of HOSTILE_PAYLOADS) {
       expect(payload.includes("<") || payload.includes(">") || payload.includes("'")).toBe(true);
     }
-    const portCardSource = fs.readFileSync(portCardPath, "utf8");
-    expect(portCardSource).not.toMatch(/innerHTML/i);
-    expect(portCardSource).not.toMatch(/\.html\s*\(/);
+    const portDetailPaneSource = fs.readFileSync(portDetailPanePath, "utf8");
+    expect(portDetailPaneSource).not.toMatch(/innerHTML/i);
+    expect(portDetailPaneSource).not.toMatch(/\.html\s*\(/);
   });
 
   it("no component in src/components/ uses dangerouslySetInnerHTML", () => {

@@ -50,11 +50,19 @@ describe("parseNmapXml (Plan 02)", () => {
     });
   });
 
-  describe("D-09: multi-host first-host-only", () => {
-    it("multi-host.xml: parses first host only, warns on remaining 2", () => {
+  describe("P1-F PR 2: multi-host XML fully parsed", () => {
+    it("multi-host.xml: every <host> element surfaces in scan.hosts", () => {
       const result = parseNmapXml(loadFixture("multi-host.xml"));
+      // Legacy mirror still points at the first host (back-compat).
       expect(result.target.ip).toBe("10.10.10.5");
-      expect(result.warnings.some((w) => /2 additional host/.test(w))).toBe(true);
+      // New: all 3 hosts are exposed; the multi-host warning is gone.
+      expect(result.hosts).toHaveLength(3);
+      expect(result.warnings.some((w) => /additional host/.test(w))).toBe(
+        false,
+      );
+      // Each ParsedHost carries its own target.
+      const ips = result.hosts.map((h) => h.target.ip);
+      expect(ips).toContain("10.10.10.5");
     });
   });
 

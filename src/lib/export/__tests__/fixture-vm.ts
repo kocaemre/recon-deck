@@ -112,11 +112,15 @@ const SCANNED_AT = "2026-04-17T10:00:00.000Z";
 const TARGET_IP = "10.10.10.5";
 const TARGET_HOSTNAME = "box.htb";
 
+// P1-F PR 1: every Port row has host_id; the fixture's primary host id is 1.
+const PRIMARY_HOST_ID = 1;
+
 // Port A — 443/tcp (https, AR data, unchecked check, NULL notes)
 const PORT_A_ID = 3;
 const portA: Port = {
   id: PORT_A_ID,
   engagement_id: ENGAGEMENT_ID,
+  host_id: PRIMARY_HOST_ID,
   port: 443,
   protocol: "tcp",
   state: "open",
@@ -185,6 +189,7 @@ const PORT_B_ID = 2;
 const portB: Port = {
   id: PORT_B_ID,
   engagement_id: ENGAGEMENT_ID,
+  host_id: PRIMARY_HOST_ID,
   port: 80,
   protocol: "tcp",
   state: "open",
@@ -240,6 +245,7 @@ const PORT_C_ID = 1;
 const portC: Port = {
   id: PORT_C_ID,
   engagement_id: ENGAGEMENT_ID,
+  host_id: PRIMARY_HOST_ID,
   port: 53,
   protocol: "udp",
   state: "open",
@@ -302,11 +308,29 @@ const engagement: Engagement = {
   updated_at: UPDATED_AT,
 };
 
+// P1-F PR 1: primary host row mirroring the legacy target columns. Once the
+// UI reads from `hosts` directly this fixture will gain multi-host variants.
+const primaryHost = {
+  id: PRIMARY_HOST_ID,
+  engagement_id: ENGAGEMENT_ID,
+  ip: TARGET_IP,
+  hostname: TARGET_HOSTNAME,
+  state: null,
+  os_name: "Linux 5.x",
+  os_accuracy: 95,
+  is_primary: true,
+  scanned_at: SCANNED_AT,
+};
+
 // Ports inserted in REVERSE order so Plan 01's ascending sort is observable.
 const fullEngagement: FullEngagement = {
   ...engagement,
+  hosts: [primaryHost],
   ports: [portA_detail, portB_detail, portC_detail],
   hostScripts: [hostScript],
+  engagementArtifacts: [],
+  evidence: [],
+  findings: [],
 };
 
 // ---------------------------------------------------------------------------

@@ -1,26 +1,23 @@
 "use client";
 
 /**
- * Engagement header bar (Phase 4, Plan 04-05 Task 1; Phase 6, Plan 06-06 Task 2).
+ * Engagement header — Modern IDE redesign (two-row layout).
  *
- * Displays engagement name, inline-editable target IP/hostname,
- * port count, global progress bar, and an Export dropdown menu with
- * Markdown / JSON / HTML download items plus a Print / PDF item that opens
- * the print-optimized `/engagements/[id]/report` route in a new tab.
+ * Row 1: ENGAGEMENT label, name, source + created chips, Palette button,
+ *        Export dropdown.
+ * Row 2: Target IP (inline edit), hostname (inline edit), port count +
+ *        risk-distribution chips, and a progress stack aligned right.
  *
- * Design refs: D-12 (header bar layout), INPUT-03 (target edit),
- * CD-06 (copywriting), UI-05 (progress bar),
- * Phase 6 D-01/D-02/D-03/D-04 (Export dropdown UX + toast feedback).
- *
- * Target IP validates non-empty on blur — restores previous value
- * and shows inline error per Copywriting Contract.
+ * Preserves existing behavior:
+ *   - Inline edit with empty-IP validation (restore on blur).
+ *   - Export dropdown with Markdown / JSON / HTML / Print PDF.
+ *   - Toast feedback (Phase 6 D-04).
  */
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,27 +25,68 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProgressBar } from "@/components/ProgressBar";
+import { useUIStore } from "@/lib/store";
 import { updateEngagementTarget } from "../../app/engagements/[id]/actions";
+
+type RiskKey = "critical" | "high" | "medium" | "low" | "info";
+
+const RISK_SHORT: Record<RiskKey, string> = {
+  critical: "crit",
+  high: "high",
+  medium: "med",
+  low: "low",
+  info: "info",
+};
+
+const RISK_VAR: Record<RiskKey, string> = {
+  critical: "var(--risk-crit)",
+  high: "var(--risk-high)",
+  medium: "var(--risk-med)",
+  low: "var(--risk-low)",
+  info: "var(--risk-info)",
+};
+
+const RISK_ORDER: RiskKey[] = ["critical", "high", "medium", "low", "info"];
 
 interface EngagementHeaderProps {
   engagementId: number;
   name: string;
+  source: string;
+  createdAt: string;
   targetIp: string;
   targetHostname: string | null;
   portCount: number;
   totalChecks: number;
   doneChecks: number;
+  riskCounts: Partial<Record<RiskKey, number>>;
+  /** v2: optional scanner meta from `<nmaprun version args ...>`. */
+  scanner?: { name?: string; version?: string; args?: string };
+  /** v2: optional extra-ports summary from `<extraports>` / "Not shown:". */
+  extraPorts?: { state: string; count: number }[];
+  /** v2: optional finished-at timestamp from `<runstats><finished>`. */
+  finishedAt?: string;
+  /** v2: secondary addresses (IPv6 + MAC) — first IPv4/IPv6 already shown via targetIp. */
+  addresses?: Array<{ addr: string; addrtype: string; vendor?: string }>;
+  /** v2: secondary hostnames (PTR + user) — first hostname already shown via targetHostname. */
+  hostnames?: Array<{ name: string; type: string }>;
 }
 
 export function EngagementHeader({
   engagementId,
   name,
+  source,
+  createdAt,
   targetIp,
   targetHostname,
   portCount,
   totalChecks,
   doneChecks,
+  riskCounts,
+  scanner,
+  extraPorts,
+  finishedAt,
+  addresses,
+  hostnames,
 }: EngagementHeaderProps) {
   const [ip, setIp] = useState(targetIp);
   const [hostname, setHostname] = useState(targetHostname ?? "");
@@ -57,16 +95,8 @@ export function EngagementHeader({
   const router = useRouter();
   const prevIpRef = useRef(targetIp);
   const prevHostnameRef = useRef(targetHostname ?? "");
+  const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
 
-  // NOTE (v1 acceptable): Both IP and Hostname inputs trigger handleTargetSave
-  // on blur. When the user edits IP then tabs to hostname, blur fires with the
-  // new IP + old hostname. When the user then clicks away, blur fires again with
-  // new IP + new hostname. The short-circuit check (trimmedIp === prevIpRef etc.)
-  // prevents redundant saves when nothing changed, but when both fields are edited
-  // the first blur persists an intermediate state that the second blur immediately
-  // overwrites. This results in two sequential server action calls — functionally
-  // correct in the end, just slightly chatty. A debounced form-level save would
-  // eliminate this, but is deferred to a future polish pass.
   async function handleTargetSave() {
     const trimmedIp = ip.trim();
     if (!trimmedIp) {
@@ -75,14 +105,12 @@ export function EngagementHeader({
       return;
     }
     setIpError(null);
-
     if (
       trimmedIp === prevIpRef.current &&
       hostname.trim() === prevHostnameRef.current
     ) {
-      return; // No change
+      return;
     }
-
     setSaving(true);
     try {
       await updateEngagementTarget(
@@ -107,11 +135,6 @@ export function EngagementHeader({
     }
   }
 
-  // Download helper: fetch the server-generated export, create an object URL,
-  // trigger anchor-click, revoke URL, fire success toast. Co-located with the
-  // DropdownMenu because `targetIp` and `engagementId` are already in scope
-  // here; a separate helper module would require threading both through
-  // parameters without any additional reuse benefit today.
   async function downloadExport(format: "markdown" | "json" | "html") {
     try {
       const res = await fetch(
@@ -125,17 +148,12 @@ export function EngagementHeader({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // Content-Disposition filename is authoritative for downloads in modern
-      // Chrome/Firefox, but passing `a.download` as fallback mirrors D-21 so
-      // the user sees the same filename even if the header is stripped by a
-      // middlebox (rare, but zero-cost belt-and-braces).
       const ext = format === "markdown" ? "md" : format;
       a.download = `${targetIp}-${new Date().toISOString().slice(0, 10)}.${ext}`;
-      document.body.appendChild(a); // required for Firefox to honor the click
+      document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      // D-04: success toast mirrors Phase 4 D-14 "Copied!" pattern.
       const label =
         format === "markdown" ? "Markdown" : format === "json" ? "JSON" : "HTML";
       toast.success(`${label} exported`);
@@ -145,12 +163,6 @@ export function EngagementHeader({
   }
 
   function openPrintReport() {
-    // window.open per D-03 — the intent is "new tab" so the user keeps the
-    // engagement page intact. router.push cannot open new tabs (it navigates
-    // the current tab), and <Link target="_blank"> would require changing the
-    // dropdown item surface. `noopener,noreferrer` is the T-06-16 mitigation
-    // (tab-nabbing): it prevents the new tab from reaching `window.opener`
-    // and from sending a Referer header.
     window.open(
       `/engagements/${engagementId}/report`,
       "_blank",
@@ -158,40 +170,142 @@ export function EngagementHeader({
     );
   }
 
+  const createdLabel = (() => {
+    try {
+      return new Date(createdAt).toISOString().slice(0, 10);
+    } catch {
+      return createdAt;
+    }
+  })();
+
+  const pct = totalChecks === 0 ? 0 : Math.round((doneChecks / totalChecks) * 100);
+
   return (
-    <div className="space-y-3 border-b border-border px-6 pb-4 pt-6">
-      {/* Row 1: Name + Export dropdown */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold text-foreground">{name}</h1>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => downloadExport("markdown")}>
-              Markdown (.md)
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => downloadExport("json")}>
-              JSON (.json)
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => downloadExport("html")}>
-              HTML (.html)
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={openPrintReport}>
-              Print / PDF…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <div
+      className="px-6 pt-[18px] pb-4"
+      style={{ background: "var(--bg-1)", borderBottom: "1px solid var(--border)" }}
+    >
+      {/* Row 1: label + name + chips + palette + export */}
+      <div className="mb-[10px] flex items-center gap-3">
+        <span
+          className="uppercase tracking-[0.08em] font-medium mono"
+          style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
+        >
+          ENGAGEMENT
+        </span>
+        <h1
+          className="font-semibold"
+          style={{ fontSize: 17, letterSpacing: "-0.01em" }}
+        >
+          {name}
+        </h1>
+        <Chip mono>{source}</Chip>
+        <Chip variant="solid" mono>
+          created {createdLabel}
+        </Chip>
+        {scanner?.version && (
+          <Chip variant="solid" mono title={scanner.args ?? `nmap ${scanner.version}`}>
+            nmap {scanner.version}
+          </Chip>
+        )}
+        {finishedAt && (
+          <Chip variant="solid" mono title={finishedAt}>
+            finished {finishedAt.slice(0, 10)}
+          </Chip>
+        )}
+        {/* v2: secondary addresses/hostnames — render only the ones not already
+           shown as primary (targetIp / targetHostname). */}
+        {addresses
+          ?.filter((a) => a.addr !== targetIp)
+          .map((a, i) => (
+            <Chip
+              key={`addr-${i}`}
+              variant="solid"
+              mono
+              title={a.vendor ? `${a.addrtype} · ${a.vendor}` : a.addrtype}
+            >
+              {a.addr}
+            </Chip>
+          ))}
+        {hostnames
+          ?.filter((h) => h.name !== (targetHostname ?? ""))
+          .map((h, i) => (
+            <Chip
+              key={`host-${i}`}
+              variant="solid"
+              mono
+              title={`hostname · ${h.type}`}
+            >
+              {h.name}
+            </Chip>
+          ))}
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="btn-sm-ghost inline-flex items-center gap-1.5"
+            style={{
+              height: 24,
+              padding: "0 8px",
+              borderRadius: 5,
+              background: "transparent",
+              color: "var(--fg-muted)",
+              fontSize: 11.5,
+              fontWeight: 500,
+              border: "1px solid transparent",
+              cursor: "pointer",
+            }}
+          >
+            <Search size={12} />
+            Palette
+            <Kbd>⌘K</Kbd>
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1"
+                style={{
+                  height: 24,
+                  padding: "0 8px",
+                  borderRadius: 5,
+                  background: "var(--bg-2)",
+                  color: "var(--fg)",
+                  fontSize: 11.5,
+                  fontWeight: 500,
+                  border: "1px solid var(--border)",
+                  cursor: "pointer",
+                }}
+              >
+                Export
+                <span style={{ color: "var(--fg-subtle)" }}>▾</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => downloadExport("markdown")}>
+                Markdown (.md)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => downloadExport("json")}>
+                JSON (.json)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => downloadExport("html")}>
+                HTML (.html)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={openPrintReport}>
+                Print / PDF…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Row 2: Target IP + Hostname inputs */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1">
-          <label className="text-xs text-muted-foreground">Target IP</label>
-          <Input
+      {/* Row 2: targets + ports + progress */}
+      <div className="flex items-end gap-6">
+        <div className="min-w-[140px]">
+          <Label>Target IP</Label>
+          <input
             value={ip}
             onChange={(e) => {
               setIp(e.target.value);
@@ -199,33 +313,222 @@ export function EngagementHeader({
             }}
             onBlur={handleTargetSave}
             onKeyDown={handleKeyDown}
-            placeholder="e.g. 10.10.10.1 or target.htb"
-            className="mt-1 font-mono text-sm"
+            placeholder="e.g. 10.10.10.1"
             disabled={saving}
+            className="mono mt-1 w-full"
+            style={{
+              background: "transparent",
+              border: "1px solid transparent",
+              padding: "2px 6px",
+              marginLeft: -6,
+              borderRadius: 4,
+              color: "var(--fg)",
+              fontSize: 15,
+              outline: "none",
+            }}
           />
           {ipError && (
-            <p className="mt-1 text-xs text-destructive">{ipError}</p>
+            <p
+              className="mt-1"
+              style={{ fontSize: 11, color: "var(--risk-crit)" }}
+            >
+              {ipError}
+            </p>
           )}
         </div>
-        <div className="flex-1">
-          <label className="text-xs text-muted-foreground">Hostname</label>
-          <Input
+
+        <Divider />
+
+        <div className="min-w-[140px]">
+          <Label>Hostname</Label>
+          <input
             value={hostname}
             onChange={(e) => setHostname(e.target.value)}
             onBlur={handleTargetSave}
             onKeyDown={handleKeyDown}
             placeholder="optional"
-            className="mt-1 font-mono text-sm"
             disabled={saving}
+            className="mono mt-1 w-full"
+            style={{
+              background: "transparent",
+              border: "1px solid transparent",
+              padding: "2px 6px",
+              marginLeft: -6,
+              borderRadius: 4,
+              color: "var(--fg)",
+              fontSize: 15,
+              outline: "none",
+            }}
           />
         </div>
-        <div className="pt-5 text-sm text-muted-foreground">
-          {portCount} {portCount === 1 ? "port" : "ports"}
+
+        <Divider />
+
+        <div>
+          <Label>Ports</Label>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="mono" style={{ fontSize: 15 }}>
+              {portCount}
+            </span>
+            <div className="flex items-center gap-1">
+              {RISK_ORDER.map((r) =>
+                riskCounts[r] ? (
+                  <Chip key={r} mono>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 2,
+                        background: RISK_VAR[r],
+                        display: "inline-block",
+                      }}
+                    />{" "}
+                    {riskCounts[r]}
+                  </Chip>
+                ) : null,
+              )}
+            </div>
+          </div>
+          {extraPorts && extraPorts.length > 0 && (
+            <div
+              className="mono mt-1"
+              style={{ fontSize: 11, color: "var(--fg-faint)" }}
+              title={extraPorts
+                .map((g) => `${g.count} ${g.state}`)
+                .join(", ")}
+            >
+              + {extraPorts.map((g) => `${g.count} ${g.state}`).join(" · ")}
+            </div>
+          )}
+        </div>
+
+        <div className="ml-auto" style={{ minWidth: 260 }}>
+          <div className="mb-1 flex items-center">
+            <Label>Progress</Label>
+            <span
+              className="mono ml-auto"
+              style={{ fontSize: 12, color: "var(--fg-muted)" }}
+            >
+              {doneChecks} / {totalChecks} checks · {pct}%
+            </span>
+          </div>
+          <ProgressLine done={doneChecks} total={totalChecks} height={4} />
         </div>
       </div>
-
-      {/* Row 3: Progress bar */}
-      <ProgressBar total={totalChecks} done={doneChecks} portCount={portCount} />
     </div>
   );
 }
+
+/* ------------ small presentational helpers (co-located) ------------ */
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="uppercase tracking-[0.08em] font-medium"
+      style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return (
+    <div
+      aria-hidden
+      style={{ width: 1, height: 34, background: "var(--border)" }}
+    />
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="mono inline-flex items-center justify-center"
+      style={{
+        minWidth: 18,
+        height: 18,
+        padding: "0 5px",
+        borderRadius: 3,
+        background: "var(--bg-3)",
+        border: "1px solid var(--border)",
+        borderBottomWidth: 2,
+        fontSize: 10,
+        color: "var(--fg-muted)",
+        lineHeight: 1,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Chip({
+  children,
+  variant = "default",
+  mono = false,
+  title,
+}: {
+  children: React.ReactNode;
+  variant?: "default" | "solid";
+  mono?: boolean;
+  title?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 ${mono ? "mono" : ""}`}
+      title={title}
+      style={{
+        padding: "2px 7px",
+        borderRadius: 3,
+        background: variant === "solid" ? "var(--bg-1)" : "var(--bg-3)",
+        border: "1px solid var(--border)",
+        fontSize: 11,
+        color: "var(--fg-muted)",
+        lineHeight: 1.4,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ProgressLine({
+  done,
+  total,
+  height = 2,
+}: {
+  done: number;
+  total: number;
+  height?: number;
+}) {
+  const pct = total === 0 ? 0 : (done / total) * 100;
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height,
+        background: "var(--bg-3)",
+        borderRadius: 2,
+        overflow: "hidden",
+      }}
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      role="progressbar"
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: `${pct}%`,
+          background: pct === 100 ? "var(--accent)" : "var(--accent-dim)",
+        }}
+      />
+    </div>
+  );
+}
+
+export { RISK_SHORT };

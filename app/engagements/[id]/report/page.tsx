@@ -26,7 +26,7 @@
 
 import { notFound } from "next/navigation";
 import path from "node:path";
-import { db, getById } from "@/lib/db";
+import { db, getById, getWordlistOverridesMap } from "@/lib/db";
 import { loadKnowledgeBase } from "@/lib/kb";
 import { loadEngagementForExport } from "@/lib/export/view-model";
 
@@ -57,7 +57,9 @@ export default async function ReportPage({ params }: PageProps) {
     notFound();
   }
 
-  const vm = loadEngagementForExport(engagement, kb);
+  // P1-E: thread wordlist overrides through so the printed PDF matches the
+  // engagement page's resolved {WORDLIST_*} paths.
+  const vm = loadEngagementForExport(engagement, kb, getWordlistOverridesMap(db));
   const eng = vm.engagement;
 
   // Pre-computed done/total per port for the summary table
@@ -92,6 +94,23 @@ export default async function ReportPage({ params }: PageProps) {
         {eng.os_name && (
           <p className="text-sm">
             <strong>OS:</strong> {eng.os_name}
+          </p>
+        )}
+        {vm.scanner?.version && (
+          <p className="text-sm">
+            <strong>nmap:</strong> {vm.scanner.version}
+            {vm.scanner.args ? (
+              <>
+                {" "}
+                <code className="font-mono text-xs">{vm.scanner.args}</code>
+              </>
+            ) : null}
+          </p>
+        )}
+        {vm.runstats?.finishedAt && (
+          <p className="text-sm">
+            <strong>Finished:</strong> {vm.runstats.finishedAt}
+            {vm.runstats.elapsed !== undefined ? ` · ${vm.runstats.elapsed}s` : ""}
           </p>
         )}
         <p className="text-sm">

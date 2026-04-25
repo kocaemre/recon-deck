@@ -79,11 +79,26 @@ function buildEngagement(): FullEngagement {
     warnings_json: JSON.stringify(["sample warning"]),
     created_at: now,
     updated_at: now,
+    // P1-F PR 1: every port carries host_id — fixture's primary host id is 1.
+    hosts: [
+      {
+        id: 1,
+        engagement_id: 1,
+        ip: "10.10.10.5",
+        hostname: "box.htb",
+        state: null,
+        os_name: null,
+        os_accuracy: null,
+        is_primary: true,
+        scanned_at: null,
+      },
+    ],
     // Ports inserted in descending order on purpose — view model must sort ASC.
     ports: [
       {
         id: 30,
         engagement_id: 1,
+        host_id: 1,
         port: 443,
         protocol: "tcp",
         state: "open",
@@ -100,6 +115,7 @@ function buildEngagement(): FullEngagement {
       {
         id: 20,
         engagement_id: 1,
+        host_id: 1,
         port: 80,
         protocol: "tcp",
         state: "open",
@@ -161,6 +177,7 @@ function buildEngagement(): FullEngagement {
       {
         id: 10,
         engagement_id: 1,
+        host_id: 1,
         port: 22,
         protocol: "tcp",
         state: "open",
@@ -186,6 +203,9 @@ function buildEngagement(): FullEngagement {
         source: "nmap",
       },
     ],
+    engagementArtifacts: [],
+    evidence: [],
+    findings: [],
   };
 }
 
@@ -308,6 +328,7 @@ describe("loadEngagementForExport (Plan 06-01 Task 2)", () => {
         {
           id: 10,
           engagement_id: 1,
+          host_id: 1,
           port: 22,
           protocol: "tcp",
           state: "open",

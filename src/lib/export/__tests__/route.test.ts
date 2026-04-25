@@ -23,6 +23,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/db", () => ({
   db: {},
   getById: vi.fn(),
+  getWordlistOverridesMap: vi.fn(() => ({})),
 }));
 
 // Mock the KB loader so no real YAML reads occur during tests.

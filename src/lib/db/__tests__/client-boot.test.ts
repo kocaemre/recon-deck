@@ -56,24 +56,37 @@ describe("DB boot sequence (Plan 02)", () => {
     void db; // no explicit re-run needed; test above covers idempotency
   });
 
-  it("PERSIST-01: all 6 tables exist after migration", () => {
-    // Updated in Phase 5 Plan 01: port_commands added for AutoRecon manual commands
+  it("PERSIST-01: all 12 base tables exist after migration", () => {
+    // Updated in Phase 5 Plan 01: port_commands added for AutoRecon manual commands.
+    // Updated in v2 Plan: search_index FTS5 virtual table added (migration 0002).
+    // Updated in v2 P0-B: port_evidence added for screenshots/attachments (migration 0003).
+    // Updated in v2 P0-C: findings catalog added (migration 0004).
+    // Updated in v2 P0-D: user_commands added for personal command library (migration 0005).
+    // Updated in v2 P1-E: wordlist_overrides added for {WORDLIST_*} resolution (migration 0006).
+    // Updated in v2 P1-F PR 1: hosts table added for multi-host engagement (migration 0007).
+    // SQLite registers FTS5 internal shadow tables (search_index_data,
+    // _idx, _content, _docsize, _config) — the test filters them out so the
+    // assertion stays scoped to the application-visible base tables.
     const db = createTestDb();
 
-    // Access the underlying SQLite connection via the drizzle instance
-    // Use a raw SQL query through drizzle to list tables
     const result = db.all<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '__drizzle%' AND name != 'sqlite_sequence' ORDER BY name",
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '__drizzle%' AND name != 'sqlite_sequence' AND name NOT LIKE 'search_index_%' ORDER BY name",
     );
     const tableNames = result.map((r) => r.name);
 
     expect(tableNames).toEqual([
       "check_states",
       "engagements",
+      "findings",
+      "hosts",
       "port_commands",
+      "port_evidence",
       "port_notes",
       "port_scripts",
       "ports",
+      "search_index",
+      "user_commands",
+      "wordlist_overrides",
     ]);
   });
 

@@ -27,10 +27,12 @@ import "server-only";
 export type { ParsedScan, ParsedPort, ScriptOutput } from "./types";
 export { parseNmapXml } from "./nmap-xml";
 export { parseNmapText } from "./nmap-text";
+export { parseNmapGreppable } from "./nmap-greppable";
 
 import type { ParsedScan } from "./types";
 import { parseNmapXml } from "./nmap-xml";
 import { parseNmapText } from "./nmap-text";
+import { parseNmapGreppable } from "./nmap-greppable";
 
 /**
  * D-11 format detection — look at the first non-whitespace characters.
@@ -60,10 +62,22 @@ export function parseAny(raw: string): ParsedScan {
   }
 
   // D-11 format detection: sniff the first non-whitespace characters.
-  // Case-insensitive so `<?XML` is still routed to the XML parser.
-  const leading = raw.trimStart().slice(0, 5).toLowerCase();
+  // - <?xml...     → XML parser
+  // - # Nmap ...   AND a "Host: ... Ports:" line present → greppable parser
+  // - otherwise    → text parser
+  const trimmed = raw.trimStart();
+  const leading = trimmed.slice(0, 5).toLowerCase();
   if (leading.startsWith("<?xml")) {
     return parseNmapXml(raw);
+  }
+  // Greppable detection — relatively unambiguous because it's the only format
+  // that uses "Host: ... Ports:" inline records. We also look for the comment
+  // header that nmap always emits at the top.
+  if (
+    /^#\s*Nmap\s+\d/i.test(trimmed) &&
+    /^Host:\s+\S+.*Ports:/m.test(raw)
+  ) {
+    return parseNmapGreppable(raw);
   }
   return parseNmapText(raw);
 }

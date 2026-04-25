@@ -26,7 +26,12 @@ import "server-only";
  * ship to the browser bundle.
  */
 
-import type { ParsedPort, ParsedScan, ScriptOutput } from "./types";
+import type {
+  ParsedHost,
+  ParsedPort,
+  ParsedScan,
+  ScriptOutput,
+} from "./types";
 
 /** IPv4 dotted quad or IPv6 (contains `:`). */
 const IP_RE = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+)$/;
@@ -198,8 +203,111 @@ export function parseNmapText(input: string): ParsedScan {
     nseBuffer = [];
   };
 
+  /**
+   * Accumulator for `<extraports>`-equivalent text lines:
+   *   "Not shown: 996 closed tcp ports (reset)"
+   *   "Not shown: 65530 filtered tcp ports (no-response), 1 closed tcp port (reset)"
+   * Multiple comma-separated groups are flattened into one entry per state.
+   */
+  const extraPortAccum: { state: string; count: number }[] = [];
+
+  /** OS detection accumulator. nmap text format examples:
+   *   "OS details: Linux 4.15 - 5.6"
+   *   "Aggressive OS guesses: Linux 4.15 (95%), Linux 4.4 (94%), ..."
+   *   "Running: Linux 4.X|5.X"
+   */
+  const osMatchAccum: { name: string; accuracy?: number }[] = [];
+  let osDetailsLine: string | undefined;
+
+  /** Traceroute accumulator — captured between "TRACEROUTE" header and a blank line. */
+  const tracerouteHops: {
+    ttl: number;
+    rtt?: number;
+    ipaddr: string;
+    host?: string;
+  }[] = [];
+  let tracerouteProto: string | undefined;
+  let tracerouteCollecting = false;
+
   for (const rawLine of lines) {
     const line = rawLine.replace(/\s+$/, ""); // trim trailing whitespace only
+
+    // "Not shown:" summary line — accumulate before falling through to
+    // the unrecognized branch.
+    if (/^Not shown:/.test(line)) {
+      const groups = line.replace(/^Not shown:\s*/, "").split(/,\s*/);
+      for (const g of groups) {
+        const m = /^(\d+)\s+(closed|filtered|open\|filtered|closed\|filtered|unfiltered)\b/.exec(
+          g,
+        );
+        if (m) {
+          extraPortAccum.push({ state: m[2], count: Number(m[1]) });
+        }
+      }
+      continue;
+    }
+
+    // OS detection — pattern matches BEFORE port-line / NSE handling.
+    if (/^OS details:/.test(line)) {
+      osDetailsLine = line.replace(/^OS details:\s*/, "").trim();
+      // Split comma-separated OS guesses if any.
+      for (const g of osDetailsLine.split(/,\s*/)) {
+        if (g.length > 0) osMatchAccum.push({ name: g });
+      }
+      continue;
+    }
+    if (/^Aggressive OS guesses:/.test(line)) {
+      const rest = line.replace(/^Aggressive OS guesses:\s*/, "");
+      // "Linux 4.15 (95%), Linux 4.4 (94%)"
+      const items = rest.split(/,\s*/);
+      for (const it of items) {
+        const m = /^(.+?)\s*\((\d+)%\)\s*$/.exec(it);
+        if (m) {
+          osMatchAccum.push({ name: m[1].trim(), accuracy: Number(m[2]) });
+        } else if (it.trim().length > 0) {
+          osMatchAccum.push({ name: it.trim() });
+        }
+      }
+      continue;
+    }
+
+    // TRACEROUTE block — header line opens collection until a blank line closes.
+    // "TRACEROUTE (using port 80/tcp)"
+    if (/^TRACEROUTE/.test(line)) {
+      tracerouteCollecting = true;
+      const m = /\(using port\s+(\d+)\/(tcp|udp)\)/.exec(line);
+      if (m) tracerouteProto = m[2];
+      continue;
+    }
+    if (tracerouteCollecting) {
+      // header table line: "HOP RTT    ADDRESS"
+      if (/^HOP\s+RTT/.test(line)) continue;
+      if (line.trim() === "") {
+        tracerouteCollecting = false;
+        continue;
+      }
+      // Hop line patterns:
+      //   "1   1.21 ms 10.10.14.1"
+      //   "1   ...    10.10.10.5 (box.htb)"
+      //   "2   2.34 ms 10.10.10.5"
+      //   "1   ... 10.10.14.1"        (no-response RTT shown as "...")
+      const m =
+        /^\s*(\d+)\s+(?:(\d+(?:\.\d+)?)\s*ms|\.\.\.)\s+([0-9a-fA-F:.]+)(?:\s+\(([^)]+)\))?\s*$/.exec(
+          line,
+        );
+      if (m) {
+        const hop: { ttl: number; rtt?: number; ipaddr: string; host?: string } = {
+          ttl: Number(m[1]),
+          ipaddr: m[3],
+        };
+        if (m[2] !== undefined) hop.rtt = Number(m[2]);
+        if (m[4]) hop.host = m[4];
+        tracerouteHops.push(hop);
+        continue;
+      }
+      // unrecognized inside traceroute → close it
+      tracerouteCollecting = false;
+    }
 
     // Host boundary: `Nmap scan report for ...`
     if (/^Nmap scan report for /.test(line)) {
@@ -299,9 +407,19 @@ export function parseNmapText(input: string): ParsedScan {
         );
       }
 
+      // ssl/<svc> and tcpwrapped/<svc> compound service strings (e.g. ssl/http,
+      // ssl/imap) — strip the ssl/ prefix and tag tunnel="ssl" so KB matching
+      // resolves to the underlying service entry (e.g. https). Mirrors the XML
+      // parser's `<service tunnel="ssl">` handling.
+      let serviceField = serviceStr;
+      let tunnel: "ssl" | undefined;
+      if (serviceField && /^ssl\//.test(serviceField)) {
+        tunnel = "ssl";
+        serviceField = serviceField.slice(4);
+      }
       const service =
-        serviceStr && serviceStr !== "?"
-          ? serviceStr.toLowerCase().trim()
+        serviceField && serviceField !== "?"
+          ? serviceField.toLowerCase().trim()
           : undefined;
       const { product, version, extrainfo } = splitVersionBlob(versionBlob);
 
@@ -315,6 +433,7 @@ export function parseNmapText(input: string): ParsedScan {
         extrainfo,
         scripts: [],
       };
+      if (tunnel) newPort.tunnel = tunnel;
       ports.push(newPort);
       currentPort = newPort;
       phase = "ports";
@@ -396,12 +515,12 @@ export function parseNmapText(input: string): ParsedScan {
     if (dest) flushNseBufferTo(dest);
   }
 
-  // Multi-host warning (D-09 mirrored via CD-03).
-  if (hostCount > 1) {
-    warnings.push(
-      `Multi-host scan: ${hostCount - 1} additional host(s) ignored — create a separate engagement per host, or use nmap -oX for multi-host parsing.`,
-    );
-  }
+  // P1-F PR 2: the legacy multi-host warning is gone. The XML parser now
+  // returns every host inside `scan.hosts`; the text parser is still
+  // first-host-only (text scans rarely cover multiple hosts in practice and
+  // a full text multi-host loop is a larger refactor scheduled for a later
+  // PR). For now, a multi-host text paste silently surfaces only the first
+  // host — operators with multi-host text scans should re-run with `-oX`.
 
   // If we never found a target line, raise a clear error — D-07 spirit.
   if (!target) {
@@ -410,11 +529,44 @@ export function parseNmapText(input: string): ParsedScan {
     );
   }
 
-  return {
+  const result: ParsedScan = {
+    hosts: [],
     target,
     source: "nmap-text",
     ports,
     hostScripts,
     warnings,
   };
+  if (extraPortAccum.length > 0) {
+    result.extraPorts = extraPortAccum;
+  }
+  if (osMatchAccum.length > 0 || osDetailsLine) {
+    const sorted = [...osMatchAccum].sort(
+      (a, b) => (b.accuracy ?? 0) - (a.accuracy ?? 0),
+    );
+    const best = sorted[0];
+    result.os = {
+      matches: sorted,
+    };
+    if (best?.name) result.os.name = best.name;
+    if (best?.accuracy !== undefined) result.os.accuracy = best.accuracy;
+  }
+  if (tracerouteHops.length > 0) {
+    result.traceroute = { hops: tracerouteHops };
+    if (tracerouteProto) result.traceroute.proto = tracerouteProto;
+  }
+
+  // P1-F PR 2: populate `scan.hosts[]` from the legacy fields. Text parser
+  // is still first-host-only; one entry mirrors the top-level fields.
+  const primary: ParsedHost = {
+    target,
+    ports,
+    hostScripts,
+  };
+  if (result.os) primary.os = result.os;
+  if (result.extraPorts) primary.extraPorts = result.extraPorts;
+  if (result.traceroute) primary.traceroute = result.traceroute;
+  result.hosts = [primary];
+
+  return result;
 }

@@ -33,8 +33,14 @@ export interface LintFailure {
 /**
  * Allowed command-template placeholders (D-16 / KB-09).
  * Anything else (e.g. {TARGET}, {RHOST}, {FOO}) is rejected.
+ *
+ * P1-E: `{WORDLIST_*}` tokens (uppercase + digits + underscores after the
+ * `WORDLIST_` prefix) are allowed; resolution to a filesystem path happens
+ * at render time via `src/lib/kb/wordlists.ts`. Operators add custom keys
+ * via `/settings/wordlists`, so the lint pattern is the general shape, not
+ * a fixed enum.
  */
-export const PLACEHOLDER_ALLOWLIST = /^\{(IP|PORT|HOST)\}$/;
+export const PLACEHOLDER_ALLOWLIST = /^\{(IP|PORT|HOST|WORDLIST_[A-Z0-9_]+)\}$/;
 
 /**
  * Command denylist (D-19 / CD-02 / T-01 / T-10 / T-12).

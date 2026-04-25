@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "../../../../tests/helpers/db.js";
 import { createFromScan, getById, listSummaries } from "../engagement-repo.js";
-import { engagements, ports, port_scripts } from "../schema.js";
-import { eq } from "drizzle-orm";
+import { engagements, ports, port_scripts, hosts } from "../schema.js";
+import { eq, and } from "drizzle-orm";
 import type { ParsedScan } from "../../parser/types.js";
 
 // ---------------------------------------------------------------------------
@@ -10,30 +10,43 @@ import type { ParsedScan } from "../../parser/types.js";
 // ---------------------------------------------------------------------------
 
 function makeScan(overrides: Partial<ParsedScan> = {}): ParsedScan {
+  const target = overrides.target ?? { ip: "10.10.10.5" };
+  const ports: ParsedScan["ports"] = overrides.ports ?? [
+    {
+      port: 22,
+      protocol: "tcp",
+      state: "open",
+      service: "ssh",
+      scripts: [],
+    },
+    {
+      port: 80,
+      protocol: "tcp",
+      state: "open",
+      service: "http",
+      product: "Apache",
+      version: "2.4.41",
+      scripts: [{ id: "http-title", output: "Test Page" }],
+    },
+  ];
+  const hostScripts = overrides.hostScripts ?? [];
+  // hosts[0] mirrors target/ports/hostScripts so createFromScan (which now
+  // reads scan.hosts) sees the same overrides callers pass at the top level.
+  const primaryHost: ParsedScan["hosts"][number] = {
+    target,
+    ports,
+    hostScripts,
+  };
+  if (overrides.os) primaryHost.os = overrides.os;
   return {
-    target: { ip: "10.10.10.5" },
-    source: "nmap-text",
-    ports: [
-      {
-        port: 22,
-        protocol: "tcp",
-        state: "open",
-        service: "ssh",
-        scripts: [],
-      },
-      {
-        port: 80,
-        protocol: "tcp",
-        state: "open",
-        service: "http",
-        product: "Apache",
-        version: "2.4.41",
-        scripts: [{ id: "http-title", output: "Test Page" }],
-      },
-    ],
-    hostScripts: [],
-    warnings: [],
-    ...overrides,
+    hosts: overrides.hosts ?? [primaryHost],
+    target,
+    source: overrides.source ?? "nmap-text",
+    ports,
+    hostScripts,
+    warnings: overrides.warnings ?? [],
+    ...(overrides.os ? { os: overrides.os } : {}),
+    ...(overrides.scannedAt ? { scannedAt: overrides.scannedAt } : {}),
   };
 }
 
@@ -155,6 +168,148 @@ describe("createFromScan (Plan 03)", () => {
     expect(full!.os_accuracy).toBe(95);
     expect(full!.scanned_at).toBe("2024-01-01T00:00:00Z");
     expect(JSON.parse(full!.warnings_json)).toEqual(["Multi-host scan detected"]);
+  });
+
+  it("P1-F PR 1: createFromScan inserts a primary host row mirroring the target", () => {
+    const scan = makeScan({
+      target: { ip: "10.10.10.7", hostname: "dc01.htb" },
+      os: { name: "Windows Server 2019", accuracy: 95 },
+      scannedAt: "2026-04-25T00:00:00Z",
+    });
+    const result = createFromScan(db, scan, "<raw>");
+
+    const hostRows = db
+      .select()
+      .from(hosts)
+      .where(eq(hosts.engagement_id, result.id))
+      .all();
+    expect(hostRows).toHaveLength(1);
+
+    const primary = hostRows[0];
+    expect(primary.is_primary).toBe(true);
+    expect(primary.ip).toBe("10.10.10.7");
+    expect(primary.hostname).toBe("dc01.htb");
+    expect(primary.os_name).toBe("Windows Server 2019");
+    expect(primary.os_accuracy).toBe(95);
+    expect(primary.scanned_at).toBe("2026-04-25T00:00:00Z");
+  });
+
+  it("P1-F PR 1: every inserted port is linked to the primary host via host_id", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    const primary = db
+      .select()
+      .from(hosts)
+      .where(
+        and(eq(hosts.engagement_id, result.id), eq(hosts.is_primary, true)),
+      )
+      .get();
+    expect(primary).toBeDefined();
+
+    const portRows = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, result.id))
+      .all();
+    expect(portRows.length).toBeGreaterThan(0);
+    for (const p of portRows) {
+      expect(p.host_id).toBe(primary!.id);
+    }
+  });
+
+  it("P1-F PR 1: getById exposes the engagement's hosts", () => {
+    const result = createFromScan(
+      db,
+      makeScan({ target: { ip: "10.10.10.9", hostname: "ws01.htb" } }),
+      "<raw>",
+    );
+    const full = getById(db, result.id);
+    expect(full).not.toBeNull();
+    expect(full!.hosts).toHaveLength(1);
+    expect(full!.hosts[0].is_primary).toBe(true);
+    expect(full!.hosts[0].ip).toBe("10.10.10.9");
+    expect(full!.hosts[0].hostname).toBe("ws01.htb");
+  });
+
+  it("P1-F PR 2: createFromScan inserts N hosts when scan.hosts has multiple entries", () => {
+    // Build a 3-host scan where each host has its own ports.
+    const dc = {
+      target: { ip: "10.10.10.5", hostname: "dc01.htb" },
+      ports: [
+        {
+          port: 88,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "kerberos-sec",
+          scripts: [],
+        },
+        {
+          port: 445,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "microsoft-ds",
+          scripts: [],
+        },
+      ],
+      hostScripts: [],
+    };
+    const ws01 = {
+      target: { ip: "10.10.10.6", hostname: "ws01.htb" },
+      ports: [
+        {
+          port: 3389,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "ms-wbt-server",
+          scripts: [],
+        },
+      ],
+      hostScripts: [],
+    };
+    const ws02 = {
+      target: { ip: "10.10.10.7", hostname: "ws02.htb" },
+      ports: [
+        {
+          port: 22,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "ssh",
+          scripts: [],
+        },
+      ],
+      hostScripts: [],
+    };
+
+    const scan = makeScan({
+      target: dc.target,
+      ports: dc.ports,
+      hosts: [dc, ws01, ws02],
+    });
+    const result = createFromScan(db, scan, "<raw>");
+
+    const full = getById(db, result.id);
+    expect(full).not.toBeNull();
+    expect(full!.hosts).toHaveLength(3);
+
+    // Primary first, others sorted by IP.
+    expect(full!.hosts[0].is_primary).toBe(true);
+    expect(full!.hosts[0].ip).toBe("10.10.10.5");
+    expect(full!.hosts[1].ip).toBe("10.10.10.6");
+    expect(full!.hosts[2].ip).toBe("10.10.10.7");
+
+    // Each port carries the correct host_id.
+    const dcId = full!.hosts[0].id;
+    const ws01Id = full!.hosts[1].id;
+    const ws02Id = full!.hosts[2].id;
+
+    const portsByHost = new Map<number, number[]>();
+    for (const p of full!.ports) {
+      const list = portsByHost.get(p.host_id ?? 0) ?? [];
+      list.push(p.port);
+      portsByHost.set(p.host_id ?? 0, list);
+    }
+    expect(portsByHost.get(dcId)?.sort((a, b) => a - b)).toEqual([88, 445]);
+    expect(portsByHost.get(ws01Id)).toEqual([3389]);
+    expect(portsByHost.get(ws02Id)).toEqual([22]);
   });
 
   it("cascade delete removes all ports and scripts when engagement is deleted", () => {

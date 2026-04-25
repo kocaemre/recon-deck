@@ -22,7 +22,12 @@ import { useUIStore } from "@/lib/store";
 
 interface Props {
   engagementId: number;
-  ports: Array<{ id: number; port: number; service: string | null }>;
+  ports: Array<{
+    id: number;
+    port: number;
+    service: string | null;
+    risk: string;
+  }>;
   kbCommands: Array<{ portId: number; label: string; command: string }>;
 }
 

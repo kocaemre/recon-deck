@@ -18,6 +18,9 @@ import type {
   CheckState,
   PortNote,
   PortCommand,
+  PortEvidence,
+  Finding,
+  Host,
 } from "./schema";
 
 /**
@@ -36,8 +39,33 @@ export type PortWithDetails = Port & {
 
 /** Full engagement with all nested data for detail view / export */
 export type FullEngagement = Engagement & {
+  /**
+   * v2 P1-F: hosts inside the engagement. Always non-empty after migration
+   * 0007 — every engagement has at least one row, exactly one with
+   * `is_primary = true`. Sorted with the primary host first, then by IP.
+   */
+  hosts: Host[];
   ports: PortWithDetails[];
   hostScripts: PortScript[];
+  /**
+   * v2: engagement-level artifacts (AutoRecon loot/report/screenshots/...,
+   * source XML retained for re-parse). Stored as port_scripts rows with
+   * port_id = NULL and is_host_script = false.
+   */
+  engagementArtifacts: PortScript[];
+  /**
+   * v2: per-port evidence (screenshots / attachments). Includes both
+   * manually-uploaded items and gowitness/aquatone PNGs lifted from an
+   * AutoRecon zip at import time. Sorted by created_at ASC.
+   */
+  evidence: PortEvidence[];
+  /**
+   * v2: pentester-discovered findings catalog. Includes both per-port
+   * (port_id !== null) and engagement-level (port_id === null) findings.
+   * Note: rows in DB store evidence_refs as JSON string; the engagement page
+   * decodes via findings-repo before passing into the UI tree.
+   */
+  findings: Finding[];
 };
 
 /** Lightweight engagement for sidebar list (no nested port data) */

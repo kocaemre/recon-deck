@@ -32,11 +32,11 @@ import type { ParsedScan } from "@/lib/parser/types";
  * keeps it out of the client bundle (ARCHITECTURE.md < 2 MB target).
  */
 export function buildSampleScan(): ParsedScan {
-  return {
-    target: { ip: "10.10.10.123", hostname: "sample.htb" },
-    source: "nmap-xml",
-    warnings: [],
-    ports: [
+  // P1-F PR 2: ParsedScan now requires `hosts: ParsedHost[]`. Build the host
+  // entry first, then alias its fields onto the legacy top-level keys for
+  // backward compat (mirror removed in PR 4).
+  const target = { ip: "10.10.10.123", hostname: "sample.htb" };
+  const ports: ParsedScan["ports"] = [
       {
         port: 21,
         protocol: "tcp",
@@ -170,13 +170,20 @@ export function buildSampleScan(): ParsedScan {
           },
         ],
       },
-    ],
-    hostScripts: [
-      {
-        id: "smb-os-discovery",
-        output:
-          "OS: Windows 10 Pro 19042 (Windows 10 Pro 6.3)\nComputer name: sample\nNetBIOS computer name: SAMPLE\nDomain name: sample.htb\nFQDN: sample.sample.htb\nSystem time: 2026-04-18T12:00:00+00:00",
-      },
-    ],
+  ];
+  const hostScripts: ParsedScan["hostScripts"] = [
+    {
+      id: "smb-os-discovery",
+      output:
+        "OS: Windows 10 Pro 19042 (Windows 10 Pro 6.3)\nComputer name: sample\nNetBIOS computer name: SAMPLE\nDomain name: sample.htb\nFQDN: sample.sample.htb\nSystem time: 2026-04-18T12:00:00+00:00",
+    },
+  ];
+  return {
+    hosts: [{ target, ports, hostScripts }],
+    target,
+    source: "nmap-xml",
+    warnings: [],
+    ports,
+    hostScripts,
   };
 }

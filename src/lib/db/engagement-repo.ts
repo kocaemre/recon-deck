@@ -17,7 +17,7 @@ import "server-only";
  */
 
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import {
   engagements,
   ports,
@@ -25,6 +25,9 @@ import {
   port_commands,
   check_states,
   port_notes,
+  port_evidence,
+  findings as findingsTable,
+  hosts,
 } from "./schema";
 import type { ParsedScan } from "../parser/types";
 import type { FullEngagement, EngagementSummary, PortWithDetails } from "./types";
@@ -87,8 +90,22 @@ export function createFromScan(
   scan: ParsedScan,
   rawInput: string,
   arData?: {
-    arFiles: Map<number, { filename: string; content: string }[]>;
+    arFiles: Map<number, { filename: string; content: string; encoding?: "utf8" | "base64" }[]>;
     arCommands: Map<number, { label: string; template: string }[]>;
+    arArtifacts?: Array<{
+      kind:
+        | "loot"
+        | "report"
+        | "screenshot"
+        | "patterns"
+        | "errors"
+        | "commands"
+        | "exploit"
+        | "service-nmap-xml";
+      filename: string;
+      content: string;
+      encoding: "utf8" | "base64";
+    }>;
   },
 ): { id: number; name: string } {
   // better-sqlite3 transactions are synchronous — Drizzle wraps them cleanly
@@ -114,93 +131,210 @@ export function createFromScan(
       .returning({ id: engagements.id, name: engagements.name })
       .get();
 
-    // Insert each port and its port-level scripts
-    for (const p of scan.ports) {
-      const port = tx
-        .insert(ports)
+    // P1-F PR 2: insert one row per ParsedHost. The first host is marked
+    // primary and mirrors the legacy engagements.target_ip/target_hostname/
+    // os_* columns. AR data (per-port files, manual commands, screenshots)
+    // is keyed by port number only and is applied to the *primary* host's
+    // ports — multi-host AutoRecon zips aren't a supported import shape yet.
+    const portIdByKey = new Map<string, number>();
+    let primaryHostId = 0;
+
+    for (let hostIdx = 0; hostIdx < scan.hosts.length; hostIdx++) {
+      const ph = scan.hosts[hostIdx];
+      const isPrimary = hostIdx === 0;
+
+      const insertedHost = tx
+        .insert(hosts)
         .values({
           engagement_id: eng.id,
-          port: p.port,
-          protocol: p.protocol,
-          state: p.state,
-          service: p.service ?? null,
-          product: p.product ?? null,
-          version: p.version ?? null,
-          tunnel: p.tunnel ?? null,
-          extrainfo: p.extrainfo ?? null,
+          ip: ph.target.ip,
+          hostname: ph.target.hostname ?? null,
+          state: ph.target.state ?? null,
+          os_name: ph.os?.name ?? null,
+          os_accuracy: ph.os?.accuracy ?? null,
+          is_primary: isPrimary,
+          scanned_at: scan.scannedAt ?? null,
         })
-        .returning({ id: ports.id })
+        .returning({ id: hosts.id })
         .get();
 
-      for (const s of p.scripts) {
+      if (isPrimary) primaryHostId = insertedHost.id;
+
+      // Per-port + per-host port_scripts.
+      for (const p of ph.ports) {
+        const port = tx
+          .insert(ports)
+          .values({
+            engagement_id: eng.id,
+            host_id: insertedHost.id,
+            port: p.port,
+            protocol: p.protocol,
+            state: p.state,
+            service: p.service ?? null,
+            product: p.product ?? null,
+            version: p.version ?? null,
+            tunnel: p.tunnel ?? null,
+            extrainfo: p.extrainfo ?? null,
+          })
+          .returning({ id: ports.id })
+          .get();
+        // portIdByKey only tracks the primary host's ports — that's the
+        // host AR data (screenshots, files, manual commands) attributes to.
+        if (isPrimary) {
+          portIdByKey.set(`${p.protocol}:${p.port}`, port.id);
+        }
+
+        for (const s of p.scripts) {
+          tx
+            .insert(port_scripts)
+            .values({
+              engagement_id: eng.id,
+              port_id: port.id,
+              script_id: s.id,
+              output: s.output,
+              is_host_script: false,
+            })
+            .run();
+        }
+
+        // Phase 5 D-12: AutoRecon per-port service files. Only applied to
+        // the primary host — AR import is single-host today.
+        if (isPrimary && arData?.arFiles) {
+          const files = arData.arFiles.get(p.port);
+          if (files) {
+            for (const f of files) {
+              tx
+                .insert(port_scripts)
+                .values({
+                  engagement_id: eng.id,
+                  port_id: port.id,
+                  script_id: f.filename,
+                  output: f.content,
+                  is_host_script: false,
+                  source: "autorecon",
+                })
+                .run();
+            }
+          }
+        }
+
+        // Phase 5 CD-01: AutoRecon manual commands (primary host only).
+        if (isPrimary && arData?.arCommands) {
+          const cmds = arData.arCommands.get(p.port);
+          if (cmds) {
+            for (const cmd of cmds) {
+              tx
+                .insert(port_commands)
+                .values({
+                  engagement_id: eng.id,
+                  port_id: port.id,
+                  source: "autorecon",
+                  label: cmd.label,
+                  template: cmd.template,
+                })
+                .run();
+            }
+          }
+        }
+      }
+
+      // Host scripts: port_id is null, is_host_script is true (D-08). One
+      // group per host — they live on the engagement but logically belong
+      // to a specific host (smb-os-discovery surfaces THIS host's OS, etc.).
+      // PR 4 will surface host attribution in the UI; the schema stays
+      // engagement-scoped for now to avoid a migration churn.
+      for (const hs of ph.hostScripts) {
         tx
           .insert(port_scripts)
           .values({
             engagement_id: eng.id,
-            port_id: port.id,
-            script_id: s.id,
-            output: s.output,
-            is_host_script: false,
+            port_id: null,
+            script_id: hs.id,
+            output: hs.output,
+            is_host_script: true,
           })
           .run();
       }
-
-      // Phase 5 D-12: AutoRecon per-port service file outputs stored in
-      // port_scripts with source='autorecon'. Keyed by port number in arFiles.
-      if (arData?.arFiles) {
-        const files = arData.arFiles.get(p.port);
-        if (files) {
-          for (const f of files) {
-            tx
-              .insert(port_scripts)
-              .values({
-                engagement_id: eng.id,
-                port_id: port.id,
-                script_id: f.filename,
-                output: f.content,
-                is_host_script: false,
-                source: "autorecon",
-              })
-              .run();
-          }
-        }
-      }
-
-      // Phase 5 CD-01: AutoRecon manual commands stored in port_commands
-      // (separate from port_scripts because these are runnable templates,
-      // not script output). Keyed by port number in arCommands.
-      if (arData?.arCommands) {
-        const cmds = arData.arCommands.get(p.port);
-        if (cmds) {
-          for (const cmd of cmds) {
-            tx
-              .insert(port_commands)
-              .values({
-                engagement_id: eng.id,
-                port_id: port.id,
-                source: "autorecon",
-                label: cmd.label,
-                template: cmd.template,
-              })
-              .run();
-          }
-        }
-      }
     }
+    // Defensive: void unused-var lint if primaryHostId never assigned
+    // (impossible — scan.hosts is required non-empty by parser contract).
+    void primaryHostId;
 
-    // Host scripts: port_id is null, is_host_script is true (D-08).
-    // These represent ParsedScan.hostScripts[], stored distinctly from port scripts.
-    for (const hs of scan.hostScripts) {
-      tx
-        .insert(port_scripts)
-        .values({
-          engagement_id: eng.id,
-          port_id: null,
-          script_id: hs.id,
-          output: hs.output,
-          is_host_script: true,
-        })
-        .run();
+    // v2: AutoRecon engagement-level artifacts (loot, report, screenshots,
+    // patterns log, errors log, commands log, exploit hints, service-nmap XML).
+    // Stored on port_scripts with port_id=null and source='autorecon-{kind}'.
+    // Binary content (screenshots) is base64-encoded; encoding is implied by
+    // source value (autorecon-screenshot → base64; everything else → utf8).
+    //
+    // v2/P0-B: gowitness/aquatone PNG screenshots (kind='screenshot') are
+    // additionally surfaced into port_evidence with source='autorecon-import'
+    // so the UI's per-port Evidence pane can render them next to manually
+    // uploaded screenshots. The original port_scripts row is kept for
+    // backward compatibility with existing exports / artifact panels.
+    if (arData?.arArtifacts) {
+      for (const a of arData.arArtifacts) {
+        tx
+          .insert(port_scripts)
+          .values({
+            engagement_id: eng.id,
+            port_id: null,
+            script_id: a.filename,
+            output: a.content,
+            is_host_script: false,
+            source: `autorecon-${a.kind}` as
+              | "autorecon-loot"
+              | "autorecon-report"
+              | "autorecon-screenshot"
+              | "autorecon-patterns"
+              | "autorecon-errors"
+              | "autorecon-commands"
+              | "autorecon-exploit"
+              | "autorecon-service-nmap-xml",
+          })
+          .run();
+
+        if (a.kind === "screenshot") {
+          // Attribute the screenshot to a specific port by parsing the
+          // filename: gowitness/aquatone produce names like
+          // `tcp80/index_aquatone.png` or `tcp_443_https_aquatone.png`.
+          // Falls back to NULL (engagement-level evidence) on no match.
+          const portMatch =
+            /(?:^|[/_])(tcp|udp)[_]?(\d+)(?:[/_]|\.|$)/.exec(a.filename);
+          let portIdForEvidence: number | null = null;
+          if (portMatch) {
+            portIdForEvidence =
+              portIdByKey.get(`${portMatch[1]}:${Number(portMatch[2])}`) ??
+              null;
+          }
+
+          const lower = a.filename.toLowerCase();
+          const mime = lower.endsWith(".png")
+            ? "image/png"
+            : /\.(jpe?g)$/.test(lower)
+              ? "image/jpeg"
+              : lower.endsWith(".gif")
+                ? "image/gif"
+                : lower.endsWith(".webp")
+                  ? "image/webp"
+                  : null;
+          const dataB64 = a.content.trim();
+
+          if (mime && dataB64.length > 0) {
+            tx.insert(port_evidence)
+              .values({
+                engagement_id: eng.id,
+                port_id: portIdForEvidence,
+                filename: a.filename.split("/").pop() ?? a.filename,
+                mime,
+                data_b64: dataB64,
+                caption: null,
+                source: "autorecon-import",
+                created_at: now,
+              })
+              .run();
+          }
+        }
+      }
     }
 
     return eng;
@@ -262,9 +396,43 @@ export function getById(db: Db, id: number): FullEngagement | null {
     .where(eq(port_commands.engagement_id, id))
     .all();
 
-  // Separate host scripts (D-08) from port-level scripts
+  // v2: per-port evidence (screenshots / attachments).
+  const evidenceRows = db
+    .select()
+    .from(port_evidence)
+    .where(eq(port_evidence.engagement_id, id))
+    .all()
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  // v2: findings catalog.
+  const findingRows = db
+    .select()
+    .from(findingsTable)
+    .where(eq(findingsTable.engagement_id, id))
+    .all();
+
+  // P1-F PR 1: hosts inside the engagement. Always non-empty (migration
+  // 0007 backfilled, createFromScan inserts). Sort: primary first, then IP.
+  const hostRows = db
+    .select()
+    .from(hosts)
+    .where(eq(hosts.engagement_id, id))
+    .all()
+    .sort((a, b) => {
+      if (a.is_primary && !b.is_primary) return -1;
+      if (!a.is_primary && b.is_primary) return 1;
+      return a.ip.localeCompare(b.ip);
+    });
+
+  // Separate host scripts (D-08) from port-level scripts and v2 engagement-level
+  // artifacts (port_id=null, is_host_script=false, source='autorecon-*').
   const hostScripts = scriptRows.filter((s) => s.is_host_script);
-  const portScripts = scriptRows.filter((s) => !s.is_host_script);
+  const portScripts = scriptRows.filter(
+    (s) => !s.is_host_script && s.port_id !== null,
+  );
+  const engagementArtifacts = scriptRows.filter(
+    (s) => !s.is_host_script && s.port_id === null,
+  );
 
   const portsWithDetails: PortWithDetails[] = portRows.map((p) => ({
     ...p,
@@ -276,8 +444,12 @@ export function getById(db: Db, id: number): FullEngagement | null {
 
   return {
     ...eng,
+    hosts: hostRows,
     ports: portsWithDetails,
     hostScripts,
+    engagementArtifacts,
+    evidence: evidenceRows,
+    findings: findingRows,
   };
 }
 
@@ -340,13 +512,27 @@ export function updateTarget(
 ): void {
   const now = new Date().toISOString();
   const name = hostname && hostname !== ip ? `${hostname} (${ip})` : ip;
-  db.update(engagements)
-    .set({
-      target_ip: ip,
-      target_hostname: hostname,
-      name,
-      updated_at: now,
-    })
-    .where(eq(engagements.id, engagementId))
-    .run();
+  db.transaction((tx) => {
+    tx.update(engagements)
+      .set({
+        target_ip: ip,
+        target_hostname: hostname,
+        name,
+        updated_at: now,
+      })
+      .where(eq(engagements.id, engagementId))
+      .run();
+
+    // P1-F PR 1: keep the primary host row in sync with the legacy
+    // engagement.target_ip/hostname columns. PR 4 will swap the UI to read
+    // from `hosts` directly and drop this dual-write — until then both
+    // surfaces must agree or the heatmap shows different addresses than
+    // the header.
+    tx.update(hosts)
+      .set({ ip, hostname })
+      .where(
+        and(eq(hosts.engagement_id, engagementId), eq(hosts.is_primary, true)),
+      )
+      .run();
+  });
 }

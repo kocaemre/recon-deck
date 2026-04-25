@@ -129,8 +129,63 @@ export const ports = sqliteTable(
 
     /** ParsedPort.extrainfo */
     extrainfo: text("extrainfo"),
+
+    /**
+     * P1-F PR 1: FK → hosts.id with CASCADE delete. Nullable in the column
+     * definition because SQLite ALTER TABLE ADD COLUMN cannot enforce
+     * NOT NULL retroactively; the application invariant ("every port belongs
+     * to a host") is enforced at write time inside createFromScan.
+     *
+     * Existing rows were backfilled to the engagement's `is_primary = 1`
+     * host during migration 0007 (see SQL header).
+     */
+    host_id: integer("host_id").references(() => hosts.id, {
+      onDelete: "cascade",
+    }),
   },
-  (t) => [index("ports_engagement_id_idx").on(t.engagement_id)],
+  (t) => [
+    index("ports_engagement_id_idx").on(t.engagement_id),
+    index("ports_host_id_idx").on(t.host_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// hosts (v2 P1-F: multi-host engagement)
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per network host inside an engagement (P1-F PR 1).
+ *
+ * Schema is additive — `engagements.target_ip` / `target_hostname` are
+ * retained until the UI is switched over in a later PR. Migration 0007
+ * backfills a single `is_primary = 1` row per existing engagement that
+ * mirrors the legacy columns; downstream invariants:
+ *   - every engagement has at least one row here
+ *   - exactly one row per engagement has `is_primary = 1`
+ * Both invariants are enforced at write time in engagement-repo.ts —
+ * SQLite cannot express "exactly one primary per parent" declaratively.
+ *
+ * `state` is the nmap host state ("up" | "down") and is currently not
+ * populated by the parser; left for future use.
+ */
+export const hosts = sqliteTable(
+  "hosts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    engagement_id: integer("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    ip: text("ip").notNull(),
+    hostname: text("hostname"),
+    state: text("state"),
+    os_name: text("os_name"),
+    os_accuracy: integer("os_accuracy"),
+    is_primary: integer("is_primary", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    scanned_at: text("scanned_at"),
+  },
+  (t) => [index("hosts_engagement_id_idx").on(t.engagement_id)],
 );
 
 // ---------------------------------------------------------------------------
@@ -178,10 +233,35 @@ export const port_scripts = sqliteTable(
      * D-12 (Phase 5): Distinguishes NSE script outputs ('nmap') from AutoRecon
      * per-port service file outputs ('autorecon'). Defaults to 'nmap' so
      * existing rows retain correct semantics after migration (T-05-01).
+     *
+     * v2 extension: engagement-level AutoRecon artifacts are stored with
+     * port_id = null and one of the `autorecon-*` source values. The SQLite
+     * column is plain TEXT — no CHECK constraint exists in migration 0001 —
+     * so additive enum members do not require a new migration.
      */
-    source: text("source", { enum: ["nmap", "autorecon"] })
+    source: text("source", {
+      enum: [
+        "nmap",
+        "autorecon",
+        "autorecon-loot",
+        "autorecon-report",
+        "autorecon-screenshot",
+        "autorecon-patterns",
+        "autorecon-errors",
+        "autorecon-commands",
+        "autorecon-exploit",
+        "autorecon-service-nmap-xml",
+      ],
+    })
       .notNull()
       .default("nmap"),
+
+    /*
+     * NOTE: encoding for binary content is implicit by `source` value:
+     * `autorecon-screenshot` rows store `output` as base64-encoded bytes;
+     * all other sources store utf-8 text. Avoids the need for a new column
+     * (which would require a migration).
+     */
   },
   (t) => [
     index("port_scripts_port_id_idx").on(t.port_id),
@@ -315,6 +395,140 @@ export const port_commands = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// port_evidence (v2: screenshots / binary attachments)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-port (or per-engagement when port_id is null) binary evidence —
+ * screenshots, proof images, attachments. Stored as base64 TEXT.
+ *
+ * Why TEXT (not BLOB): keeps the schema portable across SQLite drivers
+ * (better-sqlite3 ↔ bun:sqlite). Per-row 4 MB cap is enforced application-side
+ * before insert.
+ *
+ * `port_id` nullable for engagement-level evidence (proof-of-compromise
+ * screenshot, dashboard, etc.).
+ *
+ * `source = 'manual' | 'autorecon-import'` — distinguishes user-uploaded
+ * evidence from gowitness/aquatone PNGs lifted out of an AutoRecon zip.
+ */
+export const port_evidence = sqliteTable(
+  "port_evidence",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    engagement_id: integer("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    port_id: integer("port_id").references(() => ports.id, {
+      onDelete: "cascade",
+    }),
+    filename: text("filename").notNull(),
+    mime: text("mime").notNull(),
+    /** Base64-encoded binary content. */
+    data_b64: text("data_b64").notNull(),
+    caption: text("caption"),
+    source: text("source", { enum: ["manual", "autorecon-import"] })
+      .notNull()
+      .default("manual"),
+    created_at: text("created_at").notNull(),
+  },
+  (t) => [
+    index("port_evidence_port_id_idx").on(t.port_id),
+    index("port_evidence_engagement_id_idx").on(t.engagement_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// findings (v2: pentester-discovered issue catalog)
+// ---------------------------------------------------------------------------
+
+/**
+ * Findings catalog — what the pentester has discovered while working through
+ * an engagement. Lives between the raw scan output (low-level facts) and the
+ * eventual report (high-level narrative).
+ *
+ * Design:
+ *   - severity is a stable string enum so reports can sort/filter consistently
+ *   - port_id nullable for engagement-level findings (privesc, AD takeover)
+ *   - evidence_refs is a JSON-encoded array of port_evidence.id values, kept
+ *     as a TEXT column to avoid a third join table for "M findings ↔ N
+ *     screenshots". Validated on read in repo.
+ *   - cve free-text (comma-separated) — pentester may list multiple
+ */
+export const findings = sqliteTable(
+  "findings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    engagement_id: integer("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    port_id: integer("port_id").references(() => ports.id, {
+      onDelete: "set null",
+    }),
+    severity: text("severity", {
+      enum: ["info", "low", "medium", "high", "critical"],
+    })
+      .notNull()
+      .default("medium"),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    cve: text("cve"),
+    /** JSON array string of port_evidence.id values. Default '[]'. */
+    evidence_refs: text("evidence_refs").notNull().default("[]"),
+    created_at: text("created_at").notNull(),
+    updated_at: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("findings_engagement_id_idx").on(t.engagement_id),
+    index("findings_port_id_idx").on(t.port_id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// user_commands (v2: personal command library)
+// ---------------------------------------------------------------------------
+
+/**
+ * User-defined command snippets surfaced alongside KB commands at render
+ * time. Scope is filtered by service / port — see migration 0005 SQL header
+ * for the matrix.
+ */
+export const user_commands = sqliteTable(
+  "user_commands",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    service: text("service"),
+    port: integer("port"),
+    label: text("label").notNull(),
+    template: text("template").notNull(),
+    created_at: text("created_at").notNull(),
+    updated_at: text("updated_at").notNull(),
+  },
+  (t) => [
+    index("user_commands_service_idx").on(t.service),
+    index("user_commands_port_idx").on(t.port),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// wordlist_overrides (v2 P1-E: per-install custom wordlist paths)
+// ---------------------------------------------------------------------------
+
+/**
+ * Override table for `{WORDLIST_*}` placeholder resolution. Defaults live in
+ * `src/lib/kb/wordlists.ts` (DEFAULT_WORDLISTS) and target a Kali install;
+ * rows here win at render time when the operator stores custom paths.
+ *
+ * `key` is the uppercase identifier without braces (e.g. WORDLIST_DIRB_COMMON).
+ * Validated against `WORDLIST_[A-Z0-9_]+` in the repo before insert.
+ */
+export const wordlist_overrides = sqliteTable("wordlist_overrides", {
+  key: text("key").primaryKey(),
+  path: text("path").notNull(),
+  updated_at: text("updated_at").notNull(),
+});
+
+// ---------------------------------------------------------------------------
 // Drizzle-inferred select types
 // ---------------------------------------------------------------------------
 
@@ -335,3 +549,18 @@ export type PortNote = typeof port_notes.$inferSelect;
 
 /** Row type for the port_commands table. */
 export type PortCommand = typeof port_commands.$inferSelect;
+
+/** Row type for the port_evidence table. */
+export type PortEvidence = typeof port_evidence.$inferSelect;
+
+/** Row type for the findings table. */
+export type Finding = typeof findings.$inferSelect;
+
+/** Row type for the user_commands table. */
+export type UserCommand = typeof user_commands.$inferSelect;
+
+/** Row type for the wordlist_overrides table. */
+export type WordlistOverride = typeof wordlist_overrides.$inferSelect;
+
+/** Row type for the hosts table. */
+export type Host = typeof hosts.$inferSelect;

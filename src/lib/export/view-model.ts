@@ -44,28 +44,46 @@ import "server-only";
 import type { FullEngagement, PortWithDetails } from "@/lib/db/types";
 import type { PortScript } from "@/lib/db/schema";
 import { matchPort, type KnowledgeBase } from "@/lib/kb";
+import { interpolateWordlists } from "@/lib/kb/wordlists";
+import { parseNmapXml } from "@/lib/parser/nmap-xml";
+import { parseNmapText } from "@/lib/parser/nmap-text";
+import type {
+  Hop,
+  OsMatch,
+  ParsedScan,
+  ScannerInfo,
+  RunStats,
+  ExtraPortGroup,
+  ScriptOutput,
+} from "@/lib/parser/types";
 
 // -----------------------------------------------------------------------------
 // Private helpers
 // -----------------------------------------------------------------------------
 
 /**
- * Replace {IP}, {PORT}, {HOST} placeholders in a KB / AutoRecon command
- * template. Identical to the helper in `app/engagements/[id]/page.tsx` — the
- * whole point of the view model is that generators and the detail page see
- * the same interpolated strings.
+ * Replace {IP}, {PORT}, {HOST} and {WORDLIST_*} placeholders in a KB /
+ * AutoRecon / user-defined command template. Identical to the helper in
+ * `app/engagements/[id]/page.tsx` — the whole point of the view model is
+ * that generators and the detail page see the same interpolated strings.
  *
  * {HOST} falls back to the target IP when the engagement hostname is null
  * (nmap commonly returns no PTR for HTB targets). This keeps exported
  * commands runnable verbatim.
+ *
+ * P1-E: `wordlistOverrides` keyed by the WORDLIST_* identifier (no braces);
+ * unmapped tokens fall back to `DEFAULT_WORDLISTS` and finally remain
+ * verbatim so the operator notices an unresolved key.
  */
 function interpolateCommand(
   template: string,
   ip: string,
   port: number,
   hostname: string | null,
+  wordlistOverrides?: Record<string, string>,
 ): string {
-  return template
+  const withWordlists = interpolateWordlists(template, wordlistOverrides);
+  return withWordlists
     .replace(/\{IP\}/g, ip)
     .replace(/\{PORT\}/g, String(port))
     .replace(/\{HOST\}/g, hostname ?? ip);
@@ -93,6 +111,10 @@ export interface PortViewModel {
   checkMap: Map<string, boolean>;
   /** Risk rating from the KB entry (info|low|medium|high|critical). */
   risk: string;
+  /** v2: nmap state reason (syn-ack, no-response, ...). */
+  reason?: string;
+  /** v2: CPE identifiers from `<cpe>`. */
+  cpe?: string[];
 }
 
 /** Top-level engagement shape consumed by all Phase 06 export generators. */
@@ -113,6 +135,22 @@ export interface EngagementViewModel {
   warnings: string[];
   /** App version — `process.env.npm_package_version` at runtime, "0.0.0-dev" fallback for test contexts. */
   recon_deck_version: string;
+  /** v2: scanner meta from `<nmaprun>`. */
+  scanner?: ScannerInfo;
+  /** v2: end-of-scan stats. */
+  runstats?: RunStats;
+  /** v2: extra-port summary. */
+  extraPorts?: ExtraPortGroup[];
+  /** v2: traceroute hops. */
+  traceroute?: { proto?: string; port?: number; hops: Hop[] };
+  /** v2: pre-scan script outputs. */
+  preScripts?: ScriptOutput[];
+  /** v2: post-scan script outputs. */
+  postScripts?: ScriptOutput[];
+  /** v2: full OS detection (matches + classes + fingerprint). */
+  osMatches?: OsMatch[];
+  /** v2: TCP/IP fingerprint blob. */
+  osFingerprint?: string;
 }
 
 // -----------------------------------------------------------------------------
@@ -126,11 +164,65 @@ export interface EngagementViewModel {
  * Pure function — no DB calls, no KB file reads, no HTTP. Both inputs are
  * provided by the caller so this function stays unit-testable without spinning
  * up SQLite or reading YAML (RESEARCH.md Pitfall 5 mitigation).
+ *
+ * `wordlistOverrides` (P1-E): optional override map for `{WORDLIST_*}`
+ * placeholder resolution. The page route reads it from `wordlist_overrides`
+ * and threads it through. Empty/undefined → defaults from
+ * `src/lib/kb/wordlists.ts` (DEFAULT_WORDLISTS) only.
  */
 export function loadEngagementForExport(
   engagement: FullEngagement,
   kb: KnowledgeBase,
+  wordlistOverrides?: Record<string, string>,
 ): EngagementViewModel {
+  // v2: re-parse the source nmap output to surface enrichment fields not
+  // persisted in the DB (cpe, reason, traceroute, OS classes, scanner,
+  // runstats, extraports, pre/post scripts).
+  //
+  // Source resolution by `engagement.source`:
+  //   nmap-xml  → engagement.raw_input (full XML)
+  //   nmap-text → engagement.raw_input (text)
+  //   autorecon → engagementArtifacts row {source: 'autorecon-service-nmap-xml',
+  //               script_id: '_full_tcp_nmap.xml'} (XML stashed at import time
+  //               because raw_input is just the zip filename for AR engagements).
+  let reparsed: ParsedScan | undefined;
+  if (engagement.source === "nmap-xml") {
+    try {
+      reparsed = parseNmapXml(engagement.raw_input);
+    } catch {
+      /* non-fatal */
+    }
+  } else if (engagement.source === "nmap-text") {
+    try {
+      reparsed = parseNmapText(engagement.raw_input);
+    } catch {
+      /* non-fatal */
+    }
+  } else if (engagement.source === "autorecon") {
+    const xmlRow = engagement.engagementArtifacts.find(
+      (a) =>
+        a.source === "autorecon-service-nmap-xml" &&
+        a.script_id === "_full_tcp_nmap.xml",
+    );
+    if (xmlRow) {
+      try {
+        reparsed = parseNmapXml(xmlRow.output);
+      } catch {
+        /* non-fatal */
+      }
+    }
+  }
+
+  const reparsedByPort = new Map<number, { reason?: string; cpe?: string[] }>();
+  if (reparsed) {
+    for (const p of reparsed.ports) {
+      const meta: { reason?: string; cpe?: string[] } = {};
+      if (p.reason) meta.reason = p.reason;
+      if (p.cpe && p.cpe.length > 0) meta.cpe = p.cpe;
+      if (meta.reason || meta.cpe) reparsedByPort.set(p.port, meta);
+    }
+  }
+
   // 1. Sort ports ASC — guarantees deterministic rendering order and stable
   //    JSON key order for downstream `checklist` / `notes` objects in the JSON
   //    export (RESEARCH.md Pitfall 3).
@@ -163,6 +255,7 @@ export function loadEngagementForExport(
         engagement.target_ip,
         p.port,
         engagement.target_hostname,
+        wordlistOverrides,
       ),
     }));
 
@@ -197,9 +290,11 @@ export function loadEngagementForExport(
         engagement.target_ip,
         p.port,
         engagement.target_hostname,
+        wordlistOverrides,
       ),
     }));
 
+    const meta = reparsedByPort.get(p.port);
     return {
       port: p,
       nseScripts,
@@ -209,6 +304,8 @@ export function loadEngagementForExport(
       kbChecks,
       checkMap,
       risk: kbEntry.risk,
+      reason: meta?.reason,
+      cpe: meta?.cpe,
     };
   });
 
@@ -233,5 +330,13 @@ export function loadEngagementForExport(
     coverage,
     warnings,
     recon_deck_version,
+    scanner: reparsed?.scanner,
+    runstats: reparsed?.runstats,
+    extraPorts: reparsed?.extraPorts,
+    traceroute: reparsed?.traceroute,
+    preScripts: reparsed?.preScripts,
+    postScripts: reparsed?.postScripts,
+    osMatches: reparsed?.os?.matches,
+    osFingerprint: reparsed?.os?.fingerprint,
   };
 }

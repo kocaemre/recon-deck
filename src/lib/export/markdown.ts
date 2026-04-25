@@ -121,6 +121,20 @@ function buildFrontmatter(vm: EngagementViewModel, exportedAt: string): string {
     lines.push(`os: ${yamlQuote(engagement.os_name)}`);
   }
 
+  // v2: nmap scanner meta + finished timestamp.
+  if (vm.scanner?.version) {
+    lines.push(`nmap_version: ${yamlQuote(vm.scanner.version)}`);
+  }
+  if (vm.scanner?.args) {
+    lines.push(`nmap_args: ${yamlQuote(vm.scanner.args)}`);
+  }
+  if (vm.runstats?.finishedAt) {
+    lines.push(`finished_at: ${yamlQuote(vm.runstats.finishedAt)}`);
+  }
+  if (vm.runstats?.elapsed !== undefined) {
+    lines.push(`scan_elapsed_seconds: ${vm.runstats.elapsed}`);
+  }
+
   // Ports: block-list form `port/proto`. Obsidian Dataview requires dash
   // form to parse as List (Pitfall 1 in RESEARCH.md).
   const portKeys = vm.ports.map((p) => `${p.port.port}/${p.port.protocol}`);
@@ -166,7 +180,91 @@ function buildBody(vm: EngagementViewModel): string {
     parts.push(buildHostScriptsSection(vm));
   }
 
+  // 5. v2: engagement-level enrichment sections.
+  const extraSections = [
+    buildExtraPortsSection(vm),
+    buildOsDetectionSection(vm),
+    buildTracerouteSection(vm),
+    buildPrePostScriptsSection(vm),
+  ].filter((s): s is string => s !== null);
+  if (extraSections.length > 0) {
+    parts.push(extraSections.join("\n\n"));
+  }
+
   return parts.join("\n\n");
+}
+
+function buildExtraPortsSection(vm: EngagementViewModel): string | null {
+  if (!vm.extraPorts || vm.extraPorts.length === 0) return null;
+  const lines: string[] = ["## Extra Ports", ""];
+  for (const ep of vm.extraPorts) {
+    const reasons = ep.reasons
+      ? ` (${ep.reasons.map((r) => `${r.count} ${r.reason}`).join(", ")})`
+      : "";
+    lines.push(`- **${ep.count}** ${ep.state}${reasons}`);
+  }
+  return lines.join("\n");
+}
+
+function buildOsDetectionSection(vm: EngagementViewModel): string | null {
+  if ((!vm.osMatches || vm.osMatches.length === 0) && !vm.osFingerprint) {
+    return null;
+  }
+  const lines: string[] = ["## OS Detection", ""];
+  if (vm.osMatches) {
+    for (const m of vm.osMatches) {
+      const acc = m.accuracy !== undefined ? ` _(${m.accuracy}%)_` : "";
+      lines.push(`- **${m.name}**${acc}`);
+      if (m.classes && m.classes.length > 0) {
+        for (const c of m.classes) {
+          const parts = [c.vendor, c.family, c.gen, c.type]
+            .filter(Boolean)
+            .join(" / ");
+          if (parts) lines.push(`  - ${parts}`);
+        }
+      }
+    }
+  }
+  if (vm.osFingerprint) {
+    lines.push("", "**TCP/IP fingerprint:**", "");
+    lines.push("```");
+    lines.push(vm.osFingerprint);
+    lines.push("```");
+  }
+  return lines.join("\n");
+}
+
+function buildTracerouteSection(vm: EngagementViewModel): string | null {
+  if (!vm.traceroute || vm.traceroute.hops.length === 0) return null;
+  const lines: string[] = ["## Traceroute", ""];
+  if (vm.traceroute.proto) {
+    lines.push(
+      `_proto: ${vm.traceroute.proto}${vm.traceroute.port ? ` · port: ${vm.traceroute.port}` : ""}_`,
+      "",
+    );
+  }
+  lines.push("| TTL | IP | Host | RTT (ms) |");
+  lines.push("|-----|----|------|----------|");
+  for (const h of vm.traceroute.hops) {
+    lines.push(
+      `| ${h.ttl} | ${h.ipaddr} | ${h.host ?? ""} | ${h.rtt ?? ""} |`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function buildPrePostScriptsSection(vm: EngagementViewModel): string | null {
+  const pre = vm.preScripts ?? [];
+  const post = vm.postScripts ?? [];
+  if (pre.length === 0 && post.length === 0) return null;
+  const lines: string[] = ["## Pre / Post Scan Scripts", ""];
+  for (const s of pre) {
+    lines.push(`### pre · ${s.id}`, "", "```text", s.output, "```", "");
+  }
+  for (const s of post) {
+    lines.push(`### post · ${s.id}`, "", "```text", s.output, "```", "");
+  }
+  return lines.join("\n").replace(/\n+$/, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -202,9 +300,10 @@ function buildPortSection(p: PortViewModel): string {
   const heading = buildPortHeading(p);
   const sections: string[] = [heading, ""];
 
-  // Order: NSE → AR Files → KB Commands → AR Commands → Checklist → Notes.
+  // Order: CPE/Reason metadata → NSE → AR Files → KB Commands → AR Commands → Checklist → Notes.
   // Each helper returns `null` when the section should be skipped (D-06).
   const bodyParts = [
+    renderCpeReasonSection(p),
     renderNseSection(p),
     renderArFilesSection(p),
     renderKbCommandsSection(p),
@@ -293,12 +392,23 @@ function renderChecklistSection(p: PortViewModel): string | null {
 
 function renderNotesSection(p: PortViewModel): string | null {
   const notes = p.port.notes;
-  // Skip when the notes row is missing OR the body is whitespace-only. Both
-  // states appear in the fixture (NULL for port 443, empty string for port
-  // 53) and must produce the same "omit section" outcome per D-06.
   if (!notes) return null;
   if (notes.body.trim() === "") return null;
   return `### Notes\n\n${notes.body}`;
+}
+
+/** v2: CPE + reason rendered as a small fact list above the rest of the port body. */
+function renderCpeReasonSection(p: PortViewModel): string | null {
+  const lines: string[] = [];
+  if (p.reason) {
+    lines.push(`- **Reason:** \`${p.reason}\``);
+  }
+  if (p.cpe && p.cpe.length > 0) {
+    for (const c of p.cpe) {
+      lines.push(`- **CPE:** \`${c}\``);
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 // ---------------------------------------------------------------------------

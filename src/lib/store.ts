@@ -49,6 +49,11 @@ interface UIState {
   /** Set the cheat-sheet open state. */
   setCheatSheetOpen: (open: boolean) => void;
 
+  /** Global cross-engagement search modal open/closed. */
+  globalSearchOpen: boolean;
+  /** Set global search open state. */
+  setGlobalSearchOpen: (open: boolean) => void;
+
   /**
    * Currently-active port id for j/k navigation (UI-07). Null when no port
    * has been focused yet (initial state) or when navigating between engagements.
@@ -87,7 +92,12 @@ interface UIState {
    */
   engagementContext: {
     engagementId: number;
-    ports: Array<{ id: number; port: number; service: string | null }>;
+    ports: Array<{
+      id: number;
+      port: number;
+      service: string | null;
+      risk: string;
+    }>;
     kbCommands: Array<{ portId: number; label: string; command: string }>;
   } | null;
   /** Set or clear the engagement context. */
@@ -116,6 +126,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   cheatSheetOpen: false,
   setCheatSheetOpen: (open) => set({ cheatSheetOpen: open }),
+
+  globalSearchOpen: false,
+  setGlobalSearchOpen: (open) => set({ globalSearchOpen: open }),
 
   activePortId: null,
   setActivePortId: (portId) => set({ activePortId: portId }),

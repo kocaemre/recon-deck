@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Textarea } from "@/components/ui/textarea";
 import { saveNote } from "../../app/engagements/[id]/actions";
 import { toast } from "sonner";
 
@@ -62,21 +61,35 @@ export function NotesField({
 
   return (
     <div>
-      <Textarea
+      <textarea
         value={body}
         onChange={handleChange}
-        placeholder="Add notes for this port..."
-        className="min-h-[80px] max-h-[240px] resize-y bg-muted text-sm"
+        placeholder="No notes yet — press N to add."
+        className="mono w-full resize-y placeholder:italic placeholder:text-[var(--fg-subtle)]"
+        style={{
+          minHeight: 60,
+          maxHeight: 240,
+          padding: 10,
+          background: "var(--bg-1)",
+          border: "1px solid var(--border)",
+          borderRadius: 5,
+          color: "var(--fg)",
+          fontSize: 12.5,
+          lineHeight: 1.55,
+          outline: "none",
+          fontFamily: "var(--font-ui)",
+        }}
       />
       {/* Save status indicator — D-16 */}
       {saveStatus !== "idle" && (
         <p
           aria-live="polite"
-          className={`mt-1 text-xs text-muted-foreground transition-opacity ${
+          className={`mt-1 transition-opacity ${
             saveStatus === "saved" ? "opacity-70" : "opacity-100"
           }`}
+          style={{ fontSize: 11, color: "var(--fg-muted)" }}
         >
-          {saveStatus === "saving" ? "Saving..." : "Saved"}
+          {saveStatus === "saving" ? "Saving…" : "Saved"}
         </p>
       )}
     </div>

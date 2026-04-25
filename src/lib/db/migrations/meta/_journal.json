@@ -15,6 +15,48 @@
       "when": 1776418106876,
       "tag": "0001_add-ar-source-and-commands",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777200000000,
+      "tag": "0002_add-search-index",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1777300000000,
+      "tag": "0003_add-port-evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777400000000,
+      "tag": "0004_add-findings",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1777500000000,
+      "tag": "0005_add-user-commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777600000000,
+      "tag": "0006_add-wordlist-overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1777700000000,
+      "tag": "0007_add-hosts",
+      "breakpoints": true
     }
   ]
 }

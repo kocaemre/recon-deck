@@ -21,12 +21,22 @@ export {
   port_commands,
   check_states,
   port_notes,
+  port_evidence,
+  findings,
+  user_commands,
+  wordlist_overrides,
+  hosts,
   type Engagement,
   type Port,
   type PortScript,
   type PortCommand,
   type CheckState,
   type PortNote,
+  type PortEvidence,
+  type Finding,
+  type UserCommand,
+  type WordlistOverride,
+  type Host,
 } from "./schema";
 export type {
   FullEngagement,
@@ -45,3 +55,42 @@ export {
 } from "./engagement-repo";
 export { upsertCheck, getChecksByEngagement } from "./checklist-repo";
 export { upsertNote, getNotesByEngagement } from "./notes-repo";
+export { searchEngagements, type SearchHit, type SearchKind } from "./search";
+export {
+  createEvidence,
+  listEvidenceForEngagement,
+  deleteEvidence,
+  mimeFromFilename,
+  MAX_EVIDENCE_BYTES,
+} from "./evidence-repo";
+export {
+  listFindings,
+  createFinding,
+  updateFinding,
+  deleteFinding,
+  type Severity,
+  type FindingDecoded,
+  type FindingInput,
+  type FindingPatch,
+} from "./findings-repo";
+export {
+  listUserCommands,
+  createUserCommand,
+  updateUserCommand,
+  deleteUserCommand,
+  matchUserCommands,
+  type UserCommandInput,
+} from "./user-commands-repo";
+export {
+  addManualPort,
+  deletePort,
+  type ManualPortInput,
+} from "./ports-repo";
+export {
+  listWordlistOverrides,
+  getWordlistOverridesMap,
+  upsertWordlistOverride,
+  deleteWordlistOverride,
+  isValidWordlistKey,
+} from "./wordlists-repo";
+export { listHostsForEngagement, getPrimaryHost } from "./hosts-repo";

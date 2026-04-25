@@ -90,6 +90,9 @@ function buildPortEntry(
   if (pvm.port.version != null) entry.version = pvm.port.version;
   if (pvm.port.tunnel != null) entry.tunnel = pvm.port.tunnel;
   if (pvm.port.extrainfo != null) entry.extrainfo = pvm.port.extrainfo;
+  // v2: nmap state reason + CPE identifiers (omitted when absent).
+  if (pvm.reason != null) entry.reason = pvm.reason;
+  if (pvm.cpe && pvm.cpe.length > 0) entry.cpe = pvm.cpe;
 
   // NSE scripts — already filtered by the view model to source !== 'autorecon'.
   entry.scripts = pvm.nseScripts.map(toScriptOutput);
@@ -171,7 +174,20 @@ export function generateJson(vm: EngagementViewModel): string {
   );
   scan.hostScripts = vm.hostScripts.map(toScriptOutput);
 
-  if (vm.engagement.os_name != null) {
+  // v2: prefer the re-parsed OS detail (matches + classes + fingerprint) when
+  // available; otherwise fall back to the legacy {name, accuracy} pair stored
+  // on the engagement row.
+  if (vm.osMatches && vm.osMatches.length > 0) {
+    const os: Record<string, unknown> = {
+      matches: vm.osMatches,
+    };
+    if (vm.osMatches[0]?.name) os.name = vm.osMatches[0].name;
+    if (vm.osMatches[0]?.accuracy !== undefined) {
+      os.accuracy = vm.osMatches[0].accuracy;
+    }
+    if (vm.osFingerprint) os.fingerprint = vm.osFingerprint;
+    scan.os = os;
+  } else if (vm.engagement.os_name != null) {
     const os: { name: string; accuracy?: number } = {
       name: vm.engagement.os_name,
     };
@@ -179,6 +195,18 @@ export function generateJson(vm: EngagementViewModel): string {
       os.accuracy = vm.engagement.os_accuracy;
     }
     scan.os = os;
+  }
+
+  // v2: scanner / runstats / extraports / traceroute / pre/post scripts.
+  if (vm.scanner) scan.scanner = vm.scanner;
+  if (vm.runstats) scan.runstats = vm.runstats;
+  if (vm.extraPorts && vm.extraPorts.length > 0) scan.extraPorts = vm.extraPorts;
+  if (vm.traceroute) scan.traceroute = vm.traceroute;
+  if (vm.preScripts && vm.preScripts.length > 0) {
+    scan.preScripts = vm.preScripts.map((s) => ({ id: s.id, output: s.output }));
+  }
+  if (vm.postScripts && vm.postScripts.length > 0) {
+    scan.postScripts = vm.postScripts.map((s) => ({ id: s.id, output: s.output }));
   }
 
   scan.warnings = vm.warnings;

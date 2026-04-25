@@ -2,81 +2,122 @@
 @import "tw-animate-css";
 
 /*
- * recon-deck is dark-mode-only in v1.0 (UI-06).
- * All CSS custom properties are set directly at :root — no .dark class switching.
- * Color palette matches Phase 4 UI-SPEC (zinc-950 background, zinc-900 card,
- * green-500 accent, red-500 destructive).
+ * recon-deck redesign — Modern IDE / Linear-Raycast polish, terminal-green accent.
+ * Dark-mode-only (UI-06). All tokens set at :root, no theme switch.
+ * shadcn color aliases are remapped onto the redesign palette so existing
+ * shadcn/ui primitives (Button, Card, Dialog, ...) continue to render.
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, sans-serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo,
-    monospace;
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono);
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
+  /* shadcn Tailwind color aliases — remapped onto redesign tokens.
+   * Note: `--color-accent` stays tied to a hover surface (bg-3), NOT the green
+   * `--accent` token, so shadcn hover states (DropdownMenuItem, etc.) remain subtle.
+   * Components that need the green accent use `bg-primary` or `var(--accent)` directly. */
+  --color-background: var(--bg-0);
+  --color-foreground: var(--fg);
+  --color-card: var(--bg-2);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--bg-2);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--accent);
+  --color-primary-foreground: #05170d;
+  --color-secondary: var(--bg-3);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--bg-3);
+  --color-muted-foreground: var(--fg-muted);
+  --color-accent: var(--bg-3);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--risk-crit);
+  --color-destructive-foreground: var(--fg);
   --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
   --color-code-surface: var(--code-surface);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 }
 
 :root {
-  /* Dark theme — UI-SPEC Phase 4 color contract.
-   * zinc-950/900/800 base, green-500 accent, red-500 destructive.
-   * Matches shadcn neutral dark palette. */
-  --background: #09090b;        /* zinc-950 */
-  --foreground: #fafafa;        /* zinc-50 */
-  --card: #18181b;              /* zinc-900 */
-  --card-foreground: #fafafa;
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
-  --primary: #22c55e;           /* green-500 */
-  --primary-foreground: #09090b;
-  --secondary: #27272a;         /* zinc-800 */
-  --secondary-foreground: #fafafa;
-  --muted: #27272a;             /* zinc-800 */
-  --muted-foreground: #a1a1aa;  /* zinc-400 */
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444;       /* red-500 */
-  --destructive-foreground: #fafafa;
-  --border: #27272a;            /* zinc-800 */
-  --input: #27272a;
-  --ring: #22c55e;              /* green-500 focus ring */
+  /* Surfaces — cool neutral, subtly blueish black */
+  --bg-0: #0a0a0c;
+  --bg-1: #111114;
+  --bg-2: #17181c;
+  --bg-3: #1d1e22;
+  --code-surface: #0e0f12;
 
-  /* Custom surface for command code blocks (slightly distinct from card) */
-  --code-surface: #1c1c1f;
+  /* Borders */
+  --border: #232428;
+  --border-strong: #2e3036;
+  --border-subtle: #1b1c20;
 
-  --radius: 0.5rem;
+  /* Text */
+  --fg: #fafafa;
+  --fg-muted: #a4a8b0;
+  --fg-subtle: #6a6e78;
+  --fg-faint: #44474f;
+
+  /* Accent — terminal green (used sparingly) */
+  --accent: #4ade80;
+  --accent-dim: #22c55e;
+  --accent-bg: rgba(74, 222, 128, 0.08);
+  --accent-border: rgba(74, 222, 128, 0.22);
+
+  /* Risk palette */
+  --risk-crit: #f87171;
+  --risk-high: #fb923c;
+  --risk-med:  #fbbf24;
+  --risk-low:  #60a5fa;
+  --risk-info: #8b8f98;
+
+  /* Typography — next/font/google wires real values in layout.tsx (Step 2) */
+  --font-ui: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Density — comfortable default; expose a user toggle later if needed */
+  --row-h: 36px;
+  --pad-x: 14px;
+  --pad-y: 10px;
+
+  /* Shared radius fallback */
+  --radius: 6px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  background: var(--bg-0);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre, .mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "zero", "cv01";
+}
+
+::selection { background: var(--accent-bg); color: var(--fg); }
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: #26272c;
+  border-radius: 10px;
+  border: 2px solid var(--bg-0);
+}
+*::-webkit-scrollbar-thumb:hover { background: #34363c; }
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
 }

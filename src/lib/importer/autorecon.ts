@@ -5,10 +5,28 @@ import { parseNmapXml } from "@/lib/parser";
 import type { ParsedScan } from "@/lib/parser/types";
 
 /**
- * AutoRecon zip importer — extracts a user-uploaded `results/<ip>/` zip,
- * finds the full TCP nmap XML, parses per-port service scan files and
- * `_manual_commands.txt`, and returns a structured `AutoReconResult` ready
- * for `createFromScan(...)` (Phase 5 D-13 / D-14).
+ * AutoRecon zip importer (v2 enrichment).
+ *
+ * Discovers and parses the full AutoRecon `results/<ip>/` artifact set:
+ *
+ * Required (one of):
+ *   - `scans/xml/_full_tcp_nmap.xml`         (preferred — full TCP)
+ *   - `scans/xml/_quick_tcp_nmap.xml`        (fallback when full missing)
+ *
+ * Optional (collected when present):
+ *   - `scans/xml/_top_20_udp_nmap.xml`               UDP ports merged
+ *   - `scans/xml/{proto}_{port}_*_nmap.xml`          per-service nmap XML
+ *   - `scans/{tcp|udp}{port}/...`                    per-port service files
+ *     `scans/{tcp|udp}_{port}_...`                   flat-mode equivalent
+ *   - `scans/_manual_commands.txt`                   port_commands
+ *   - `scans/_patterns.log`                          highlights → warnings
+ *   - `scans/_errors.log`                            tool failures → warnings
+ *   - `scans/_commands.log`                          audit trail (artifact)
+ *   - `loot/**`                                      credential dumps (artifact)
+ *   - `report/notes.txt|proof.txt|local.txt`         operator notes (artifact)
+ *   - `report/screenshots/**`                        screenshots (binary artifact)
+ *   - `exploit/**`                                   exploit hints (artifact)
+ *   - `*.png/*.jpg/*.jpeg/*.gif/*.webp`              screenshots stored base64
  *
  * Security-critical:
  *   - `import "server-only"` keeps jszip out of the client bundle (Pitfall 4).
@@ -17,40 +35,54 @@ import type { ParsedScan } from "@/lib/parser/types";
  *   - Per-entry decompressed-size limits prevent a single deflate-bombed
  *     entry from exhausting heap (defense-in-depth alongside the route's
  *     50 MB pre-load check). Implemented via a streaming reader that aborts
- *     once the per-entry budget is exceeded — public jszip API, no reliance
- *     on private `_data.uncompressedSize` (HI-01, HI-02, ME-02).
+ *     once the per-entry budget is exceeded.
  *   - Aggregate decompressed-size budget across ALL entries caps total heap
- *     footprint at MAX_TOTAL_DECOMPRESSED. Without this, hundreds of entries
- *     each just under the per-entry limit can sum to multi-GB (HI-02).
- *   - Extracted XML is run through the existing `parseNmapXml` which has the
- *     two-layer XXE defense from Phase 2 (T-05-05 reuse).
+ *     footprint at MAX_TOTAL_DECOMPRESSED.
+ *   - Extracted XML is run through `parseNmapXml` (XXE defense from Phase 2).
  *
- * Throw / warn taxonomy (mirrors Phase 2 D-07/D-08):
- *   - Throws (hard reject, user-facing, no stack frames):
+ * Throw / warn taxonomy:
+ *   - Throws (hard reject):
  *       * empty zip (no entries)
- *       * zip missing `_full_tcp_nmap.xml`
+ *       * zip without `_full_tcp_nmap.xml` AND `_quick_tcp_nmap.xml`
  *       * zip without a `scans/` directory component
  *       * extracted XML decompresses past per-entry budget (zip-bomb)
  *       * aggregate decompressed payload exceeds budget (zip-bomb)
- *       * `parseNmapXml` failure on extracted XML (re-thrown with prefix)
+ *       * `parseNmapXml` failure on the chosen TCP XML (re-thrown with prefix)
  *   - Warnings (soft, accumulated into `scan.warnings`):
+ *       * fell back to quick scan
+ *       * `_patterns.log` first 20 lines (signal highlights)
+ *       * `_errors.log` first 20 lines (tool failures)
  *       * `_manual_commands.txt` header references a port not in the scan
  *
  * Tolerated silently (D-10):
- *   - Missing `_manual_commands.txt`
- *   - Missing per-port service files
- *   - Per-file entries larger than the per-entry AR-file limit (skipped,
- *     not fatal, since one oversized service file should not block import)
- *
- * Path resolution (CD-05 / Pitfall 5): we search by suffix
- * `xml/_full_tcp_nmap.xml` so both `results/<ip>/scans/xml/...` (user zipped
- * the IP folder) and `scans/xml/...` (user zipped from inside the IP folder)
- * layouts work without hardcoding a prefix.
+ *   - Missing optional artifacts
+ *   - Per-file entries larger than per-entry AR-file limit (skipped)
  */
+
+export type ArArtifactKind =
+  | "loot"
+  | "report"
+  | "screenshot"
+  | "patterns"
+  | "errors"
+  | "commands"
+  | "exploit"
+  | "service-nmap-xml";
 
 export interface ArFile {
   filename: string;
+  /** Raw text or base64-encoded binary. */
   content: string;
+  /** "utf8" for text files, "base64" for images. Defaults to "utf8" if omitted. */
+  encoding?: "utf8" | "base64";
+}
+
+export interface ArArtifact {
+  kind: ArArtifactKind;
+  filename: string;
+  /** Decoded content (utf8 string OR base64 of binary). */
+  content: string;
+  encoding: "utf8" | "base64";
 }
 
 export interface ArCommand {
@@ -60,54 +92,35 @@ export interface ArCommand {
 
 export interface AutoReconResult {
   scan: ParsedScan;
+  /** Per-port (port number) service file outputs. Same as v1. */
   arFiles: Map<number, ArFile[]>;
+  /** Per-port (port number) manual commands. Same as v1. */
   arCommands: Map<number, ArCommand[]>;
+  /** Engagement-level artifacts (loot, report, screenshots, patterns, ...). v2. */
+  arArtifacts: ArArtifact[];
 }
 
-/** AutoRecon `_manual_commands.txt` section header — `[*] {service} on {tcp|udp}/{port}`.
- *  Verified from `autorecon/main.py` (Pattern 5 in 05-RESEARCH.md). */
-const HEADER_RE = /^\[\*\]\s+(\S+)\s+on\s+(tcp|udp)\/(\d+)\s*$/;
+/* --------------------------- regexes & limits ----------------------------- */
 
-/** AutoRecon per-tool sub-header inside a section — `    [-] nikto`. */
+const HEADER_RE = /^\[\*\]\s+(\S+)\s+on\s+(tcp|udp)\/(\d+)\s*$/;
 const SUB_HEADER_RE = /^\s+\[-\]\s+(.+)$/;
 
-/** Per-AR-file safety limit — skip individual service-file entries larger
- *  than this. AutoRecon nmap-text output is typically a few KB; 1 MB is
- *  generous. Going over this cap skips the entry (D-10: missing service
- *  files are tolerated) rather than aborting the whole import. */
 const MAX_FILE_SIZE = 1 * 1024 * 1024;
-
-/** Per-entry hard cap for the main AutoRecon XML and `_manual_commands.txt`.
- *  These are required for a successful import, so exceeding the cap is fatal
- *  (rejected as a probable zip-bomb). 16 MB comfortably exceeds the largest
- *  real AutoRecon XML observed (~5 MB for full TCP scan with NSE) while
- *  blocking ratio-1000x deflate bombs that target a 50 MB upload bucket. */
 const MAX_REQUIRED_ENTRY_SIZE = 16 * 1024 * 1024;
-
-/** Aggregate decompressed-size budget across ALL entries read from the zip.
- *  The 50 MB upload cap bounds COMPRESSED size; deflate ratios of 100x-1000x
- *  are routine over repetitive data, so a 50 MB zip can yield multi-GB of
- *  heap. 200 MB aggregate is far above any legitimate AutoRecon output and
- *  far below a Node default heap (~1.5 GB). */
+/** Larger cap for binary screenshots (gowitness/aquatone png+jpg are 100-500 KB). */
+const MAX_BINARY_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_TOTAL_DECOMPRESSED = 200 * 1024 * 1024;
 
-/**
- * Read a zip entry as a UTF-8 string with both per-entry and aggregate size
- * caps. Uses the public jszip `nodeStream("nodebuffer")` API (avoids the
- * brittle private `_data.uncompressedSize` field — see ME-02 in REVIEW.md).
- *
- * Bytes are accumulated chunk-by-chunk; once either limit is hit the stream
- * is destroyed and the promise rejects, so we never materialize the full
- * payload in memory beyond the limit + one in-flight chunk (~64 KB).
- *
- * Returns the decoded string AND mutates `budget.used` so the caller can
- * carry the running aggregate across multiple reads.
- */
-async function readEntryAsString(
+const BINARY_EXT_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
+const SERVICE_NMAP_XML_RE = /xml\/(tcp|udp)_(\d+)_[^/]+_nmap\.xml$/;
+
+/* --------------------------- streaming readers ---------------------------- */
+
+async function readEntryAsBuffer(
   entry: JSZip.JSZipObject,
   perEntryLimit: number,
   budget: { used: number },
-): Promise<string> {
+): Promise<Buffer> {
   const remainingAggregate = MAX_TOTAL_DECOMPRESSED - budget.used;
   if (remainingAggregate <= 0) {
     throw new Error(
@@ -117,10 +130,7 @@ async function readEntryAsString(
   }
   const effectiveLimit = Math.min(perEntryLimit, remainingAggregate);
 
-  return await new Promise<string>((resolve, reject) => {
-    // jszip's `nodeStream` is typed as the legacy NodeJS.ReadableStream
-    // interface (no `destroy`), but at runtime returns a Readable. We cast
-    // through Readable so we can abort decompression on overflow.
+  return await new Promise<Buffer>((resolve, reject) => {
     type AbortableStream = NodeJS.ReadableStream & { destroy?: () => void };
     const stream: AbortableStream = entry.nodeStream("nodebuffer");
     const chunks: Buffer[] = [];
@@ -139,7 +149,6 @@ async function readEntryAsString(
       if (total > effectiveLimit) {
         settled = true;
         cleanup();
-        // Destroy aborts decompression — heap stops growing immediately.
         stream.destroy?.();
         if (total > perEntryLimit) {
           reject(
@@ -167,7 +176,7 @@ async function readEntryAsString(
       settled = true;
       cleanup();
       budget.used += total;
-      resolve(Buffer.concat(chunks).toString("utf8"));
+      resolve(Buffer.concat(chunks));
     });
 
     stream.on("error", (err: Error) => {
@@ -179,148 +188,216 @@ async function readEntryAsString(
   });
 }
 
+async function readEntryAsString(
+  entry: JSZip.JSZipObject,
+  perEntryLimit: number,
+  budget: { used: number },
+): Promise<string> {
+  const buf = await readEntryAsBuffer(entry, perEntryLimit, budget);
+  return buf.toString("utf8");
+}
+
+async function readEntryAsBase64(
+  entry: JSZip.JSZipObject,
+  perEntryLimit: number,
+  budget: { used: number },
+): Promise<string> {
+  const buf = await readEntryAsBuffer(entry, perEntryLimit, budget);
+  return buf.toString("base64");
+}
+
+/* --------------------------- helpers ------------------------------------- */
+
+function basename(p: string): string {
+  const i = p.lastIndexOf("/");
+  return i >= 0 ? p.slice(i + 1) : p;
+}
+
+/** Find the scans/ base prefix from a known suffix entry. */
+function deriveScansBase(entryName: string, suffixToStrip: RegExp): string {
+  return entryName.replace(suffixToStrip, "");
+}
+
+/* --------------------------- main entrypoint ----------------------------- */
+
 export async function importAutoRecon(
   buffer: ArrayBuffer,
-  // zipFilename retained in the signature so future telemetry / error context
-  // can include it; the importer itself doesn't need it for processing — the
-  // route handler stores it in `engagements.raw_input` per D-14.
   _zipFilename: string,
 ): Promise<AutoReconResult> {
   const zip = await JSZip.loadAsync(buffer);
-
-  // Aggregate decompressed-byte counter shared across every readEntryAsString
-  // call below. Mutated in-place by the helper. See MAX_TOTAL_DECOMPRESSED.
   const budget = { used: 0 };
 
-  // 1. Empty zip guard.
   if (Object.keys(zip.files).length === 0) {
     throw new Error("Zip contains no files.");
   }
 
-  // 2. Flexible XML discovery (CD-05 / Pitfall 2 / Pitfall 5). We search by
-  //    suffix so both nested (`<ip>/scans/xml/...`) and flat (`scans/xml/...`)
-  //    layouts work without hardcoding a prefix. The match REQUIRES a
-  //    `scans/` component up front — previously the find accepted bare
-  //    `xml/_full_tcp_nmap.xml` only to be rejected 8 lines later by a
-  //    redundant scans-check (ME-03 dead-code branch).
-  const xmlEntry = Object.values(zip.files).find(
+  // ----- 1. Locate required TCP XML (full preferred, quick fallback) -----
+  const fullEntry = Object.values(zip.files).find(
     (f) =>
       !f.dir &&
       (f.name.endsWith("/scans/xml/_full_tcp_nmap.xml") ||
         f.name === "scans/xml/_full_tcp_nmap.xml"),
   );
+  const quickEntry = Object.values(zip.files).find(
+    (f) =>
+      !f.dir &&
+      (f.name.endsWith("/scans/xml/_quick_tcp_nmap.xml") ||
+        f.name === "scans/xml/_quick_tcp_nmap.xml"),
+  );
 
-  if (!xmlEntry) {
+  const tcpEntry = fullEntry ?? quickEntry;
+  if (!tcpEntry) {
     throw new Error(
-      "Could not find scans/_full_tcp_nmap.xml in the uploaded zip. " +
-        "Make sure you're zipping the results/<ip>/ folder.",
+      "Could not find scans/xml/_full_tcp_nmap.xml (or _quick_tcp_nmap.xml) " +
+        "in the uploaded zip. Make sure you're zipping the results/<ip>/ folder.",
     );
   }
 
-  // 3. Derive the scans/ base prefix by stripping `xml/_full_tcp_nmap.xml`.
-  //    Always ends in `scans/` because the find above guarantees the suffix.
-  //    e.g. "10.10.10.5/scans/xml/_full_tcp_nmap.xml" -> "10.10.10.5/scans/"
-  //    e.g. "scans/xml/_full_tcp_nmap.xml"            -> "scans/"
-  const scansBase = xmlEntry.name.replace(/xml\/_full_tcp_nmap\.xml$/, "");
+  const usedQuickFallback = !fullEntry && !!quickEntry;
 
-  // 4. Parse XML using the existing Phase 2 parser (D-13 reuse). Wrap so
-  //    parser errors are re-thrown with an AutoRecon-context prefix.
-  //    The streaming reader enforces both a per-entry 16 MB cap and the
-  //    aggregate 200 MB budget — required to defeat zip-bomb XML payloads
-  //    that the 50 MB upload cap alone cannot block (HI-01, HI-02).
-  const xmlString = await readEntryAsString(
-    xmlEntry,
+  const scansBase = deriveScansBase(
+    tcpEntry.name,
+    /xml\/_(?:full|quick)_tcp_nmap\.xml$/,
+  );
+
+  // ----- 2. Parse TCP XML -----
+  const tcpXmlString = await readEntryAsString(
+    tcpEntry,
     MAX_REQUIRED_ENTRY_SIZE,
     budget,
   );
   let scan: ParsedScan;
   try {
-    scan = parseNmapXml(xmlString);
+    scan = parseNmapXml(tcpXmlString);
   } catch (err) {
     throw new Error(
       "AutoRecon XML could not be parsed: " +
         (err instanceof Error ? err.message : String(err)),
     );
   }
-
-  // Override source — this scan came from an AutoRecon zip, not a paste.
-  // Cast through the union; the field is statically the union, runtime is fine.
   (scan as { source: ParsedScan["source"] }).source = "autorecon";
 
-  // 5. Per-port service file extraction (D-04 / D-05). Two layout modes:
-  //    a) Port-dirs (default): files under `{scansBase}tcp{port}/...`
-  //    b) No-port-dirs: files directly in `{scansBase}` matching `tcp_{port}_...`
-  const arFiles = new Map<number, ArFile[]>();
+  // Stash the extracted full TCP XML so the engagement page can re-parse it
+  // and surface v2 fields (cpe, reason, traceroute, OS classes, scanner,
+  // runstats, extraports). Without this the engagement.raw_input column would
+  // only hold the zip filename — re-parse impossible.
+  const sourceXmlForRetainment = tcpXmlString;
 
+  if (usedQuickFallback) {
+    scan.warnings.push(
+      "AutoRecon: full TCP scan XML missing — used _quick_tcp_nmap.xml " +
+        "(top-1000 ports only). Re-run AutoRecon for complete coverage.",
+    );
+  }
+
+  // ----- 3. Optional UDP merge -----
+  const udpEntry = Object.values(zip.files).find(
+    (f) =>
+      !f.dir &&
+      (f.name === `${scansBase}xml/_top_20_udp_nmap.xml` ||
+        f.name.endsWith("/scans/xml/_top_20_udp_nmap.xml")),
+  );
+  if (udpEntry) {
+    try {
+      const udpXmlString = await readEntryAsString(
+        udpEntry,
+        MAX_REQUIRED_ENTRY_SIZE,
+        budget,
+      );
+      const udpScan = parseNmapXml(udpXmlString);
+      // Merge UDP ports — dedupe by (proto, port).
+      const seen = new Set(scan.ports.map((p) => `${p.protocol}:${p.port}`));
+      for (const p of udpScan.ports) {
+        const key = `${p.protocol}:${p.port}`;
+        if (!seen.has(key)) {
+          scan.ports.push(p);
+          seen.add(key);
+        }
+      }
+      scan.ports.sort((a, b) => a.port - b.port);
+      // Carry forward UDP-side warnings prefixed for context.
+      for (const w of udpScan.warnings) {
+        scan.warnings.push(`UDP scan: ${w}`);
+      }
+    } catch (err) {
+      scan.warnings.push(
+        "AutoRecon: failed to parse _top_20_udp_nmap.xml — " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
+
+  // ----- 4. Per-port service files (TCP + UDP, port-dirs + flat) -----
+  const arFiles = new Map<number, ArFile[]>();
   for (const port of scan.ports) {
-    const portDirPrefix = `${scansBase}tcp${port.port}/`;
-    const flatPrefix = `${scansBase}tcp_${port.port}_`;
+    const proto = port.protocol;
+    const portDirPrefix = `${scansBase}${proto}${port.port}/`;
+    const flatPrefix = `${scansBase}${proto}_${port.port}_`;
 
     const matches = Object.values(zip.files).filter(
       (f) =>
         !f.dir &&
         (f.name.startsWith(portDirPrefix) || f.name.startsWith(flatPrefix)),
     );
-
     if (matches.length === 0) continue;
 
     const files: ArFile[] = [];
     for (const entry of matches) {
-      // Per-AR-file safety limit (T-05-04 defense-in-depth). The streaming
-      // reader aborts decompression once the per-entry budget is hit, so a
-      // single huge file cannot exhaust heap mid-read. D-10 says missing
-      // service files are tolerated, so an oversized entry is SKIPPED
-      // (caught below) — it does not abort the import. ME-02: no longer
-      // touches the private `_data.uncompressedSize` field.
+      // Binary detection for screenshots tucked under per-port dirs (rare,
+      // but seen in some plugin configurations).
+      if (BINARY_EXT_RE.test(entry.name)) {
+        let content: string;
+        try {
+          content = await readEntryAsBase64(
+            entry,
+            MAX_BINARY_FILE_SIZE,
+            budget,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("more than 200 MB")) throw err;
+          continue;
+        }
+        files.push({
+          filename: basename(entry.name),
+          content,
+          encoding: "base64",
+        });
+        continue;
+      }
+
       let content: string;
       try {
         content = await readEntryAsString(entry, MAX_FILE_SIZE, budget);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        // Aggregate-budget failure is fatal (zip-bomb in the small); per-entry
-        // overflow is a soft skip per D-10.
-        if (msg.includes("more than 200 MB")) {
-          throw err;
-        }
+        if (msg.includes("more than 200 MB")) throw err;
         continue;
       }
-
-      // Strip the directory prefix to get just the basename for display.
-      const lastSlash = entry.name.lastIndexOf("/");
-      const filename =
-        lastSlash >= 0 ? entry.name.slice(lastSlash + 1) : entry.name;
-
-      files.push({ filename, content });
+      files.push({
+        filename: basename(entry.name),
+        content,
+        encoding: "utf8",
+      });
     }
-
-    if (files.length > 0) {
-      arFiles.set(port.port, files);
-    }
+    if (files.length > 0) arFiles.set(port.port, files);
   }
 
-  // 6. Manual commands parsing (D-06 / D-07 / Pitfall 1).
-  //    Optional file (D-10). When present, parse `[*] service on proto/port`
-  //    sections, then `    [-] tool` sub-headers, then indented command lines.
+  // ----- 5. Manual commands -----
   const arCommands = new Map<number, ArCommand[]>();
   const manualCommandsPath = `${scansBase}_manual_commands.txt`;
   const manualCommandsEntry = zip.file(manualCommandsPath);
-
   if (manualCommandsEntry) {
-    // 16 MB cap: `_manual_commands.txt` is plain text — typical files are
-    // a few KB. A bombed manual_commands.txt was previously unbounded
-    // (HI-02). Aggregate budget also enforced via `budget`.
     const text = await readEntryAsString(
       manualCommandsEntry,
       MAX_REQUIRED_ENTRY_SIZE,
       budget,
     );
     const lines = text.split(/\r?\n/);
-
     let currentPort: number | null = null;
     let currentLabel: string | null = null;
     const validPorts = new Set(scan.ports.map((p) => p.port));
     const warnedPorts = new Set<number>();
-
     for (const line of lines) {
       const headerMatch = HEADER_RE.exec(line);
       if (headerMatch) {
@@ -329,7 +406,6 @@ export async function importAutoRecon(
           currentPort = portNum;
         } else {
           currentPort = null;
-          // Only warn once per dropped port — not once per command.
           if (!warnedPorts.has(portNum)) {
             warnedPorts.add(portNum);
             scan.warnings.push(
@@ -341,15 +417,11 @@ export async function importAutoRecon(
         currentLabel = null;
         continue;
       }
-
       const subMatch = SUB_HEADER_RE.exec(line);
       if (subMatch) {
         currentLabel = subMatch[1].trim();
         continue;
       }
-
-      // Command line: indented + non-empty after trim, AND we're inside a
-      // section with a known port and label.
       if (
         currentPort !== null &&
         currentLabel !== null &&
@@ -358,7 +430,6 @@ export async function importAutoRecon(
       ) {
         const trimmed = line.trim();
         if (trimmed.length === 0) continue;
-
         const list = arCommands.get(currentPort) ?? [];
         list.push({ label: currentLabel, template: trimmed });
         arCommands.set(currentPort, list);
@@ -366,5 +437,126 @@ export async function importAutoRecon(
     }
   }
 
-  return { scan, arFiles, arCommands };
+  // ----- 6. Engagement-level artifacts ----------------------------------
+  const arArtifacts: ArArtifact[] = [];
+
+  const tryReadArtifact = async (
+    entry: JSZip.JSZipObject,
+    kind: ArArtifactKind,
+    cap: number,
+    binary: boolean,
+  ) => {
+    try {
+      const content = binary
+        ? await readEntryAsBase64(entry, cap, budget)
+        : await readEntryAsString(entry, cap, budget);
+      arArtifacts.push({
+        kind,
+        filename: entry.name,
+        content,
+        encoding: binary ? "base64" : "utf8",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("more than 200 MB")) throw err;
+      // soft-skip oversize/parse failures per D-10
+    }
+  };
+
+  // Determine the engagement-root prefix (`results/<ip>/` or empty for flat zip).
+  const engagementRoot = scansBase.replace(/scans\/$/, "");
+
+  // patterns.log + errors.log + commands.log
+  for (const name of ["_patterns.log", "_errors.log", "_commands.log"]) {
+    const entry = zip.file(`${scansBase}${name}`);
+    if (entry) {
+      const kind: ArArtifactKind =
+        name === "_patterns.log"
+          ? "patterns"
+          : name === "_errors.log"
+            ? "errors"
+            : "commands";
+      await tryReadArtifact(entry, kind, MAX_REQUIRED_ENTRY_SIZE, false);
+      // Push first 20 highlight lines from patterns/errors into warnings so
+      // they surface in the engagement banner.
+      if (kind === "patterns" || kind === "errors") {
+        const last = arArtifacts[arArtifacts.length - 1];
+        if (last && last.kind === kind) {
+          const lines = last.content
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter((l) => l.length > 0);
+          const cap = 20;
+          for (const l of lines.slice(0, cap)) {
+            scan.warnings.push(
+              `AutoRecon ${kind === "patterns" ? "pattern" : "error"}: ${l}`,
+            );
+          }
+          if (lines.length > cap) {
+            scan.warnings.push(
+              `AutoRecon ${kind}: …and ${lines.length - cap} more (see artifact).`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // Per-service nmap XML under scans/xml/{proto}_{port}_{svc}_nmap.xml
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    if (!entry.name.startsWith(scansBase)) continue;
+    if (!SERVICE_NMAP_XML_RE.test(entry.name)) continue;
+    await tryReadArtifact(
+      entry,
+      "service-nmap-xml",
+      MAX_REQUIRED_ENTRY_SIZE,
+      false,
+    );
+  }
+
+  // loot/, report/, exploit/ directory dumps
+  const dirArtifactKinds: Array<{ prefix: string; kind: ArArtifactKind }> = [
+    { prefix: `${engagementRoot}loot/`, kind: "loot" },
+    { prefix: `${engagementRoot}report/`, kind: "report" },
+    { prefix: `${engagementRoot}exploit/`, kind: "exploit" },
+  ];
+  for (const { prefix, kind } of dirArtifactKinds) {
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir) continue;
+      if (!entry.name.startsWith(prefix)) continue;
+      const isBinary = BINARY_EXT_RE.test(entry.name);
+      const useKind: ArArtifactKind = isBinary ? "screenshot" : kind;
+      const cap = isBinary ? MAX_BINARY_FILE_SIZE : MAX_REQUIRED_ENTRY_SIZE;
+      await tryReadArtifact(entry, useKind, cap, isBinary);
+    }
+  }
+
+  // Catch-all: any other binary screenshot anywhere under engagementRoot
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    if (!entry.name.startsWith(engagementRoot)) continue;
+    if (!BINARY_EXT_RE.test(entry.name)) continue;
+    // Skip if already collected by a previous loop (per-port files or dir dump).
+    if (arArtifacts.some((a) => a.filename === entry.name)) continue;
+    if (
+      Array.from(arFiles.values()).some((files) =>
+        files.some((f) => f.filename === basename(entry.name)),
+      )
+    ) {
+      continue;
+    }
+    await tryReadArtifact(entry, "screenshot", MAX_BINARY_FILE_SIZE, true);
+  }
+
+  // ----- 7. Retain extracted full TCP XML so the engagement page can
+  //         re-parse for v2 enrichment (cpe, reason, traceroute, ...).
+  arArtifacts.push({
+    kind: "service-nmap-xml",
+    filename: "_full_tcp_nmap.xml",
+    content: sourceXmlForRetainment,
+    encoding: "utf8",
+  });
+
+  return { scan, arFiles, arCommands, arArtifacts };
 }

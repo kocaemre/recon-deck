@@ -11,21 +11,24 @@ import type { ParsedScan } from "../../parser/types.js";
 // ---------------------------------------------------------------------------
 
 function makeScan(overrides: Partial<ParsedScan> = {}): ParsedScan {
+  const target = overrides.target ?? { ip: "10.10.10.5" };
+  const ports: ParsedScan["ports"] = overrides.ports ?? [
+    {
+      port: 22,
+      protocol: "tcp",
+      state: "open",
+      service: "ssh",
+      scripts: [],
+    },
+  ];
+  const hostScripts = overrides.hostScripts ?? [];
   return {
-    target: { ip: "10.10.10.5" },
-    source: "nmap-text",
-    ports: [
-      {
-        port: 22,
-        protocol: "tcp",
-        state: "open",
-        service: "ssh",
-        scripts: [],
-      },
-    ],
-    hostScripts: [],
-    warnings: [],
-    ...overrides,
+    hosts: overrides.hosts ?? [{ target, ports, hostScripts }],
+    target,
+    source: overrides.source ?? "nmap-text",
+    ports,
+    hostScripts,
+    warnings: overrides.warnings ?? [],
   };
 }
 

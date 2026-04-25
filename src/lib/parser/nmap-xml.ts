@@ -1,45 +1,39 @@
 import "server-only";
 
 import { XMLParser } from "fast-xml-parser";
-import type { ParsedScan, ParsedPort, ScriptOutput, ScriptElem, ScriptTable } from "./types";
+import type {
+  ParsedScan,
+  ParsedHost,
+  ParsedPort,
+  ScriptOutput,
+  ScriptElem,
+  ScriptTable,
+  Hop,
+  OsMatch,
+  OsClass,
+  ExtraPortGroup,
+  ScannerInfo,
+  RunStats,
+  TargetAddress,
+  TargetHostname,
+} from "./types";
 
 /**
- * nmap XML parser — converts raw `-oX` output to a `ParsedScan`.
+ * nmap XML parser — converts raw `-oX` output to a ParsedScan.
  *
- * Security-critical: two-layer XXE defense per D-14 / D-15 / SEC-05.
- *   1. Pre-parse scan strips benign `<!DOCTYPE nmaprun>` declarations (no
- *      internal subset — no `[`) and rejects any DOCTYPE containing `[`,
- *      which is where `ENTITY` definitions live.
- *   2. XMLParser runs with `processEntities: false` — belt + braces; even if
- *      a DOCTYPE somehow slipped through it would never be expanded.
+ * v2 enrichments (additive — every new field is optional):
+ *   - target.state, target.addresses[], target.hostnames[]
+ *   - port.reason, port.reasonTtl, port.cpe[], port.serviceFp
+ *   - os.matches[] (with osclass), os.fingerprint
+ *   - extraPorts[] from <ports><extraports>
+ *   - traceroute from <trace><hop>
+ *   - preScripts[] / postScripts[] from <prescript>/<postscript>
+ *   - scanner{name, version, args, xmlVersion} from <nmaprun> attrs
+ *   - runstats{finishedAt, elapsed, summary, exitStatus, hosts}
  *
- * Throw/warn taxonomy per D-07 / D-08:
- *   - Throws (hard failure, user-facing, no stack frames, no inner-error
- *     interpolation — INPUT-04):
- *       * empty / whitespace-only input
- *       * DOCTYPE with entity definitions
- *       * multi-prologue (`--append-output`)
- *       * malformed / partial / Ctrl-C'd XML
- *       * missing `<nmaprun>` root
- *       * zero hosts
- *   - Warnings (soft, recoverable — pushed into `warnings[]`, never console):
- *       * multi-host scan (first host only per D-09)
- *       * unsupported protocol (sctp/ip/icmp) — skipped
- *       * invalid port number — skipped
- *       * `open|filtered` normalized to `filtered` (D-02)
- *       * unknown state token — skipped
- *       * port with no `<service>` child (PARSE-04 parse-time half — the
- *         render-time half falls back to `default.yaml` in Phase 4's
- *         `matchPort()`)
- *
- * Normalization rules:
- *   - D-05: `service` is `.toLowerCase().trim()`ed.
- *   - D-06: `product` / `version` / `extrainfo` verbatim (no lowercasing).
- *   - D-09 multi-host warning wording is locked.
- *   - CD-02 partial-XML wording is locked.
- *
- * `import "server-only"` prevents the client bundle from pulling in
- * fast-xml-parser (ARCHITECTURE.md: bundle < 2 MB).
+ * Security-critical: two-layer XXE defense per D-14 / D-15 / SEC-05 unchanged.
+ *   1. Strip benign DOCTYPE; reject DOCTYPE with internal subset (`[`).
+ *   2. processEntities: false — defense in depth.
  */
 
 const PARSER_OPTIONS = {
@@ -48,26 +42,32 @@ const PARSER_OPTIONS = {
   parseAttributeValue: false,
   processEntities: false,
   isArray: (name: string) =>
-    ["host", "port", "script", "osmatch", "hostname", "elem", "table"].includes(name),
+    [
+      "host",
+      "port",
+      "script",
+      "osmatch",
+      "osclass",
+      "hostname",
+      "elem",
+      "table",
+      "address",
+      "extraports",
+      "extrareasons",
+      "hop",
+      "cpe",
+    ].includes(name),
 } as const;
 
-// D-15 / SEC-05 pre-parse DOCTYPE handling.
-//   (a) Strip benign `<!DOCTYPE ...>` declarations that do NOT contain `[`
-//       (i.e. no internal subset, no ENTITY definitions). nmap itself never
-//       emits one, but some pipelines / editors add `<!DOCTYPE nmaprun>`.
-//   (b) If any `<!DOCTYPE` remains after stripping, the original had a `[`
-//       and therefore potentially an `ENTITY` — reject.
 const BENIGN_DOCTYPE_RE = /<!DOCTYPE[^\[>]*>/gi;
 
 export function parseNmapXml(raw: string): ParsedScan {
-  // D-07: empty / whitespace-only input
   if (!raw || !raw.trim()) {
     throw new Error(
       "Empty input — paste your nmap -oX output and try again.",
     );
   }
 
-  // Layer 1: DOCTYPE strip + reject
   const stripped = raw.replace(BENIGN_DOCTYPE_RE, "");
   if (/<!DOCTYPE/i.test(stripped)) {
     throw new Error(
@@ -77,24 +77,19 @@ export function parseNmapXml(raw: string): ParsedScan {
     );
   }
 
-  // D-07: concatenated --append-output → multiple `<?xml` prologues
-  const prologues = (stripped.match(/<\?xml/gi) ?? []).length;
-  if (prologues > 1) {
+  const prologueMatches = stripped.match(/<\?xml/g) ?? [];
+  if (prologueMatches.length > 1) {
     throw new Error(
-      "Multiple XML prologues detected. nmap --append-output produces " +
-        "invalid concatenated XML. Provide a single scan file instead.",
+      "Multiple XML prologues detected (likely from --append-output). " +
+        "Split into separate files and import one at a time.",
     );
   }
 
-  // Parse — fast-xml-parser is synchronous; layer 2 of XXE defense lives in
-  // PARSER_OPTIONS (processEntities: false).
+  const xml = new XMLParser(PARSER_OPTIONS);
   let doc: XmlDoc;
   try {
-    const parser = new XMLParser(PARSER_OPTIONS);
-    doc = parser.parse(stripped) as XmlDoc;
+    doc = xml.parse(stripped) as XmlDoc;
   } catch {
-    // CD-02 / INPUT-04 locked wording — do NOT interpolate the inner error
-    // (no stack frames, no jargon in user-facing message).
     throw new Error(
       "Incomplete nmap XML — the scan may have been interrupted (Ctrl-C). " +
         "Re-run the scan or use partial results manually.",
@@ -102,9 +97,6 @@ export function parseNmapXml(raw: string): ParsedScan {
   }
 
   if (!doc || typeof doc !== "object" || !doc.nmaprun) {
-    // fast-xml-parser can succeed on truncated input by silently closing open
-    // tags — guard with a root sanity check so partial captures still throw a
-    // helpful message rather than returning an empty ParsedScan.
     throw new Error(
       "Incomplete nmap XML — the scan may have been interrupted (Ctrl-C). " +
         "Re-run the scan or use partial results manually.",
@@ -112,66 +104,132 @@ export function parseNmapXml(raw: string): ParsedScan {
   }
 
   const warnings: string[] = [];
-  const hosts = normalizeArray(
+  const xmlHosts = normalizeArray(
     doc.nmaprun.host as XmlHost | XmlHost[] | undefined,
   );
 
-  const firstHost = hosts[0];
-  if (!firstHost) {
+  if (xmlHosts.length === 0) {
     throw new Error(
       "No hosts found in scan. The nmap XML must contain at least one " +
         "<host> element.",
     );
   }
 
-  // D-09 multi-host locked wording
-  if (hosts.length > 1) {
-    warnings.push(
-      `Multi-host scan: ${hosts.length - 1} additional host(s) ignored — ` +
-        `create a separate engagement per host.`,
-    );
-  }
+  // P1-F PR 2: parse every <host> element. The legacy multi-host warning
+  // is gone — multi-host scans are first-class citizens now.
+  const parsedHosts: ParsedHost[] = xmlHosts.map((h) => buildParsedHost(h, warnings));
 
-  const target = extractTarget(firstHost);
-  const ports = extractPorts(firstHost.ports, warnings);
-  const hostScripts = extractHostScripts(firstHost.hostscript);
   const scannedAt = extractScannedAt(doc.nmaprun.start);
-  const os = extractOs(firstHost.os);
+  const preScripts = extractScripts(
+    (doc.nmaprun.prescript as { script?: unknown } | undefined)?.script as
+      | XmlScript
+      | XmlScript[]
+      | undefined,
+  );
+  const postScripts = extractScripts(
+    (doc.nmaprun.postscript as { script?: unknown } | undefined)?.script as
+      | XmlScript
+      | XmlScript[]
+      | undefined,
+  );
+  const scanner = extractScanner(doc.nmaprun);
+  const runstats = extractRunStats(doc.nmaprun.runstats);
 
+  // Mirror hosts[0] onto the legacy top-level fields so existing single-host
+  // consumers (view-model, page.tsx, exports, importer) keep working until
+  // they migrate to scan.hosts. Removed in PR 4.
+  const primary = parsedHosts[0];
   const result: ParsedScan = {
-    target,
+    hosts: parsedHosts,
+    target: primary.target,
     source: "nmap-xml",
-    ports,
-    hostScripts,
+    ports: primary.ports,
+    hostScripts: primary.hostScripts,
     warnings,
   };
   if (scannedAt !== undefined) result.scannedAt = scannedAt;
-  if (os !== undefined) result.os = os;
+  if (primary.os !== undefined) result.os = primary.os;
+  if (primary.extraPorts && primary.extraPorts.length > 0) {
+    result.extraPorts = primary.extraPorts;
+  }
+  if (primary.traceroute) result.traceroute = primary.traceroute;
+  if (preScripts.length > 0) result.preScripts = preScripts;
+  if (postScripts.length > 0) result.postScripts = postScripts;
+  if (scanner) result.scanner = scanner;
+  if (runstats) result.runstats = runstats;
   return result;
 }
 
-// ----------------------------- helpers -------------------------------------
+/**
+ * Build a ParsedHost from one `<host>` element. All extractors here are
+ * already host-scoped; this helper just bundles them so the top-level loop
+ * stays tidy.
+ */
+function buildParsedHost(host: XmlHost, warnings: string[]): ParsedHost {
+  const target = extractTarget(host);
+  const ports = extractPorts(host.ports, warnings);
+  const hostScripts = extractHostScripts(host.hostscript);
+  const os = extractOs(host.os);
+  const extraPorts = extractExtraPorts(host.ports);
+  const traceroute = extractTraceroute(host.trace);
+
+  const result: ParsedHost = { target, ports, hostScripts };
+  if (os !== undefined) result.os = os;
+  if (extraPorts && extraPorts.length > 0) result.extraPorts = extraPorts;
+  if (traceroute) result.traceroute = traceroute;
+  return result;
+}
+
+// ----------------------------- types ---------------------------------------
 
 interface XmlDoc {
   nmaprun?: {
     start?: unknown;
+    version?: unknown;
+    args?: unknown;
+    xmloutputversion?: unknown;
+    scanner?: unknown;
     host?: unknown;
+    prescript?: unknown;
+    postscript?: unknown;
+    runstats?: unknown;
     [k: string]: unknown;
   };
 }
 
+interface XmlStatus {
+  state?: unknown;
+  reason?: unknown;
+}
+
 interface XmlHost {
+  status?: XmlStatus;
   address?: unknown;
   hostnames?: { hostname?: unknown } | undefined;
-  ports?: { port?: unknown } | undefined;
+  ports?:
+    | { port?: unknown; extraports?: unknown }
+    | undefined;
   hostscript?: { script?: unknown } | undefined;
-  os?: { osmatch?: unknown } | undefined;
+  os?: { osmatch?: unknown; osfingerprint?: unknown } | undefined;
+  trace?:
+    | {
+        proto?: unknown;
+        port?: unknown;
+        hop?: unknown;
+      }
+    | undefined;
   [k: string]: unknown;
 }
 
 interface XmlAddr {
   addr?: unknown;
   addrtype?: unknown;
+  vendor?: unknown;
+}
+
+interface XmlHostname {
+  name?: unknown;
+  type?: unknown;
 }
 
 interface XmlService {
@@ -180,12 +238,16 @@ interface XmlService {
   version?: unknown;
   tunnel?: unknown;
   extrainfo?: unknown;
+  servicefp?: unknown;
+  cpe?: unknown;
 }
 
 interface XmlPort {
   portid?: unknown;
   protocol?: unknown;
-  state?: { state?: unknown } | undefined;
+  state?:
+    | { state?: unknown; reason?: unknown; reason_ttl?: unknown }
+    | undefined;
   service?: XmlService | undefined;
   script?: unknown;
 }
@@ -212,6 +274,38 @@ interface XmlTable {
 interface XmlOsMatch {
   name?: unknown;
   accuracy?: unknown;
+  osclass?: unknown;
+}
+
+interface XmlOsClass {
+  type?: unknown;
+  vendor?: unknown;
+  osfamily?: unknown;
+  osgen?: unknown;
+  accuracy?: unknown;
+}
+
+interface XmlExtraPorts {
+  state?: unknown;
+  count?: unknown;
+  extrareasons?: unknown;
+}
+
+interface XmlExtraReasons {
+  reason?: unknown;
+  count?: unknown;
+}
+
+interface XmlHop {
+  ttl?: unknown;
+  rtt?: unknown;
+  ipaddr?: unknown;
+  host?: unknown;
+}
+
+interface XmlRunStats {
+  finished?: { time?: unknown; elapsed?: unknown; summary?: unknown; exit?: unknown };
+  hosts?: { up?: unknown; down?: unknown; total?: unknown };
 }
 
 function normalizeArray<T>(v: T | T[] | undefined | null): T[] {
@@ -219,25 +313,52 @@ function normalizeArray<T>(v: T | T[] | undefined | null): T[] {
   return Array.isArray(v) ? v : [v];
 }
 
-function extractTarget(host: XmlHost): { ip: string; hostname?: string } {
+// ----------------------------- target --------------------------------------
+
+function extractTarget(host: XmlHost): ParsedScan["target"] {
   const addrs = normalizeArray(host.address as XmlAddr | XmlAddr[] | undefined);
   const ipv4 = addrs.find((a) => a?.addrtype === "ipv4");
   const ipv6 = addrs.find((a) => a?.addrtype === "ipv6");
   const chosen = ipv4 ?? ipv6;
   const ip = chosen?.addr !== undefined ? String(chosen.addr) : "";
-  const hostnameEl = normalizeArray(
-    host.hostnames?.hostname as { name?: unknown } | { name?: unknown }[] | undefined,
-  )[0];
-  const rawHostname = hostnameEl?.name;
-  const hostname =
-    rawHostname !== undefined && rawHostname !== null && String(rawHostname) !== ""
-      ? String(rawHostname)
-      : undefined;
-  return hostname ? { ip, hostname } : { ip };
+
+  const allAddresses: TargetAddress[] = addrs
+    .filter((a) => a.addr !== undefined && a.addrtype !== undefined)
+    .map((a) => {
+      const out: TargetAddress = {
+        addr: String(a.addr),
+        addrtype: String(a.addrtype) as TargetAddress["addrtype"],
+      };
+      if (a.vendor !== undefined) out.vendor = String(a.vendor);
+      return out;
+    });
+
+  const rawHostnames = normalizeArray(
+    host.hostnames?.hostname as XmlHostname | XmlHostname[] | undefined,
+  );
+  const allHostnames: TargetHostname[] = rawHostnames
+    .filter((h) => h.name !== undefined && String(h.name) !== "")
+    .map((h) => ({
+      name: String(h.name),
+      type: h.type !== undefined ? String(h.type) : "user",
+    }));
+  const hostnameValue = allHostnames[0]?.name;
+
+  const statusState =
+    host.status?.state !== undefined ? String(host.status.state) : undefined;
+
+  const target: ParsedScan["target"] = { ip };
+  if (hostnameValue) target.hostname = hostnameValue;
+  if (statusState) target.state = statusState;
+  if (allAddresses.length > 0) target.addresses = allAddresses;
+  if (allHostnames.length > 0) target.hostnames = allHostnames;
+  return target;
 }
 
+// ----------------------------- ports ---------------------------------------
+
 function extractPorts(
-  portsEl: { port?: unknown } | undefined,
+  portsEl: { port?: unknown; extraports?: unknown } | undefined,
   warnings: string[],
 ): ParsedPort[] {
   if (!portsEl?.port) return [];
@@ -262,8 +383,6 @@ function extractPorts(
 
     const stateVal = p.state?.state !== undefined ? String(p.state.state) : "";
 
-    // D-02: drop unreportable states at parse time (not a warning — it's simply
-    // not an observation worth rendering).
     if (
       stateVal === "" ||
       stateVal === "closed" ||
@@ -292,11 +411,8 @@ function extractPorts(
 
     const svc = p.service;
     if (!svc) {
-      // PARSE-04 parse-time half: emit undefined service + warning. Phase 4's
-      // matchPort() routes undefined-service ports to default.yaml.
       warnings.push(`Port ${portNum}/${protocol}: no service detected.`);
     }
-
     const scripts = extractScripts(p.script as XmlScript | XmlScript[] | undefined);
 
     const parsed: ParsedPort = {
@@ -306,23 +422,78 @@ function extractPorts(
       scripts,
     };
 
+    if (p.state?.reason !== undefined) {
+      parsed.reason = String(p.state.reason);
+    }
+    if (p.state?.reason_ttl !== undefined) {
+      const ttl = Number(p.state.reason_ttl);
+      if (Number.isFinite(ttl)) parsed.reasonTtl = ttl;
+    }
+
     if (svc) {
       const service =
         svc.name !== undefined ? String(svc.name).toLowerCase().trim() : undefined;
       if (service) parsed.service = service;
-
       if (svc.product !== undefined) parsed.product = String(svc.product);
       if (svc.version !== undefined) parsed.version = String(svc.version);
       if (svc.extrainfo !== undefined) parsed.extrainfo = String(svc.extrainfo);
       if (svc.tunnel !== undefined && String(svc.tunnel) === "ssl") {
         parsed.tunnel = "ssl";
       }
+      if (svc.servicefp !== undefined) parsed.serviceFp = String(svc.servicefp);
+
+      const cpes = normalizeArray(
+        svc.cpe as string | { "#text"?: unknown } | Array<string | { "#text"?: unknown }> | undefined,
+      );
+      const cpeStrings = cpes
+        .map((c) => {
+          if (typeof c === "string") return c;
+          if (c && typeof c === "object" && "#text" in c && c["#text"] !== undefined) {
+            return String(c["#text"]);
+          }
+          return "";
+        })
+        .filter((s) => s.length > 0);
+      if (cpeStrings.length > 0) parsed.cpe = cpeStrings;
     }
 
     result.push(parsed);
   }
   return result;
 }
+
+// ----------------------------- extraports ----------------------------------
+
+function extractExtraPorts(
+  portsEl: { extraports?: unknown } | undefined,
+): ExtraPortGroup[] | undefined {
+  if (!portsEl?.extraports) return undefined;
+  const arr = normalizeArray(
+    portsEl.extraports as XmlExtraPorts | XmlExtraPorts[],
+  );
+  const out: ExtraPortGroup[] = [];
+  for (const ep of arr) {
+    if (ep.state === undefined || ep.count === undefined) continue;
+    const count = Number(ep.count);
+    if (!Number.isFinite(count)) continue;
+    const group: ExtraPortGroup = { state: String(ep.state), count };
+    const reasons = normalizeArray(
+      ep.extrareasons as XmlExtraReasons | XmlExtraReasons[] | undefined,
+    );
+    if (reasons.length > 0) {
+      group.reasons = reasons
+        .filter((r) => r.reason !== undefined && r.count !== undefined)
+        .map((r) => ({
+          reason: String(r.reason),
+          count: Number(r.count),
+        }));
+    }
+    out.push(group);
+  }
+  return out;
+}
+
+// ----------------------------- scripts -------------------------------------
 
 function extractScripts(
   scriptEl: XmlScript | XmlScript[] | undefined,
@@ -332,14 +503,8 @@ function extractScripts(
   return arr.map((s) => {
     const result: ScriptOutput = {
       id: s.id !== undefined ? String(s.id) : "",
-      // Pitfall 3: prefer the `output` attribute. If it's absent OR present but
-      // empty (nmap emits `output=""` on CDATA scripts), fall back to element
-      // body text (CDATA merged as `#text` by fast-xml-parser).
       output: pickScriptBody(s),
     };
-    // UI-11 / PARSE-03: walk <elem>/<table> children. Only attach `structured`
-    // when there is at least one entry — undefined preserves backward compat
-    // for plain text-only scripts (e.g. http-title with only an `output` attr).
     const structured = walkStructured(s);
     if (structured.length > 0) {
       result.structured = structured;
@@ -348,57 +513,26 @@ function extractScripts(
   });
 }
 
-/**
- * Walk a script's <elem>/<table> children recursively, producing a structured
- * array consumed by Plan 07-04's <StructuredScriptOutput> renderer (UI-11).
- *
- * Returns an empty array when the node has no <elem> and no <table> children —
- * extractScripts treats empty as "omit `structured` entirely" so plain-text
- * scripts (http-title, ftp-anon, etc.) keep their original shape.
- *
- * Recursion: <table> nodes contain more <elem>/<table>, so we recurse via the
- * same XmlElem|XmlTable union shape. Depth is bounded by nmap's emitted XML
- * (typically <= 3 levels for ssl-cert / smb-os-discovery), so no explicit
- * recursion limit is needed; if a malicious fixture were to drive deep nesting
- * the existing parser-level XXE defenses (DOCTYPE strip, processEntities:false)
- * already prevent entity-expansion DoS — the walk itself is bounded by the
- * already-parsed object tree which fast-xml-parser materialized in memory.
- */
 function walkStructured(
   node: XmlScript | XmlElem | XmlTable,
 ): Array<ScriptElem | ScriptTable> {
   const out: Array<ScriptElem | ScriptTable> = [];
-
-  // The union (XmlScript | XmlElem | XmlTable) does not declare `elem`/`table`
-  // on every member (XmlElem is leaf-only). Cast via the structural shape that
-  // all three may carry in practice — fast-xml-parser may attach `elem`/`table`
-  // as children to any of them.
   const childBag = node as { elem?: unknown; table?: unknown };
 
-  // <elem> children — leaf nodes with text body.
-  // fast-xml-parser shapes:
-  //   <elem key="k">v</elem>   → { key: "k", "#text": "v" }
-  //   <elem key="k"/>          → { key: "k" }                (no #text → value "")
-  //   <elem>v</elem>           → "v"                          (bare string, no key)
-  // The bare-string case happens when the element has neither attributes nor
-  // children other than text — fast-xml-parser collapses it. Handle both.
   const elems = normalizeArray(
     childBag.elem as XmlElem | string | Array<XmlElem | string> | undefined,
   );
   for (const e of elems) {
     if (typeof e === "string") {
-      // Bare-string elem — no attributes, just text body. key === "".
       out.push({ key: "", value: e });
       continue;
     }
     out.push({
       key: e.key !== undefined ? String(e.key) : "",
-      // React text nodes consume `value` directly — never HTML (SEC-03).
       value: e["#text"] !== undefined ? String(e["#text"]) : "",
     });
   }
 
-  // <table> children — recursive, may contain more <elem> and <table>.
   const tables = normalizeArray(
     childBag.table as XmlTable | XmlTable[] | undefined,
   );
@@ -422,7 +556,6 @@ function pickScriptBody(s: XmlScript): string {
 function extractHostScripts(
   hostscriptEl: { script?: unknown } | undefined,
 ): ScriptOutput[] {
-  // D-04: always return an array, never undefined.
   if (!hostscriptEl) return [];
   return extractScripts(
     hostscriptEl.script as XmlScript | XmlScript[] | undefined,
@@ -430,27 +563,165 @@ function extractHostScripts(
 }
 
 function extractScannedAt(start: unknown): string | undefined {
-  // Pitfall 7: nmap `start` is Unix epoch SECONDS, not milliseconds.
   const unix = Number(start);
   if (!Number.isFinite(unix) || unix <= 0) return undefined;
   return new Date(unix * 1000).toISOString();
 }
 
+// ----------------------------- OS ------------------------------------------
+
 function extractOs(
-  osEl: { osmatch?: unknown } | undefined,
-): { name: string; accuracy?: number } | undefined {
+  osEl: { osmatch?: unknown; osfingerprint?: unknown } | undefined,
+):
+  | {
+      name?: string;
+      accuracy?: number;
+      matches?: OsMatch[];
+      fingerprint?: string;
+    }
+  | undefined {
   if (!osEl) return undefined;
   const matches = normalizeArray(
     osEl.osmatch as XmlOsMatch | XmlOsMatch[] | undefined,
   );
-  if (matches.length === 0) return undefined;
-  // CD-05: highest-accuracy osmatch wins; stable fallback to first on tie.
+
+  const fpRaw = osEl.osfingerprint as { fingerprint?: unknown } | undefined;
+  const fingerprint = fpRaw?.fingerprint
+    ? String(fpRaw.fingerprint)
+    : undefined;
+
+  if (matches.length === 0) {
+    return fingerprint ? { fingerprint } : undefined;
+  }
+
   const sorted = [...matches].sort(
     (a, b) => Number(b.accuracy ?? 0) - Number(a.accuracy ?? 0),
   );
-  const best = sorted[0];
-  if (!best?.name) return undefined;
-  const name = String(best.name);
-  const acc = Number(best.accuracy);
-  return Number.isFinite(acc) ? { name, accuracy: acc } : { name };
+
+  const allMatches: OsMatch[] = sorted.map((m) => {
+    const classes = normalizeArray(
+      m.osclass as XmlOsClass | XmlOsClass[] | undefined,
+    );
+    const out: OsMatch = {
+      name: String(m.name ?? ""),
+    };
+    if (m.accuracy !== undefined) {
+      const acc = Number(m.accuracy);
+      if (Number.isFinite(acc)) out.accuracy = acc;
+    }
+    if (classes.length > 0) {
+      out.classes = classes.map((c) => {
+        const oc: OsClass = {};
+        if (c.type !== undefined) oc.type = String(c.type);
+        if (c.vendor !== undefined) oc.vendor = String(c.vendor);
+        if (c.osfamily !== undefined) oc.family = String(c.osfamily);
+        if (c.osgen !== undefined) oc.gen = String(c.osgen);
+        if (c.accuracy !== undefined) {
+          const acc = Number(c.accuracy);
+          if (Number.isFinite(acc)) oc.accuracy = acc;
+        }
+        return oc;
+      });
+    }
+    return out;
+  });
+
+  const best = allMatches[0];
+  const result: {
+    name?: string;
+    accuracy?: number;
+    matches?: OsMatch[];
+    fingerprint?: string;
+  } = {};
+  if (best?.name) result.name = best.name;
+  if (best?.accuracy !== undefined) result.accuracy = best.accuracy;
+  result.matches = allMatches;
+  if (fingerprint) result.fingerprint = fingerprint;
+  return result;
+}
+
+// ----------------------------- traceroute ----------------------------------
+
+function extractTraceroute(
+  traceEl: XmlHost["trace"],
+): { proto?: string; port?: number; hops: Hop[] } | undefined {
+  if (!traceEl) return undefined;
+  const hops = normalizeArray(
+    traceEl.hop as XmlHop | XmlHop[] | undefined,
+  );
+  if (hops.length === 0) return undefined;
+  const out: { proto?: string; port?: number; hops: Hop[] } = {
+    hops: hops
+      .filter((h) => h.ipaddr !== undefined && h.ttl !== undefined)
+      .map((h) => {
+        const hop: Hop = {
+          ttl: Number(h.ttl),
+          ipaddr: String(h.ipaddr),
+        };
+        if (h.rtt !== undefined) {
+          const rtt = Number(h.rtt);
+          if (Number.isFinite(rtt)) hop.rtt = rtt;
+        }
+        if (h.host !== undefined) hop.host = String(h.host);
+        return hop;
+      }),
+  };
+  if (traceEl.proto !== undefined) out.proto = String(traceEl.proto);
+  if (traceEl.port !== undefined) {
+    const portNum = Number(traceEl.port);
+    if (Number.isFinite(portNum)) out.port = portNum;
+  }
+  return out;
+}
+
+// ----------------------------- scanner -------------------------------------
+
+function extractScanner(
+  nmaprun: NonNullable<XmlDoc["nmaprun"]>,
+): ScannerInfo | undefined {
+  const out: ScannerInfo = {};
+  if (nmaprun.scanner !== undefined) out.name = String(nmaprun.scanner);
+  if (nmaprun.version !== undefined) out.version = String(nmaprun.version);
+  if (nmaprun.args !== undefined) out.args = String(nmaprun.args);
+  if (nmaprun.xmloutputversion !== undefined) {
+    out.xmlVersion = String(nmaprun.xmloutputversion);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+// ----------------------------- runstats ------------------------------------
+
+function extractRunStats(runstatsEl: unknown): RunStats | undefined {
+  if (!runstatsEl || typeof runstatsEl !== "object") return undefined;
+  const r = runstatsEl as XmlRunStats;
+  const out: RunStats = {};
+  if (r.finished?.time !== undefined) {
+    const unix = Number(r.finished.time);
+    if (Number.isFinite(unix) && unix > 0) {
+      out.finishedAt = new Date(unix * 1000).toISOString();
+    }
+  }
+  if (r.finished?.elapsed !== undefined) {
+    const e = Number(r.finished.elapsed);
+    if (Number.isFinite(e)) out.elapsed = e;
+  }
+  if (r.finished?.summary !== undefined) out.summary = String(r.finished.summary);
+  if (r.finished?.exit !== undefined) out.exitStatus = String(r.finished.exit);
+  if (r.hosts) {
+    const hosts: NonNullable<RunStats["hosts"]> = {};
+    if (r.hosts.up !== undefined) {
+      const n = Number(r.hosts.up);
+      if (Number.isFinite(n)) hosts.up = n;
+    }
+    if (r.hosts.down !== undefined) {
+      const n = Number(r.hosts.down);
+      if (Number.isFinite(n)) hosts.down = n;
+    }
+    if (r.hosts.total !== undefined) {
+      const n = Number(r.hosts.total);
+      if (Number.isFinite(n)) hosts.total = n;
+    }
+    if (Object.keys(hosts).length > 0) out.hosts = hosts;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }

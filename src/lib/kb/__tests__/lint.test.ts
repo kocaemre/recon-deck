@@ -60,6 +60,19 @@ describe("scripts/lint-kb.ts (Plan 06)", () => {
       expect(PLACEHOLDER_ALLOWLIST.test("{TARGET}")).toBe(false);
       expect(PLACEHOLDER_ALLOWLIST.test("{RHOST}")).toBe(false);
     });
+
+    it("P1-E: PLACEHOLDER_ALLOWLIST accepts {WORDLIST_*} keys", () => {
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST_DIRB_COMMON}")).toBe(true);
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST_RAFT_DIRS_BIG}")).toBe(true);
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST_CUSTOM_42}")).toBe(true);
+    });
+
+    it("P1-E: PLACEHOLDER_ALLOWLIST rejects malformed wordlist keys", () => {
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST}")).toBe(false);
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST_}")).toBe(false);
+      expect(PLACEHOLDER_ALLOWLIST.test("{WORDLIST_lowercase}")).toBe(false);
+      expect(PLACEHOLDER_ALLOWLIST.test("{wordlist_dirb}")).toBe(false);
+    });
   });
 
   describe("clean shipped KB", () => {

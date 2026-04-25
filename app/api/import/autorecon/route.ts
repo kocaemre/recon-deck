@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     result = createFromScan(db, importResult.scan, file.name, {
       arFiles: importResult.arFiles,
       arCommands: importResult.arCommands,
+      arArtifacts: importResult.arArtifacts,
     });
   } catch (err) {
     console.error("createFromScan (autorecon) failed:", err);

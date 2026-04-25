@@ -1,8 +1,15 @@
 "use client";
 
+/**
+ * ChecklistItem — custom 14x14 checkbox row (redesign).
+ *
+ * Uses useOptimistic for snappy toggles; server action reverts silently on failure.
+ * Checked state: accent-filled square with dark check glyph; label struck-through
+ * and muted. Unchecked: hollow square with strong border.
+ */
+
 import { useOptimistic, useTransition } from "react";
 import { Check } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { toggleCheck } from "../../app/engagements/[id]/actions";
 
 interface ChecklistItemProps {
@@ -29,8 +36,7 @@ export function ChecklistItem({
       try {
         await toggleCheck(engagementId, portId, checkKey, !optimisticChecked);
       } catch {
-        // D-15: API failure silently reverts — useOptimistic auto-reverts
-        // when the transition completes with the original server state
+        /* optimistic revert handled by transition completing with server state */
       }
     });
   }
@@ -39,32 +45,40 @@ export function ChecklistItem({
     <button
       type="button"
       onClick={handleToggle}
-      className="flex min-h-11 w-full items-center gap-3 rounded px-2 text-left transition-colors hover:bg-muted/50"
       role="checkbox"
       aria-checked={optimisticChecked}
+      className="flex w-full items-center gap-2 text-left"
+      style={{
+        padding: "5px 6px",
+        borderRadius: 3,
+        background: "transparent",
+        border: 0,
+        cursor: "pointer",
+        color: "inherit",
+      }}
     >
-      {/* Custom checkbox visual — 16px square, 2px rounded */}
       <span
-        className={cn(
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border-2 transition-colors",
-          optimisticChecked
-            ? "border-green-500 bg-green-500"
-            : "border-zinc-600 bg-transparent",
-        )}
+        aria-hidden
+        className="grid place-items-center"
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 3,
+          flexShrink: 0,
+          border: `1px solid ${optimisticChecked ? "var(--accent)" : "var(--border-strong)"}`,
+          background: optimisticChecked ? "var(--accent)" : "transparent",
+          color: "#05170d",
+        }}
       >
-        {optimisticChecked && (
-          <Check className="h-3 w-3 text-white" strokeWidth={3} />
-        )}
+        {optimisticChecked && <Check size={8} strokeWidth={3} />}
       </span>
-
-      {/* Check label */}
       <span
-        className={cn(
-          "text-sm",
-          optimisticChecked
-            ? "text-muted-foreground line-through"
-            : "text-foreground",
-        )}
+        style={{
+          fontSize: 12.5,
+          color: optimisticChecked ? "var(--fg-muted)" : "var(--fg)",
+          textDecoration: optimisticChecked ? "line-through" : "none",
+          textDecorationColor: "var(--fg-faint)",
+        }}
       >
         {label}
       </span>

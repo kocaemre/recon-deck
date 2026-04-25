@@ -30,7 +30,7 @@
 
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
-import { db, getById } from "@/lib/db";
+import { db, getById, getWordlistOverridesMap } from "@/lib/db";
 import { loadKnowledgeBase } from "@/lib/kb";
 import { loadEngagementForExport } from "@/lib/export/view-model";
 import { generateMarkdown } from "@/lib/export/markdown";
@@ -116,7 +116,9 @@ export async function GET(
   //    body (T-06-19 mitigation).
   let body: string;
   try {
-    const vm = loadEngagementForExport(engagement, kb);
+    // P1-E: pass wordlist overrides so exported markdown/json/html embeds the
+    // operator's customized {WORDLIST_*} paths (DB read is cheap — ~tens of bytes).
+    const vm = loadEngagementForExport(engagement, kb, getWordlistOverridesMap(db));
     switch (format) {
       case "markdown":
         body = generateMarkdown(vm);

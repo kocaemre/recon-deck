@@ -1,37 +1,66 @@
 /**
- * Landing page — RSC shell with centered PastePanel + ImportPanel.
+ * Landing — Modern IDE redesign.
  *
- * PastePanel handles the primary paste interaction (nmap text/XML). ImportPanel
- * provides the secondary AutoRecon zip upload path. Both client islands live
- * in the same centered column, separated by an "or" divider.
- *
- * Per D-01 (Phase 4): Minimal landing — centered textarea + "Start Engagement" button.
- * Per D-01 (Phase 5): AutoRecon zip drop zone placed BELOW PastePanel with "or" divider.
- * Per D-05: Sidebar is visible alongside (rendered by layout).
+ * Centered 640px column on a fluid main area. Renders a hero eyebrow + h1 +
+ * subtitle, then the redesigned PastePanel (with its own window-chrome and
+ * action row), an "or" divider, and the AutoRecon ImportPanel drop zone.
  */
 
 import { PastePanel } from "@/components/PastePanel";
 import { ImportPanel } from "@/components/ImportPanel";
-import { Separator } from "@/components/ui/separator";
 
 export default function HomePage() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="w-full">
+    <div className="flex min-h-screen items-center justify-center p-8">
+      <div style={{ width: 640 }}>
+        <div
+          className="mono uppercase tracking-[0.08em] font-medium"
+          style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 10 }}
+        >
+          NEW ENGAGEMENT · 01
+        </div>
+        <h1
+          className="font-semibold"
+          style={{
+            fontSize: 28,
+            letterSpacing: "-0.02em",
+            margin: "0 0 6px",
+            color: "var(--fg)",
+          }}
+        >
+          Paste nmap output.
+        </h1>
+        <p
+          style={{
+            color: "var(--fg-muted)",
+            margin: "0 0 22px",
+            fontSize: 14,
+          }}
+        >
+          Text <span className="mono">(-oN)</span> or XML{" "}
+          <span className="mono">(-oX)</span>. Every open port becomes a card
+          with commands, checks, notes.
+        </p>
+
         <PastePanel />
 
-        {/* "or" divider between paste and import (D-01, Phase 5) */}
-        <div className="relative mx-auto my-6 w-full max-w-[680px] px-8">
-          <Separator />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-3 text-xs text-muted-foreground">
+        {/* "or" divider */}
+        <div className="my-[26px] flex items-center gap-2.5">
+          <div
+            style={{ height: 1, background: "var(--border)", flex: 1 }}
+          />
+          <span
+            className="uppercase tracking-[0.08em] font-medium"
+            style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
+          >
             or
           </span>
+          <div
+            style={{ height: 1, background: "var(--border)", flex: 1 }}
+          />
         </div>
 
-        {/* AutoRecon zip import (D-01, Phase 5) */}
-        <div className="mx-auto w-full max-w-[680px] px-8">
-          <ImportPanel />
-        </div>
+        <ImportPanel />
       </div>
     </div>
   );

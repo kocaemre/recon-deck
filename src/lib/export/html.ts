@@ -115,7 +115,93 @@ function generateBody(vm: EngagementViewModel): string {
   if (vm.hostScripts.length > 0) {
     parts.push(renderHostScripts(vm));
   }
+  // v2 enrichment sections — only emit when data exists.
+  const extra = renderExtraSections(vm);
+  if (extra) parts.push(extra);
   return parts.join("\n");
+}
+
+function renderExtraSections(vm: EngagementViewModel): string | null {
+  const sections: string[] = [];
+
+  if (vm.extraPorts && vm.extraPorts.length > 0) {
+    const rows = vm.extraPorts
+      .map((ep) => {
+        const reasons = ep.reasons
+          ? ep.reasons.map((r) => `${r.count} ${r.reason}`).join(", ")
+          : "";
+        return `<tr><td>${ep.count}</td><td>${escapeHtml(ep.state)}</td><td>${escapeHtml(reasons)}</td></tr>`;
+      })
+      .join("\n");
+    sections.push(
+      `<section class="extras">\n<h2>Extra Ports</h2>\n<table>\n<thead><tr><th>Count</th><th>State</th><th>Reasons</th></tr></thead>\n<tbody>\n${rows}\n</tbody>\n</table>\n</section>`,
+    );
+  }
+
+  if (vm.osMatches && vm.osMatches.length > 0) {
+    const items = vm.osMatches
+      .map((m) => {
+        const acc =
+          m.accuracy !== undefined ? ` <em>(${m.accuracy}%)</em>` : "";
+        const classBits =
+          m.classes && m.classes.length > 0
+            ? `<ul>${m.classes
+                .map(
+                  (c) =>
+                    `<li>${escapeHtml(
+                      [c.vendor, c.family, c.gen, c.type]
+                        .filter(Boolean)
+                        .join(" / "),
+                    )}</li>`,
+                )
+                .join("")}</ul>`
+            : "";
+        return `<li><strong>${escapeHtml(m.name)}</strong>${acc}${classBits}</li>`;
+      })
+      .join("\n");
+    const fp = vm.osFingerprint
+      ? `<h3>TCP/IP fingerprint</h3>\n<pre>${escapeHtml(vm.osFingerprint)}</pre>`
+      : "";
+    sections.push(
+      `<section class="extras">\n<h2>OS Detection</h2>\n<ul>\n${items}\n</ul>\n${fp}\n</section>`,
+    );
+  }
+
+  if (vm.traceroute && vm.traceroute.hops.length > 0) {
+    const meta = vm.traceroute.proto
+      ? `<p><em>proto: ${escapeHtml(vm.traceroute.proto)}${vm.traceroute.port ? ` · port: ${vm.traceroute.port}` : ""}</em></p>`
+      : "";
+    const rows = vm.traceroute.hops
+      .map(
+        (h) =>
+          `<tr><td>${h.ttl}</td><td>${escapeHtml(h.ipaddr)}</td><td>${escapeHtml(h.host ?? "")}</td><td>${h.rtt ?? ""}</td></tr>`,
+      )
+      .join("\n");
+    sections.push(
+      `<section class="extras">\n<h2>Traceroute</h2>\n${meta}\n<table>\n<thead><tr><th>TTL</th><th>IP</th><th>Host</th><th>RTT (ms)</th></tr></thead>\n<tbody>\n${rows}\n</tbody>\n</table>\n</section>`,
+    );
+  }
+
+  const pre = vm.preScripts ?? [];
+  const post = vm.postScripts ?? [];
+  if (pre.length > 0 || post.length > 0) {
+    const blocks: string[] = [];
+    for (const s of pre) {
+      blocks.push(
+        `<h3>pre · ${escapeHtml(s.id)}</h3>\n<pre>${escapeHtml(s.output)}</pre>`,
+      );
+    }
+    for (const s of post) {
+      blocks.push(
+        `<h3>post · ${escapeHtml(s.id)}</h3>\n<pre>${escapeHtml(s.output)}</pre>`,
+      );
+    }
+    sections.push(
+      `<section class="extras">\n<h2>Pre / Post Scan Scripts</h2>\n${blocks.join("\n")}\n</section>`,
+    );
+  }
+
+  return sections.length > 0 ? sections.join("\n") : null;
 }
 
 function renderHeader(vm: EngagementViewModel): string {
@@ -125,15 +211,34 @@ function renderHeader(vm: EngagementViewModel): string {
   const host = engagement.target_hostname
     ? ` (${escapeHtml(engagement.target_hostname)})`
     : "";
-  const os = engagement.os_name
-    ? `<p><strong>OS:</strong> ${escapeHtml(engagement.os_name)}</p>`
-    : "";
-  return `<header>
-<h1>${name}</h1>
-<p><strong>Target:</strong> <code>${ip}</code>${host}</p>
-${os}
-<p><strong>Coverage:</strong> ${vm.coverage}% (${vm.doneChecks}/${vm.totalChecks})</p>
-</header>`;
+  const lines: string[] = [
+    "<header>",
+    `<h1>${name}</h1>`,
+    `<p><strong>Target:</strong> <code>${ip}</code>${host}</p>`,
+  ];
+  if (engagement.os_name) {
+    lines.push(`<p><strong>OS:</strong> ${escapeHtml(engagement.os_name)}</p>`);
+  }
+  if (vm.scanner?.version) {
+    const args = vm.scanner.args
+      ? ` <code>${escapeHtml(vm.scanner.args)}</code>`
+      : "";
+    lines.push(
+      `<p><strong>nmap:</strong> ${escapeHtml(vm.scanner.version)}${args}</p>`,
+    );
+  }
+  if (vm.runstats?.finishedAt) {
+    const elapsed =
+      vm.runstats.elapsed !== undefined ? ` · ${vm.runstats.elapsed}s` : "";
+    lines.push(
+      `<p><strong>Finished:</strong> ${escapeHtml(vm.runstats.finishedAt)}${elapsed}</p>`,
+    );
+  }
+  lines.push(
+    `<p><strong>Coverage:</strong> ${vm.coverage}% (${vm.doneChecks}/${vm.totalChecks})</p>`,
+  );
+  lines.push("</header>");
+  return lines.join("\n");
 }
 
 function renderPortsTable(vm: EngagementViewModel): string {
@@ -165,6 +270,22 @@ function renderPortSection(pd: PortViewModel): string {
   const heading = `<h2>Port ${p.port}/${escapeHtml(p.protocol)} — ${service}${versionSuffix}</h2>`;
 
   const sections: string[] = [];
+
+  // 0. v2: CPE + reason metadata at the top of the port body.
+  const meta: string[] = [];
+  if (pd.reason) {
+    meta.push(
+      `<li><strong>Reason:</strong> <code>${escapeHtml(pd.reason)}</code></li>`,
+    );
+  }
+  if (pd.cpe && pd.cpe.length > 0) {
+    for (const c of pd.cpe) {
+      meta.push(`<li><strong>CPE:</strong> <code>${escapeHtml(c)}</code></li>`);
+    }
+  }
+  if (meta.length > 0) {
+    sections.push(`<ul class="port-meta">\n${meta.join("\n")}\n</ul>`);
+  }
 
   // 1. NSE Output
   if (pd.nseScripts.length > 0) {

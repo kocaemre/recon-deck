@@ -83,8 +83,10 @@ describe("parseAny (Plan 04) — D-11 format dispatcher", () => {
   describe("ParsedScan contract re-export", () => {
     it("type `ParsedScan` is exported from index barrel", () => {
       // Compile-time check: if the type isn't exported, tsc would fail.
+      const target = { ip: "1.2.3.4" };
       const shape: ParsedScan = {
-        target: { ip: "1.2.3.4" },
+        hosts: [{ target, ports: [], hostScripts: [] }],
+        target,
         source: "nmap-text",
         ports: [],
         hostScripts: [],
