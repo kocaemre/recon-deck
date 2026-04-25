@@ -2,7 +2,7 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-25 (P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 + P1-F PR 3 bitti, P1-F PR 4 (UI host selector) sırada). AR multi-IP importer ayrı küçük PR'a defer.
+> Son güncelleme: 2026-04-26 (P0-A/B/C/D + P1-E + P1-F tüm PR'lar bitti — multi-host artık UI'da yaşıyor). AR multi-IP importer + GlobalSearch host context ayrı küçük PR'lara defer.
 >
 > Test durumu: **381/381 yeşil**, TypeScript: 0 hata.
 
@@ -97,6 +97,27 @@ Ek iyileştirmeler:
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
 
+### P1-F PR 4 — UI multi-host ✅ (2 atomic commit: 4-A + 4-B)
+
+**PR 4-A (`d4967d7`):** ana UI değişikliği
+- `?host=<id>` URL search param — engagement page okuyor; activeHost = `engagement.hosts.find(h => h.id === requested) ?? primary ?? hosts[0]`
+- Engagement page portları aktif host'a filter ediyor (heatmap aktif host'a scope'lu)
+- Command interpolation artık aktif host'un IP/hostname'ini kullanıyor (engagements.target_ip → activeHost.ip); single-host'ta aynı değer
+- `EngagementHeader` multi-host'ta yeni "Hosts" satırı — her host bir Link chip (`?host=<id>`); aktif host highlight + primary için ★
+- `Sidebar` engagement satırına "Nh" chip (host_count > 1 ise); single-host satır aynı
+- `EngagementSummary.host_count` field eklendi; `listSummaries` correlated COUNT subquery
+
+**PR 4-B (`0487e32`):** peripheral host context
+- `CommandPalette` "Hosts" group (multi-host'ta) — ⌘K → host adı → Enter ile switch
+- `FindingsPanel` finding chip'inde "host:port/proto" etiketi (multi-host'ta); finding listesi tüm engagement'ı kapsıyor
+- `useUIStore.engagementContext` `hosts` + `activeHostId` slice eklendi
+- `EngagementContextBridge` hosts ve activeHostId'yi store'a yazıyor
+
+**Defer edilenler:**
+- AR multi-IP importer — `results/<ip>/...` parse, fixture eksik
+- GlobalSearchModal hit'lerinde host adı — cross-engagement search, host context daha geniş kapsam
+- `engagements.target_ip/target_hostname` deprecate — şu an "primary host mirror" olarak retain, çalışıyor
+
 ### P1-F PR 3 — View-model + export multi-host ✅
 - `EngagementViewModel.hosts: HostViewModel[]` — primary first then by IP; `vm.ports` / `vm.hostScripts` legacy mirror retain
 - `HostViewModel { host, ports, hostScripts, isPrimary }`
@@ -156,17 +177,13 @@ Her görev: schema/DB → repo/server → API → UI → typecheck + test. Her g
 
 ### P1-F — Multi-host engagement (4 PR'a bölündü)
 
-PR 1 + PR 2 + PR 3 ✅ bitti. Kalan:
+PR 1 + PR 2 + PR 3 + PR 4 ✅ bitti. Kalan ufak işler:
 
-**PR 4 — UI multi-host:**
-- EngagementHeader host selector (dropdown veya tab şeridi)
-- EngagementHeatmap aktif host'a scope'lu
-- Sidebar host count chip
-- ⌘K palette host jump
-- PortDetailPane `{IP}` artık port'un host'unun IP'si (engagement.target_ip değil)
-- FindingsPanel + EvidencePane host context
+**Defer edilen P1-F işleri (ayrı küçük PR'lar):**
+- AR multi-IP importer (`results/<ip>/...`)
 - GlobalSearchModal hit'lerinde host adı
-- `engagements.target_ip`/`target_hostname` deprecate (sadece backward compat için generated column'a dönüştürülebilir)
+- `engagements.target_ip/target_hostname` deprecate (PR 4 retain etti, dual-write çalışıyor)
+- nmap-text + greppable parser multi-host (XML zaten tam multi-host)
 
 ### P0-B — Screenshot/evidence integration
 
@@ -407,23 +424,21 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 
 ## Resume noktası
 
-**Şu an nerede:** P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 + P1-F PR 3 tamam. P1-F PR 4 (UI host selector) sırada.
+**Şu an nerede:** P0 + P1-E + P1-F PR 1-4 tamam. Multi-host artık tam UI'da yaşıyor (heatmap aktif host'a scope, header chip selector, palette host group, findings host etiketi). Sıradaki büyük iş: P1-G (scan diff) veya P1-H (SysReptor exports). Manuel Chrome doğrulaması önerilir — multi-host scan upload edip chip switch'i görsel test et.
 
-**Son commit:** `a5e89aa` — "feat: v2 — search, evidence, findings, manual ports/commands, wordlists, multi-host foundation". `origin/main`'e push'landı. PR 3 değişiklikleri (view-model + 3 export + report page + 10 yeni test) commit edilmedi henüz — ayrı commit alınmalı.
+**Son commit'ler (origin/main):**
+- `0487e32` PR 4-B (palette + findings host context)
+- `d4967d7` PR 4-A (header selector + sidebar host count)
+- `1972040` PR 3 (view-model + 3 export + report page)
+- `a5e89aa` v2 batch (P0 + P1-E + P1-F PR 1+2)
 
-**P1-F PR 4 başlangıç adımları:**
-1. `EngagementHeader` — host selector (dropdown veya tab şeridi); aktif host state global store'a (`useUIStore.activeHostId`) bağlanır
-2. `EngagementHeatmap` — aktif host'a scope'lanır (mevcut `engagement.ports` yerine `engagement.hosts.find(h => h.id === activeHostId).ports`)
-3. `Sidebar` — engagement satırına host count chip ("3 hosts · 47 ports")
-4. `CommandPalette` (⌘K) — "Jump to host: dc01" / "Jump to port: dc01:445"
-5. `PortDetailPane` — `{IP}` artık port'un host'unun IP'si (engagement.target_ip değil); interpolateCommand'a host bağlamı geçir
-6. `FindingsPanel` — finding listesinde "host:port" etiketi
-7. `EvidencePane` — host context
-8. `GlobalSearchModal` — search hit'lerinde host adı
-9. `engagements.target_ip/target_hostname` deprecate kararı (kaldır vs retain — PROGRESS Açık Kararlar maddesi)
-10. typecheck + test (UI test'leri minimal kaldı — manuel Chrome doğrulaması)
-
-**P1-F PR 3 (deferred): AR multi-IP importer** — `src/lib/importer/autorecon.ts` zip yapısı `results/<ip>/...`'ı multi-host olarak parse etsin. Sonraki küçük PR.
+**Sıradaki seçenekler:**
+1. **P1-G — Diff between scans** (scan_history tablo + Re-import butonu + diff view) — orta büyüklük, izole
+2. **P1-H — Reporting tool exports** (SysReptor JSON + PwnDoc YAML + findings CSV) — küçük, izole
+3. **AR multi-IP importer** — defer'd, küçük PR
+4. **GlobalSearchModal host context** — minor cleanup
+5. **DIST — Bun binary build** — büyük, ayrı oturum
+6. **P2 candidate — searchsploit/CVE lookup** — yeni feature, araştırma gerekli
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
