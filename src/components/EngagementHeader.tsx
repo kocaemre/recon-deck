@@ -147,7 +147,9 @@ export function EngagementHeader({
     }
   }
 
-  async function downloadExport(format: "markdown" | "json" | "html") {
+  async function downloadExport(
+    format: "markdown" | "json" | "html" | "csv" | "sysreptor" | "pwndoc",
+  ) {
     try {
       const res = await fetch(
         `/api/engagements/${engagementId}/export/${format}`,
@@ -160,7 +162,16 @@ export function EngagementHeader({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const ext = format === "markdown" ? "md" : format;
+      // Filename extension matches the route's FORMATS table — markdown→md,
+      // sysreptor→sysreptor.json, pwndoc→pwndoc.yaml, others lower-cased.
+      const ext =
+        format === "markdown"
+          ? "md"
+          : format === "sysreptor"
+            ? "sysreptor.json"
+            : format === "pwndoc"
+              ? "pwndoc.yaml"
+              : format;
       a.download = `${targetIp}-${new Date().toISOString().slice(0, 10)}.${ext}`;
       document.body.appendChild(a);
       a.click();
@@ -303,6 +314,19 @@ export function EngagementHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => downloadExport("html")}>
                 HTML (.html)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {/* P1-H: reporting-tool feeds. Generic shapes operators map
+                  onto their own SysReptor / PwnDoc design templates. CSV
+                  is a flat findings dump for spreadsheet triage. */}
+              <DropdownMenuItem onSelect={() => downloadExport("csv")}>
+                Findings CSV (.csv)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => downloadExport("sysreptor")}>
+                SysReptor (.json)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => downloadExport("pwndoc")}>
+                PwnDoc (.yaml)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={openPrintReport}>

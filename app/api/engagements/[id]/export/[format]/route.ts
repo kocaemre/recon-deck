@@ -36,6 +36,9 @@ import { loadEngagementForExport } from "@/lib/export/view-model";
 import { generateMarkdown } from "@/lib/export/markdown";
 import { generateJson } from "@/lib/export/json";
 import { generateHtml } from "@/lib/export/html";
+import { generateFindingsCsv } from "@/lib/export/findings-csv";
+import { generateSysReptor } from "@/lib/export/sysreptor";
+import { generatePwndoc } from "@/lib/export/pwndoc";
 
 // Module-level KB cache — matches app/engagements/[id]/page.tsx. Reading the
 // shipped YAML on every request would add 50-200ms per export (RESEARCH.md
@@ -48,15 +51,32 @@ const kb = loadKnowledgeBase({
 });
 
 // Format dispatch table — Content-Type values are locked by D-23.
+// P1-H: csv / sysreptor / pwndoc added as reporting-tool feeds.
 const FORMATS = {
   markdown: { ext: "md", contentType: "text/markdown; charset=utf-8" },
   json: { ext: "json", contentType: "application/json; charset=utf-8" },
   html: { ext: "html", contentType: "text/html; charset=utf-8" },
+  csv: { ext: "csv", contentType: "text/csv; charset=utf-8" },
+  sysreptor: {
+    ext: "sysreptor.json",
+    contentType: "application/json; charset=utf-8",
+  },
+  pwndoc: {
+    ext: "pwndoc.yaml",
+    contentType: "application/x-yaml; charset=utf-8",
+  },
 } as const;
 type Format = keyof typeof FORMATS;
 
 function isFormat(x: string): x is Format {
-  return x === "markdown" || x === "json" || x === "html";
+  return (
+    x === "markdown" ||
+    x === "json" ||
+    x === "html" ||
+    x === "csv" ||
+    x === "sysreptor" ||
+    x === "pwndoc"
+  );
 }
 
 // IPv4 dots + digits, IPv6 dots + digits + colons + hex (a-f upper and lower).
@@ -128,6 +148,15 @@ export async function GET(
         break;
       case "html":
         body = generateHtml(vm);
+        break;
+      case "csv":
+        body = generateFindingsCsv(vm);
+        break;
+      case "sysreptor":
+        body = generateSysReptor(vm);
+        break;
+      case "pwndoc":
+        body = generatePwndoc(vm);
         break;
     }
   } catch (err) {
