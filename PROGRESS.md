@@ -2,7 +2,7 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + GlobalSearch host context + P1-H + P1-G PR 1+2 bitti — multi-host yaşıyor, scan diff yaşıyor, reporting tool exports hazır). Geriye kalanlar: AR multi-IP importer (defer), nmap-text/greppable multi-host (defer), DIST Bun binary (büyük, ayrı oturum), P2 searchsploit (yeni feature).
+> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP importer + P2 searchsploit MVP bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), DIST Bun binary (büyük, ayrı oturum).
 >
 > Test durumu: **397/397 yeşil**, TypeScript: 0 hata.
 
@@ -96,6 +96,18 @@ Ek iyileştirmeler:
 - `report/page.tsx` + export `[format]` route — DB'den override map çekip `loadEngagementForExport`'a pass ediyor (print/PDF + MD/JSON/HTML export aynı resolved komutu görür)
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
+
+### P2 searchsploit MVP ✅
+- `src/lib/exploits/searchsploit.ts` — argv-array `spawn` (no shell), 5 s timeout, 10 MB stdout cap, ENOENT → friendly "install via apt install exploitdb" mesajı, query sanitisation (`[A-Za-z0-9._-\s]`)
+- `POST /api/exploits/lookup` — body `{ query }`, hits[] veya 400 (caller bug) / 503 (env) döner
+- `PortDetailPane` Exploits section — button-driven (auto-fire yok), her port için `key` ile state reset; section auto-suppress (product/service yoksa)
+- Engagement page `exploitQuery` deriviation: `${product} ${version}` → product → service → suppress
+- searchsploit yoksa graceful: section render olur, butonu tıklayınca friendly error toast/inline
+
+### AR multi-IP zip import ✅ (P1-F follow-up)
+- Importer artık tüm `_full_tcp_nmap.xml` (veya `_quick_*`) entry'lerini topluyor; primary mevcut akışı sürdürür, secondary'ler `scan.hosts[]`'a eklenir
+- Per-host AR file / manual command merge dışı (warning ile bilgilendirilir): "Multi-IP AR zip detected — N secondary host(s) imported (ports + scripts only; per-host AR data not merged)"
+- Single-IP zips davranış değişikliği YOK
 
 ### P1-G — Diff between scans ✅ (2 PR)
 
@@ -467,11 +479,11 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 - `a5e89aa` v2 batch (P0 + P1-E + P1-F PR 1+2)
 
 **Sıradaki seçenekler (kalanlar):**
-1. **AR multi-IP importer** — defer'd küçük PR. Zip'i `results/<ip>/...` çoklu IP varsa multi-host parse et. Mevcut tek-IP davranış zaten çalışıyor.
-2. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder.
-3. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror). Schema temizliği ileride yapılabilir.
-4. **DIST — Bun binary build** — büyük, ayrı oturum (better-sqlite3 → bun:sqlite migration + 4 platform CI).
-5. **P2 candidate — searchsploit/CVE lookup** — yeni feature. Sistem bağımlı (`/usr/share/exploitdb/files_exploits.csv` veya `searchsploit -j`). Araştırma + impl ~5 saat.
+1. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder. Düşük öncelik.
+2. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror, dual-write çalışıyor). Schema temizliği için migration 0009 + cascade gerekir; pragmatik retain.
+3. **DIST — Bun binary build** — büyük, ayrı oturum (better-sqlite3 → bun:sqlite + 4 platform CI workflow).
+4. **searchsploit cache** — şu an her tıkta shell-out. Per-port cache (memory veya DB) eklenebilir; minor.
+5. **P2 ek lookup'lar** — NVD CVE local mirror, vulners local DB, KB known_vulns auto-match. searchsploit'a benzer pattern.
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
