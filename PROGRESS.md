@@ -2,9 +2,9 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-26 (P0-A/B/C/D + P1-E + P1-F tüm PR'lar bitti — multi-host artık UI'da yaşıyor). AR multi-IP importer + GlobalSearch host context ayrı küçük PR'lara defer.
+> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + GlobalSearch host context + P1-H + P1-G PR 1+2 bitti — multi-host yaşıyor, scan diff yaşıyor, reporting tool exports hazır). Geriye kalanlar: AR multi-IP importer (defer), nmap-text/greppable multi-host (defer), DIST Bun binary (büyük, ayrı oturum), P2 searchsploit (yeni feature).
 >
-> Test durumu: **381/381 yeşil**, TypeScript: 0 hata.
+> Test durumu: **397/397 yeşil**, TypeScript: 0 hata.
 
 ---
 
@@ -96,6 +96,36 @@ Ek iyileştirmeler:
 - `report/page.tsx` + export `[format]` route — DB'den override map çekip `loadEngagementForExport`'a pass ediyor (print/PDF + MD/JSON/HTML export aynı resolved komutu görür)
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
+
+### P1-G — Diff between scans ✅ (2 PR)
+
+**PR 1 — Schema + persistence (`9099f12`):**
+- Migration 0008: `scan_history` tablosu (engagement_id, raw_input, source, scanned_at, created_at) + ports'a `first_seen_scan_id`/`last_seen_scan_id`/`closed_at_scan_id` nullable kolonlar
+- Backfill: her engagement için inaugural scan_history row + tüm ports onun id'sine link
+- `createFromScan` artık inaugural scan_history insert + portları link ediyor
+- `scan-history-repo.ts`: `listScanHistory` + `rescanEngagement(db, id, scan, raw)` — host reconciliation (yeni IP → yeni non-primary host) + port lifecycle update (re-observed = last_seen advance + closed clear; absent = closed_at stamp; new = insert)
+- API: `POST /api/engagements/[id]/rescan` — paste raw nmap → parseAny → rescanEngagement → result summary
+- UI: `RescanModal` (textarea + submit + result toast) + `EngagementHeader` "Re-import" butonu (RotateCw icon)
+- 4 yeni rescan repo testi (inaugural insert, last_seen advance, close+reopen, new host)
+
+**PR 2 — Heatmap lifecycle chips:**
+- Engagement page'de portData'ya `isClosed`/`isNew` flag ekle (`first_seen_scan_id == latestScanId && hasMultipleScans` koşullu)
+- EngagementHeatmap PortTile: closed tile dim'lendirir + "closed" risk-crit chip; new tile accent-bordered "new" chip
+- "Show N closed" toolbar toggle — default'ta closed'lar gizli; multi-scan engagement'larda görünür
+- Tek scan engagement'larda lifecycle chip yok (golden behavior korunmuş)
+
+### P1-H — Reporting tool exports ✅ (`8b6cc81` ya da yakın)
+- `findings-csv.ts`: RFC 4180 flat CSV — severity/title/host/port/protocol/service/cve/description/created_at sütunları + CRLF + quote escape
+- `sysreptor.ts`: jenerik `format: "projects/v1"` JSON shape — engagement scope + per-finding affected_components ("<host>:<port>/<proto>") + recon_deck_finding_id + opsiyonel CVE
+- `pwndoc.ts`: hand-rolled minimal YAML serializer (byte-stable test çıktısı için js-yaml dep yok); title-cased severity
+- Export route'a 3 yeni format (csv / sysreptor / pwndoc) + EngagementHeader Export dropdown'a 3 yeni item
+- 12 yeni smoke test (4 her exporter)
+- Multi-host aware: scope tüm hostları primary-first listeler; per-finding affected_components doğru host:port'a işaret
+
+### GlobalSearch host context ✅
+- `SearchHit.hostLabel` field eklendi — port-bound hit'ler için host adı (ya da IP)
+- Search SQL: `kind in ('port','script','finding')` için CASE+LEFT JOIN ile host_label türet; engagement/note kind'ları null
+- GlobalSearchModal hit row'da accent-bordered host chip (multi-host'ta)
 
 ### P1-F PR 4 — UI multi-host ✅ (2 atomic commit: 4-A + 4-B)
 
@@ -424,21 +454,24 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 
 ## Resume noktası
 
-**Şu an nerede:** P0 + P1-E + P1-F PR 1-4 tamam. Multi-host artık tam UI'da yaşıyor (heatmap aktif host'a scope, header chip selector, palette host group, findings host etiketi). Sıradaki büyük iş: P1-G (scan diff) veya P1-H (SysReptor exports). Manuel Chrome doğrulaması önerilir — multi-host scan upload edip chip switch'i görsel test et.
+**Şu an nerede:** P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context tamam. Tüm büyük v2 hedefleri yerleşmiş durumda. Manuel Chrome doğrulaması önerilir — multi-host scan upload + Re-import + Export menü'den 3 yeni format + GlobalSearch ⌃⇧F.
 
 **Son commit'ler (origin/main):**
-- `0487e32` PR 4-B (palette + findings host context)
-- `d4967d7` PR 4-A (header selector + sidebar host count)
-- `1972040` PR 3 (view-model + 3 export + report page)
+- (yeni) P1-G PR 2 (heatmap lifecycle chips + closed toggle)
+- (yeni) P1-G PR 1 (scan_history + rescan API + RescanModal)
+- (yeni) P1-H exports (CSV + SysReptor + PwnDoc)
+- (yeni) GlobalSearch host context
+- `0487e32` P1-F PR 4-B (palette + findings host context)
+- `d4967d7` P1-F PR 4-A (header selector + sidebar host count)
+- `1972040` P1-F PR 3 (view-model + 3 export + report page)
 - `a5e89aa` v2 batch (P0 + P1-E + P1-F PR 1+2)
 
-**Sıradaki seçenekler:**
-1. **P1-G — Diff between scans** (scan_history tablo + Re-import butonu + diff view) — orta büyüklük, izole
-2. **P1-H — Reporting tool exports** (SysReptor JSON + PwnDoc YAML + findings CSV) — küçük, izole
-3. **AR multi-IP importer** — defer'd, küçük PR
-4. **GlobalSearchModal host context** — minor cleanup
-5. **DIST — Bun binary build** — büyük, ayrı oturum
-6. **P2 candidate — searchsploit/CVE lookup** — yeni feature, araştırma gerekli
+**Sıradaki seçenekler (kalanlar):**
+1. **AR multi-IP importer** — defer'd küçük PR. Zip'i `results/<ip>/...` çoklu IP varsa multi-host parse et. Mevcut tek-IP davranış zaten çalışıyor.
+2. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder.
+3. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror). Schema temizliği ileride yapılabilir.
+4. **DIST — Bun binary build** — büyük, ayrı oturum (better-sqlite3 → bun:sqlite migration + 4 platform CI).
+5. **P2 candidate — searchsploit/CVE lookup** — yeni feature. Sistem bağımlı (`/usr/share/exploitdb/files_exploits.csv` veya `searchsploit -j`). Araştırma + impl ~5 saat.
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
@@ -448,7 +481,7 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 ```bash
 cd /Users/0xemrek/Desktop/recon
 npx tsc --noEmit              # 0 hata bekleniyor
-npm test                       # 381+/381+
+npm test                       # 397+/397+
 nohup npx next dev -p 3030 > /tmp/nextdev.log 2>&1 &
 ```
 
