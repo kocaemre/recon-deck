@@ -444,6 +444,7 @@ export default async function EngagementPage({
           is_primary: h.is_primary,
         }))}
         activeHostId={activeHostId}
+        scanCount={scanHistory.length}
         scanner={reparsed?.scanner}
         extraPorts={reparsed?.extraPorts}
         finishedAt={reparsed?.runstats?.finishedAt}

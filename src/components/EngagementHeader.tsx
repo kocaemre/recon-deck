@@ -80,6 +80,13 @@ interface EngagementHeaderProps {
   }>;
   /** P1-F PR 4: id of the currently-selected host (driven by `?host=<id>`). */
   activeHostId?: number | null;
+  /**
+   * P1-G follow-up: total number of scan_history rows for this engagement.
+   * The header surfaces a "scans: N" chip when > 1 so the operator knows
+   * a re-import has happened and the closed/new lifecycle chips on the
+   * heatmap are meaningful.
+   */
+  scanCount?: number;
 }
 
 export function EngagementHeader({
@@ -100,6 +107,7 @@ export function EngagementHeader({
   hostnames,
   hosts,
   activeHostId,
+  scanCount,
 }: EngagementHeaderProps) {
   const [ip, setIp] = useState(targetIp);
   const [hostname, setHostname] = useState(targetHostname ?? "");
@@ -266,6 +274,11 @@ export function EngagementHeader({
           ))}
 
         <div className="ml-auto flex items-center gap-2">
+          {scanCount && scanCount > 1 && (
+            <Chip mono title={`${scanCount} nmap re-imports recorded`}>
+              scans: {scanCount}
+            </Chip>
+          )}
           <button
             type="button"
             onClick={() => setRescanOpen(true)}
