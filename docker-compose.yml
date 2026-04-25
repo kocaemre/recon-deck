@@ -1,0 +1,29 @@
+# recon-deck — Docker Compose deployment.
+#
+# Usage:
+#   docker compose up -d         # start (detached)
+#   docker compose logs -f       # tail
+#   docker compose down          # stop (volumes preserved)
+#   docker compose pull && \
+#     docker compose up -d       # update to latest image
+#
+# Loopback bind (127.0.0.1:3000) keeps the surface off your LAN. Override
+# in a docker-compose.override.yml if you really want to expose it (e.g.
+# behind a reverse proxy on a lab network).
+
+services:
+  recon-deck:
+    image: ghcr.io/kocaemre/recon-deck:latest
+    container_name: recon-deck
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - recondeck-data:/data
+      - recondeck-kb:/kb
+
+volumes:
+  recondeck-data:
+  recondeck-kb:

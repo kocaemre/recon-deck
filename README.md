@@ -14,8 +14,25 @@ Paste nmap text or XML (or import an AutoRecon `results/` folder) and every open
 
 ## Quick Start
 
+Three ways to run, pick one. All bind to `127.0.0.1:3000` so nothing leaks to your LAN by default; see [Exposing to LAN](#exposing-to-lan) if you need otherwise.
+
+**1. One-liner (auto-pulls + starts + opens browser):**
+
 ```bash
-docker run -p 127.0.0.1:3000:3000 \
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+```
+
+**2. Docker Compose (recommended for persistent setups):**
+
+```bash
+curl -O https://raw.githubusercontent.com/kocaemre/recon-deck/main/docker-compose.yml
+docker compose up -d
+```
+
+**3. Manual `docker run`:**
+
+```bash
+docker run -d --name recon-deck -p 127.0.0.1:3000:3000 \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
