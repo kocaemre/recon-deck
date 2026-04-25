@@ -2,7 +2,7 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP importer + P2 searchsploit MVP bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), Docker UX iyileştirmeleri (install one-liner + compose). **DIST/Bun binary roadmap'ten çıkarıldı** — Docker yeterli, Bun + Next.js bleeding edge ve maliyet/fayda düşük.
+> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP + P2 searchsploit + searchsploit cache + KB known_vulns auto-match + scan count chip + Docker UX bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), NVD CVE local mirror (yeni feature, büyük iş). **DIST/Bun binary roadmap'ten çıkarıldı** — Docker yeterli.
 >
 > Test durumu: **397/397 yeşil**, TypeScript: 0 hata.
 
@@ -96,6 +96,25 @@ Ek iyileştirmeler:
 - `report/page.tsx` + export `[format]` route — DB'den override map çekip `loadEngagementForExport`'a pass ediyor (print/PDF + MD/JSON/HTML export aynı resolved komutu görür)
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
+
+### Docker UX ✅
+- `install.sh` repo root — `curl … | sh` one-liner: docker daemon check + image pull + persistent named volumes + 127.0.0.1:3000 bind + browser auto-open
+- `docker-compose.yml` repo root — drop-in compose deployment, restart policy, volume preserved across `docker compose pull && up -d`
+- README Quick Start: 3 yol (one-liner / compose / manual `docker run`)
+
+### Scan count chip ✅
+- `EngagementHeader` Re-import butonunun yanında "scans: N" chip (multi-scan engagement'larda; tek scan'de görünmez)
+- Heatmap closed/new lifecycle chip'lerinin "trigger context'i" — operatör hem "kaç kez re-import yaptım" hem "neler değişti"yi tek bakışta görür
+
+### KB known_vulns auto-match ✅
+- Engagement page'de `kbEntry.known_vulns` listesini port'un `${product} ${version}` substring match'ine göre filter
+- PortDetailPane "Known Vulnerabilities" section — risk-high bordered match chip + KB note + `ref ↗` link
+- Match scoping KB author sorumluluğunda — "Apache" alone over-match yapmasın diye tight match string'leri tercih edilmeli (mevcut shipped KB'ler bunu sağlar)
+
+### searchsploit cache ✅ (P2 follow-up)
+- Module-level `Map<query, ExploitHit[]>` — aynı query'e port switch'lerinde anında sonuç
+- ExploitsSection mount'unda cache'den seed; `key={query}` ile remount → cache hit
+- TTL: full page reload (interactive recon session için doğru)
 
 ### P2 searchsploit MVP ✅
 - `src/lib/exploits/searchsploit.ts` — argv-array `spawn` (no shell), 5 s timeout, 10 MB stdout cap, ENOENT → friendly "install via apt install exploitdb" mesajı, query sanitisation (`[A-Za-z0-9._-\s]`)
@@ -470,10 +489,9 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 
 **Sıradaki seçenekler (kalanlar):**
 1. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder. Düşük öncelik.
-2. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror, dual-write çalışıyor). Schema temizliği için migration 0009 + cascade gerekir; pragmatik retain.
-3. **DIST — Docker UX** — install.sh + docker-compose.yml + README quickstart. Küçük iş, ~30 dk.
-4. **searchsploit cache** — şu an her tıkta shell-out. Per-port cache (memory veya DB) eklenebilir; minor.
-5. **P2 ek lookup'lar** — NVD CVE local mirror, vulners local DB, KB known_vulns auto-match. searchsploit'a benzer pattern.
+2. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror, dual-write çalışıyor). Schema temizliği için migration 0009 + cascade gerekir; büyük + riskli + faydası düşük.
+3. **NVD CVE / vulners ek lookup'lar** — searchsploit'a benzer pattern. NVD JSON feed ~5GB local mirror büyük iş; pragmatik MVP olarak CVE-XXXX-YYYY pattern detection + auto-link sonra eklenebilir.
+4. **Manuel Chrome doğrulaması** — kullanıcı tarafı. Multi-host upload + Re-import + Export menü + searchsploit Lookup + known_vulns hit'leri.
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
