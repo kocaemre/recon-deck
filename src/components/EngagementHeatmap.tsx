@@ -53,6 +53,8 @@ interface PortTileData {
   /** P1-G PR 2: port lifecycle vs latest scan. */
   isClosed?: boolean;
   isNew?: boolean;
+  /** P2: searchsploit query (`product version` or fallback). */
+  exploitQuery?: string;
   /** Detail pane data */
   scripts: Array<{
     id: number;
@@ -305,6 +307,7 @@ export function EngagementHeatmap({
           userCommands={selected.userCommands}
           cpe={selected.cpe}
           evidence={selected.evidence}
+          exploitQuery={selected.exploitQuery}
         />
       </div>
     </div>

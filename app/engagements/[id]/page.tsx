@@ -341,6 +341,13 @@ export default async function EngagementPage({
         hasMultipleScans &&
         latestScanId !== null &&
         p.first_seen_scan_id === latestScanId,
+      // P2: searchsploit query. Prefer `<product> <version>` (most
+      // specific), fall back to `<product>` alone, then `<service>`,
+      // then nothing — empty/undefined suppresses the section.
+      exploitQuery:
+        p.product && p.version
+          ? `${p.product} ${p.version}`
+          : (p.product || p.service || "").trim() || undefined,
     };
   });
 

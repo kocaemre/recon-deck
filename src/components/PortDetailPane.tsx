@@ -12,12 +12,13 @@
  * actions, same optimistic UI. Only the rendering surface changed.
  */
 
+import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { NotesField } from "@/components/NotesField";
 import { StructuredScriptOutput } from "@/components/StructuredScriptOutput";
 import { EvidencePane } from "@/components/EvidencePane";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Search as SearchIcon } from "lucide-react";
 import type { ScriptElem, ScriptTable } from "@/lib/parser/types";
 import type { PortEvidence } from "@/lib/db/schema";
 
@@ -45,6 +46,14 @@ interface PortDetailPaneProps {
   cpe?: string[];
   /** v2: per-port evidence rows (screenshots / attachments). */
   evidence?: PortEvidence[];
+  /**
+   * P2: searchsploit query — typically `${product} ${version}` for the
+   * port (or just `service` when product is unknown). Empty/undefined
+   * suppresses the Exploits section entirely. The button-driven lookup
+   * fires only when the operator clicks; results aren't cached across
+   * port switches yet.
+   */
+  exploitQuery?: string;
 }
 
 export function PortDetailPane({
@@ -61,6 +70,7 @@ export function PortDetailPane({
   userCommands = [],
   cpe,
   evidence = [],
+  exploitQuery,
 }: PortDetailPaneProps) {
   const checkMap = new Map(checks.map((c) => [c.check_key, c.checked]));
 
@@ -74,6 +84,10 @@ export function PortDetailPane({
     >
       {/* Left column */}
       <div className="flex flex-col gap-4">
+        {exploitQuery && (
+          <ExploitsSection key={`exploits-${portId}`} query={exploitQuery} />
+        )}
+
         {userCommands.length > 0 && (
           <Section label="My Commands" count={userCommands.length}>
             <div className="flex flex-col gap-2">
@@ -359,4 +373,167 @@ function safeHostname(url: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * P2: searchsploit-backed exploit lookup. Fires only when the operator
+ * clicks "Lookup exploits" — searchsploit shell-out is up to 5 s wall
+ * time, too slow for an auto-fire. Results aren't cached across port
+ * switches; the parent's `key` reset gives each port a fresh state.
+ */
+interface ExploitHit {
+  id: string;
+  title: string;
+  type: string;
+  platform: string;
+  date?: string;
+  url?: string;
+}
+
+function ExploitsSection({ query }: { query: string }) {
+  const [hits, setHits] = useState<ExploitHit[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runLookup() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/exploits/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? "Lookup failed.");
+        setHits(null);
+        return;
+      }
+      setHits(Array.isArray(body.hits) ? body.hits : []);
+    } catch (err) {
+      setError((err as Error).message ?? "Lookup failed.");
+      setHits(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Section
+      label="Exploits"
+      count={hits === null ? undefined : hits.length}
+    >
+      <div className="flex flex-col gap-2">
+        {hits === null && !loading && !error && (
+          <button
+            type="button"
+            onClick={runLookup}
+            className="mono inline-flex items-center justify-center gap-1.5"
+            style={{
+              alignSelf: "flex-start",
+              height: 26,
+              padding: "0 10px",
+              borderRadius: 5,
+              border: "1px solid var(--border)",
+              background: "var(--bg-2)",
+              color: "var(--fg-muted)",
+              fontSize: 11.5,
+              cursor: "pointer",
+            }}
+            title={`searchsploit -t "${query}"`}
+          >
+            <SearchIcon size={11} />
+            Lookup exploits for{" "}
+            <span style={{ color: "var(--accent)" }}>{query}</span>
+          </button>
+        )}
+
+        {loading && (
+          <div
+            className="mono"
+            style={{ fontSize: 11, color: "var(--fg-subtle)" }}
+          >
+            Querying searchsploit…
+          </div>
+        )}
+
+        {error && (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--risk-crit)",
+              padding: "6px 8px",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              background: "var(--bg-1)",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {hits !== null && hits.length === 0 && !loading && (
+          <div
+            className="mono"
+            style={{ fontSize: 11, color: "var(--fg-subtle)" }}
+          >
+            No matches for{" "}
+            <span style={{ color: "var(--accent)" }}>{query}</span>.
+          </div>
+        )}
+
+        {hits !== null && hits.length > 0 && (
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {hits.map((h) => (
+              <li
+                key={h.id}
+                style={{
+                  padding: "6px 8px",
+                  borderTop: "1px solid var(--border-subtle)",
+                  fontSize: 12,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="mono uppercase"
+                    style={{
+                      fontSize: 9.5,
+                      letterSpacing: "0.06em",
+                      padding: "1px 5px",
+                      borderRadius: 3,
+                      background: "var(--bg-3)",
+                      border: "1px solid var(--border)",
+                      color: "var(--fg-muted)",
+                    }}
+                    title={`${h.type} · ${h.platform}`}
+                  >
+                    {h.type}
+                  </span>
+                  <span style={{ color: "var(--fg)", flex: 1, minWidth: 0 }}>
+                    {h.title}
+                  </span>
+                  {h.url && (
+                    <a
+                      href={h.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: "var(--accent)",
+                        fontSize: 11,
+                        textDecoration: "none",
+                      }}
+                      title="Open exploit-db entry"
+                    >
+                      EDB-{h.id} ↗
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Section>
+  );
 }
