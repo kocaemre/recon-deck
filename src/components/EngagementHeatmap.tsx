@@ -9,7 +9,7 @@
  * (handled elsewhere) automatically updates the selection.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useUIStore } from "@/lib/store";
 import { PortDetailPane } from "@/components/PortDetailPane";
 import { AddPortButton } from "@/components/AddPortButton";
@@ -50,6 +50,9 @@ interface PortTileData {
   done: number;
   reason?: string;
   cpe?: string[];
+  /** P1-G PR 2: port lifecycle vs latest scan. */
+  isClosed?: boolean;
+  isNew?: boolean;
   /** Detail pane data */
   scripts: Array<{
     id: number;
@@ -84,15 +87,25 @@ export function EngagementHeatmap({
   const activePortId = useUIStore((s) => s.activePortId);
   const setActivePortId = useUIStore((s) => s.setActivePortId);
 
+  // P1-G PR 2: closed-port visibility toggle. Default-hide so the heatmap
+  // stays focused on the live attack surface; the toolbar surfaces a
+  // "Show N closed" button when applicable.
+  const closedCount = ports.filter((p) => p.isClosed).length;
+  const [showClosed, setShowClosed] = useState(false);
+  const visiblePorts = showClosed ? ports : ports.filter((p) => !p.isClosed);
+
   // Ensure we always have a selection as long as there are ports.
   // Choose the first port by default; use layout effect so the selected-port
   // header renders on first paint instead of flashing empty.
   useEffect(() => {
-    if (ports.length === 0) return;
-    if (!activePortId || !ports.some((p) => p.id === activePortId)) {
-      setActivePortId(ports[0].id);
+    if (visiblePorts.length === 0) return;
+    if (
+      !activePortId ||
+      !visiblePorts.some((p) => p.id === activePortId)
+    ) {
+      setActivePortId(visiblePorts[0].id);
     }
-  }, [ports, activePortId, setActivePortId]);
+  }, [visiblePorts, activePortId, setActivePortId]);
 
   if (ports.length === 0) {
     return (
@@ -104,7 +117,10 @@ export function EngagementHeatmap({
     );
   }
 
-  const selected = ports.find((p) => p.id === activePortId) ?? ports[0];
+  const selected =
+    visiblePorts.find((p) => p.id === activePortId) ??
+    visiblePorts[0] ??
+    ports[0];
 
   const riskLevels: RiskKey[] = ["critical", "high", "medium", "low", "info"];
 
@@ -123,8 +139,37 @@ export function EngagementHeatmap({
             className="uppercase tracking-[0.08em] font-medium"
             style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
           >
-            Attack Surface · {ports.length} open port{ports.length === 1 ? "" : "s"}
+            Attack Surface · {visiblePorts.length} open port
+            {visiblePorts.length === 1 ? "" : "s"}
           </span>
+          {/* P1-G PR 2: closed-port toggle — only renders when there is at
+              least one closed port (i.e. the engagement has been re-imported
+              and a previously-open port disappeared). */}
+          {closedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowClosed((v) => !v)}
+              className="mono ml-3"
+              style={{
+                fontSize: 10.5,
+                padding: "2px 8px",
+                borderRadius: 4,
+                border: showClosed
+                  ? "1px solid var(--accent)"
+                  : "1px solid var(--border)",
+                background: showClosed ? "var(--bg-3)" : "var(--bg-2)",
+                color: showClosed ? "var(--accent)" : "var(--fg-muted)",
+                cursor: "pointer",
+              }}
+              title={
+                showClosed
+                  ? "Hide closed ports"
+                  : `Show ${closedCount} closed port${closedCount === 1 ? "" : "s"}`
+              }
+            >
+              {showClosed ? "Hide" : "Show"} {closedCount} closed
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-3">
             {riskLevels.map((r) => (
               <span
@@ -155,7 +200,7 @@ export function EngagementHeatmap({
             gap: 8,
           }}
         >
-          {ports.map((p) => (
+          {visiblePorts.map((p) => (
             <PortTile
               key={p.id}
               data={p}
@@ -276,6 +321,9 @@ function PortTile({
   onClick: () => void;
 }) {
   const pct = data.total === 0 ? 0 : (data.done / data.total) * 100;
+  // P1-G PR 2: closed tile dims the entire content; new chip surfaces in
+  // the top-right corner. Both render only when scan history has > 1 row.
+  const dim = data.isClosed === true;
   return (
     <button
       type="button"
@@ -292,6 +340,7 @@ function PortTile({
         overflow: "hidden",
         outline: active ? "1px solid var(--accent)" : "none",
         outlineOffset: -1,
+        opacity: dim ? 0.55 : 1,
       }}
     >
       <div
@@ -305,6 +354,27 @@ function PortTile({
           background: RISK_VAR[data.risk] ?? "var(--risk-info)",
         }}
       />
+      {(data.isClosed || data.isNew) && (
+        <span
+          className="mono uppercase"
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            fontSize: 9,
+            letterSpacing: "0.08em",
+            padding: "1px 5px",
+            borderRadius: 3,
+            border: data.isClosed
+              ? "1px solid var(--risk-crit)"
+              : "1px solid var(--accent)",
+            color: data.isClosed ? "var(--risk-crit)" : "var(--accent)",
+            background: "var(--bg-2)",
+          }}
+        >
+          {data.isClosed ? "closed" : "new"}
+        </span>
+      )}
       <div className="flex items-center gap-2">
         <span className="mono font-semibold" style={{ fontSize: 14 }}>
           {data.port}

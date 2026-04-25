@@ -14,6 +14,7 @@ import {
   getById,
   matchUserCommands,
   getWordlistOverridesMap,
+  listScanHistory,
 } from "@/lib/db";
 import { loadKnowledgeBase, matchPort } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
@@ -103,6 +104,14 @@ export default async function EngagementPage({
   const sortedPorts = [...engagement.ports]
     .filter((p) => activeHostId === null || p.host_id === activeHostId)
     .sort((a, b) => a.port - b.port);
+
+  // P1-G PR 2: scan history drives port lifecycle chips. With a single scan
+  // (scanHistory.length === 1) every port is just "current"; with multiple
+  // scans we surface "new" / "closed" badges on the heatmap so re-imports
+  // are legible at a glance.
+  const scanHistory = listScanHistory(db, engagement.id);
+  const latestScanId = scanHistory[0]?.id ?? null;
+  const hasMultipleScans = scanHistory.length > 1;
 
   let totalChecks = 0;
   let doneChecks = 0;
@@ -323,6 +332,15 @@ export default async function EngagementPage({
       reason: meta?.reason,
       cpe: meta?.cpe,
       evidence: evidenceByPortId.get(p.id) ?? [],
+      // P1-G PR 2: port lifecycle relative to the latest scan. Only
+      // meaningful when the engagement has been re-imported at least
+      // once (hasMultipleScans). Single-scan engagements report `null`
+      // so the heatmap renders the legacy chip-free tile.
+      isClosed: p.closed_at_scan_id != null,
+      isNew:
+        hasMultipleScans &&
+        latestScanId !== null &&
+        p.first_seen_scan_id === latestScanId,
     };
   });
 
