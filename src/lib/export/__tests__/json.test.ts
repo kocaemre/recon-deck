@@ -17,7 +17,10 @@
 
 import { describe, it, expect } from "vitest";
 import { generateJson } from "../json";
-import { buildFixtureViewModel } from "./fixture-vm";
+import {
+  buildFixtureViewModel,
+  buildMultiHostFixtureViewModel,
+} from "./fixture-vm";
 
 describe("generateJson — Contract (EXPORT-03)", () => {
   it("output is valid JSON", () => {
@@ -282,5 +285,46 @@ describe("generateJson — Golden Fixture (EXPORT-03)", () => {
     await expect(output).toMatchFileSnapshot(
       "../../../../tests/golden/engagement.json",
     );
+  });
+});
+
+describe("generateJson — multi-host (P1-F PR 3)", () => {
+  it("multi-host bumps schema_version to 2.0 and emits scan.hosts[]", () => {
+    const out = generateJson(buildMultiHostFixtureViewModel());
+    const parsed = JSON.parse(out);
+    expect(parsed.schema_version).toBe("2.0");
+    expect(Array.isArray(parsed.scan.hosts)).toBe(true);
+    expect(parsed.scan.hosts).toHaveLength(2);
+  });
+
+  it("each scan.hosts entry carries target + is_primary + ports", () => {
+    const parsed = JSON.parse(generateJson(buildMultiHostFixtureViewModel()));
+    const primary = parsed.scan.hosts[0];
+    const secondary = parsed.scan.hosts[1];
+
+    expect(primary.is_primary).toBe(true);
+    expect(primary.target.ip).toBe("10.10.10.5");
+    expect(primary.target.hostname).toBe("box.htb");
+    expect(primary.ports.length).toBeGreaterThan(0);
+
+    expect(secondary.is_primary).toBe(false);
+    expect(secondary.target.ip).toBe("10.10.10.6");
+    expect(secondary.target.hostname).toBe("ws01.htb");
+    expect(secondary.ports[0].port).toBe(3389);
+  });
+
+  it("single-host engagement keeps schema_version 1.0 and omits scan.hosts", () => {
+    const parsed = JSON.parse(generateJson(buildFixtureViewModel()));
+    expect(parsed.schema_version).toBe("1.0");
+    expect(parsed.scan.hosts).toBeUndefined();
+  });
+
+  it("legacy scan.ports + scan.hostScripts retained on multi-host (back-compat)", () => {
+    const parsed = JSON.parse(generateJson(buildMultiHostFixtureViewModel()));
+    // Legacy mirror points at the primary host's ports/scripts; downstream
+    // consumers built before v2 keep working.
+    expect(Array.isArray(parsed.scan.ports)).toBe(true);
+    expect(parsed.scan.ports.length).toBeGreaterThan(0);
+    expect(Array.isArray(parsed.scan.hostScripts)).toBe(true);
   });
 });

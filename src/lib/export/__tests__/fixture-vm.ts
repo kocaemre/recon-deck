@@ -56,33 +56,21 @@ import type {
   PortCommand,
 } from "@/lib/db/schema";
 import type { FullEngagement, PortWithDetails } from "@/lib/db/types";
+import type {
+  EngagementViewModel,
+  HostViewModel,
+  PortViewModel,
+} from "../view-model";
 
 // ---------------------------------------------------------------------------
-// Local view-model type shim — mirrors Plan 01's src/lib/export/view-model.ts
-// contract verbatim. See coordination note in file header.
+// Re-export view-model types so existing test files (markdown/html/json)
+// that import `EngagementViewModel` from this fixture keep working — the
+// fixture used to declare a local shim during Wave 1 parallel execution
+// (see file header coordination note); P1-F PR 3 promotes the real types
+// from `../view-model` and re-exports them here as a compatibility shim.
 // ---------------------------------------------------------------------------
 
-export interface PortViewModel {
-  port: PortWithDetails;
-  nseScripts: PortScript[];
-  arFiles: Array<{ filename: string; content: string }>;
-  kbCommands: Array<{ label: string; command: string }>;
-  arCommands: Array<{ label: string; command: string }>;
-  kbChecks: Array<{ key: string; label: string }>;
-  checkMap: Map<string, boolean>;
-  risk: string;
-}
-
-export interface EngagementViewModel {
-  engagement: FullEngagement;
-  ports: PortViewModel[];
-  hostScripts: PortScript[];
-  totalChecks: number;
-  doneChecks: number;
-  coverage: number;
-  warnings: string[];
-  recon_deck_version: string;
-}
+export type { EngagementViewModel, HostViewModel, PortViewModel };
 
 // ---------------------------------------------------------------------------
 // Pinned constants
@@ -447,8 +435,20 @@ export function buildFixtureViewModel(): EngagementViewModel {
   const coverage =
     totalChecks === 0 ? 0 : Math.round((doneChecks / totalChecks) * 100);
 
+  // P1-F PR 3: single-host fixture — every port goes to the engagement's
+  // primary host. Generators that branch on `vm.hosts.length > 1` must NOT
+  // emit host headers for this fixture; the existing golden fixtures stay
+  // byte-stable (single-host == legacy rendering).
+  const primaryHostVm: HostViewModel = {
+    host: primaryHost,
+    ports: sortedPorts,
+    hostScripts: [hostScript],
+    isPrimary: true,
+  };
+
   return {
     engagement: fullEngagement,
+    hosts: [primaryHostVm],
     ports: sortedPorts,
     hostScripts: [hostScript],
     totalChecks,
@@ -456,5 +456,77 @@ export function buildFixtureViewModel(): EngagementViewModel {
     coverage,
     warnings: ["skipped sctp port 9999"],
     recon_deck_version: FIXTURE_RECON_DECK_VERSION,
+  };
+}
+
+/**
+ * Multi-host fixture (P1-F PR 3) — 2 hosts, used by smoke tests for
+ * markdown/json/html multi-host rendering. Reuses the primary host fixture
+ * plus a minimal secondary "ws01" host carrying one RDP port. Engagement-
+ * level fields (warnings, coverage, recon_deck_version) inherit the
+ * single-host fixture's values so assertions stay readable.
+ */
+export function buildMultiHostFixtureViewModel(): EngagementViewModel {
+  const base = buildFixtureViewModel();
+
+  const secondaryHostId = 2;
+  const secondaryIp = "10.10.10.6";
+  const secondaryHostname = "ws01.htb";
+
+  const secondaryPort: PortWithDetails = {
+    id: 999,
+    engagement_id: ENGAGEMENT_ID,
+    host_id: secondaryHostId,
+    port: 3389,
+    protocol: "tcp",
+    state: "open",
+    service: "ms-wbt-server",
+    product: null,
+    version: null,
+    tunnel: null,
+    extrainfo: null,
+    scripts: [],
+    checks: [],
+    notes: null,
+    commands: [],
+  };
+
+  const secondaryPortVm: PortViewModel = {
+    port: secondaryPort,
+    nseScripts: [],
+    arFiles: [],
+    kbCommands: [],
+    arCommands: [],
+    kbChecks: [],
+    checkMap: new Map<string, boolean>(),
+    risk: "medium",
+  };
+
+  const secondaryHostVm: HostViewModel = {
+    host: {
+      id: secondaryHostId,
+      engagement_id: ENGAGEMENT_ID,
+      ip: secondaryIp,
+      hostname: secondaryHostname,
+      state: null,
+      os_name: null,
+      os_accuracy: null,
+      is_primary: false,
+      scanned_at: null,
+    },
+    ports: [secondaryPortVm],
+    hostScripts: [],
+    isPrimary: false,
+  };
+
+  // Primary host inherits its ports from the base fixture; mark it as
+  // primary explicitly (base already has it as such).
+  const primaryHostVm = base.hosts[0];
+
+  return {
+    ...base,
+    hosts: [primaryHostVm, secondaryHostVm],
+    // Legacy mirror still points at the primary host's ports + scripts
+    // (used by single-host code paths inside generators).
   };
 }

@@ -18,7 +18,10 @@
 
 import { describe, it, expect } from "vitest";
 import { generateHtml } from "../html";
-import { buildFixtureViewModel } from "./fixture-vm";
+import {
+  buildFixtureViewModel,
+  buildMultiHostFixtureViewModel,
+} from "./fixture-vm";
 
 describe("generateHtml (Plan 06-05, EXPORT-04)", () => {
   describe("Document shape (D-15)", () => {
@@ -127,6 +130,26 @@ describe("generateHtml (Plan 06-05, EXPORT-04)", () => {
       await expect(out).toMatchFileSnapshot(
         "../../../../tests/golden/engagement.html",
       );
+    });
+  });
+
+  describe("Multi-host (P1-F PR 3)", () => {
+    it("wraps each host in a <section class=\"host-block\">", () => {
+      const out = generateHtml(buildMultiHostFixtureViewModel());
+      const matches = out.match(/<section class="host-block">/g) ?? [];
+      expect(matches).toHaveLength(2);
+    });
+
+    it("renders each host's H2 heading with primary marker on the primary host", () => {
+      const out = generateHtml(buildMultiHostFixtureViewModel());
+      expect(out).toContain("Host: box.htb (10.10.10.5) · primary");
+      expect(out).toContain("Host: ws01.htb (10.10.10.6)");
+      expect(out).not.toContain("Host: ws01.htb (10.10.10.6) · primary");
+    });
+
+    it("single-host fixture does NOT emit a host-block wrapper", () => {
+      const out = generateHtml(buildFixtureViewModel());
+      expect(out).not.toContain('class="host-block"');
     });
   });
 });

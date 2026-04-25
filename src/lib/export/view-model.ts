@@ -42,7 +42,7 @@ import "server-only";
  */
 
 import type { FullEngagement, PortWithDetails } from "@/lib/db/types";
-import type { PortScript } from "@/lib/db/schema";
+import type { Host, PortScript } from "@/lib/db/schema";
 import { matchPort, type KnowledgeBase } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { parseNmapXml } from "@/lib/parser/nmap-xml";
@@ -117,10 +117,42 @@ export interface PortViewModel {
   cpe?: string[];
 }
 
+/**
+ * Per-host normalized shape (P1-F PR 3).
+ *
+ * Wraps a `hosts` row with everything an export generator needs to render
+ * THAT host: its ports (filtered from the flat vm.ports), and its host-level
+ * scripts. Until migration 0008 adds `port_scripts.host_id`, host scripts
+ * stay engagement-scoped — the primary host claims all of them so the
+ * existing per-engagement "Host Scripts" section keeps rendering. Non-primary
+ * hosts surface an empty list; PR 4 will retire that approximation.
+ */
+export interface HostViewModel {
+  /** The hosts table row. */
+  host: Host;
+  /** Ports belonging to this host, in vm.ports' ASC port-number order. */
+  ports: PortViewModel[];
+  /**
+   * Host-level NSE scripts attributed to this host. Primary host inherits
+   * the engagement's full `hostScripts` collection until PR 4 splits the
+   * port_scripts table by host. Non-primary hosts get `[]`.
+   */
+  hostScripts: PortScript[];
+  /** Convenience flag — `host.is_primary` re-exposed at the top level. */
+  isPrimary: boolean;
+}
+
 /** Top-level engagement shape consumed by all Phase 06 export generators. */
 export interface EngagementViewModel {
   /** Engagement row pass-through (name, target_ip, target_hostname, source, raw_input, os_*, warnings_json, created_at, updated_at). */
   engagement: FullEngagement;
+  /**
+   * P1-F PR 3: hosts grouped with their ports, primary first then by IP.
+   * Multi-host-aware generators (markdown, json, html, /report) iterate
+   * this; legacy single-host consumers can keep reading `vm.ports` /
+   * `vm.hostScripts` (mirror of `vm.hosts[0]`).
+   */
+  hosts: HostViewModel[];
   /** Ports sorted ASCENDING by port number. Rendering order is fixed by this array. */
   ports: PortViewModel[];
   /** Host-level NSE scripts (port_id = NULL, is_host_script = true). */
@@ -321,8 +353,21 @@ export function loadEngagementForExport(
   //    now fall back to a placeholder so exports never emit `"undefined"`.
   const recon_deck_version = process.env.npm_package_version ?? "0.0.0-dev";
 
+  // 6. P1-F PR 3: group ports by host. engagement.hosts is already sorted
+  //    primary-first then by IP (engagement-repo.getById invariant). For each
+  //    host we filter the flat portVms list by host_id; the order inside the
+  //    filter result inherits sortedPorts' port-number ASC sort. Primary host
+  //    inherits all hostScripts until PR 4 splits port_scripts by host.
+  const hostVms: HostViewModel[] = engagement.hosts.map((h) => ({
+    host: h,
+    ports: portVms.filter((pvm) => pvm.port.host_id === h.id),
+    hostScripts: h.is_primary ? engagement.hostScripts : [],
+    isPrimary: h.is_primary,
+  }));
+
   return {
     engagement,
+    hosts: hostVms,
     ports: portVms,
     hostScripts: engagement.hostScripts,
     totalChecks,

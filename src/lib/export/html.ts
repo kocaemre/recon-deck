@@ -29,7 +29,12 @@ import "server-only";
  *   NSE Output → AutoRecon Files → Commands → AutoRecon Commands → Checklist → Notes
  */
 
-import type { EngagementViewModel, PortViewModel } from "./view-model";
+import type {
+  EngagementViewModel,
+  HostViewModel,
+  PortViewModel,
+} from "./view-model";
+import type { PortScript } from "@/lib/db/schema";
 import { escapeHtml } from "./escape";
 
 // -----------------------------------------------------------------------------
@@ -108,17 +113,63 @@ ${generateBody(vm)}
 function generateBody(vm: EngagementViewModel): string {
   const parts: string[] = [];
   parts.push(renderHeader(vm));
-  parts.push(renderPortsTable(vm));
-  for (const pd of vm.ports) {
-    parts.push(renderPortSection(pd));
+
+  // P1-F PR 3: multi-host engagements wrap their port grids inside per-host
+  // <section class="host-block"> wrappers, mirroring the markdown layout.
+  // Single-host engagements emit the legacy flat layout (golden HTML fixture
+  // stays byte-stable).
+  if (vm.hosts.length > 1) {
+    for (const hvm of vm.hosts) {
+      parts.push(renderHostBlock(hvm));
+    }
+  } else {
+    parts.push(renderPortsTable(vm.ports));
+    for (const pd of vm.ports) {
+      parts.push(renderPortSection(pd));
+    }
+    if (vm.hostScripts.length > 0) {
+      parts.push(renderHostScripts(vm.hostScripts));
+    }
   }
-  if (vm.hostScripts.length > 0) {
-    parts.push(renderHostScripts(vm));
-  }
-  // v2 enrichment sections — only emit when data exists.
+
+  // v2 enrichment sections — only emit when data exists. These are scan-level
+  // (scanner / runstats / extraports / OS / traceroute / pre-post) so they
+  // sit at the engagement bottom regardless of single- vs multi-host layout.
   const extra = renderExtraSections(vm);
   if (extra) parts.push(extra);
   return parts.join("\n");
+}
+
+/**
+ * Render one per-host section block (P1-F PR 3).
+ *
+ *   <section class="host-block">
+ *     <h2>Host: dc01.htb (10.10.10.5) · primary</h2>
+ *     <h2>Ports</h2><table>…</table>
+ *     <section class="port-section">…</section>
+ *     <section class="host-scripts-section">…</section>
+ *   </section>
+ *
+ * Heading levels stay at H2 inside the block — same trade-off as the
+ * markdown generator (PR 4 may revisit hierarchy).
+ */
+function renderHostBlock(hvm: HostViewModel): string {
+  const { ip, hostname, is_primary } = hvm.host;
+  const display = hostname
+    ? `${escapeHtml(hostname)} (${escapeHtml(ip)})`
+    : escapeHtml(ip);
+  const suffix = is_primary ? " · primary" : "";
+  const heading = `<h2>Host: ${display}${suffix}</h2>`;
+
+  const parts: string[] = [heading];
+  parts.push(renderPortsTable(hvm.ports));
+  for (const pd of hvm.ports) {
+    parts.push(renderPortSection(pd));
+  }
+  if (hvm.hostScripts.length > 0) {
+    parts.push(renderHostScripts(hvm.hostScripts));
+  }
+  return `<section class="host-block">\n${parts.join("\n")}\n</section>`;
 }
 
 function renderExtraSections(vm: EngagementViewModel): string | null {
@@ -241,8 +292,8 @@ function renderHeader(vm: EngagementViewModel): string {
   return lines.join("\n");
 }
 
-function renderPortsTable(vm: EngagementViewModel): string {
-  const rows = vm.ports.map((pd) => {
+function renderPortsTable(ports: PortViewModel[]): string {
+  const rows = ports.map((pd) => {
     const p = pd.port;
     const versionText = [p.product, p.version].filter(Boolean).join(" ");
     const done = pd.kbChecks.filter((c) => pd.checkMap.get(c.key) === true)
@@ -357,12 +408,12 @@ ${sections.join("\n")}
 </section>`;
 }
 
-function renderHostScripts(vm: EngagementViewModel): string {
+function renderHostScripts(scripts: PortScript[]): string {
   // Uses `host-scripts-section` (not `port-section`) so a `port-section` count
   // is always equal to `vm.ports.length`. Same `break-inside: avoid-page`
   // behaviour is inherited by applying `port-section` as a secondary class
   // on the element to keep the CSS rule single-sourced.
-  const blocks = vm.hostScripts
+  const blocks = scripts
     .map(
       (s) =>
         `<div><strong>${escapeHtml(s.script_id)}</strong></div><pre>${escapeHtml(s.output)}</pre>`,

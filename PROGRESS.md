@@ -2,9 +2,9 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-25 (P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 bitti, P1-F PR 3 (importer + view-model + export) sırada).
+> Son güncelleme: 2026-04-25 (P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 + P1-F PR 3 bitti, P1-F PR 4 (UI host selector) sırada). AR multi-IP importer ayrı küçük PR'a defer.
 >
-> Test durumu: **371/371 yeşil**, TypeScript: 0 hata.
+> Test durumu: **381/381 yeşil**, TypeScript: 0 hata.
 
 ---
 
@@ -97,6 +97,19 @@ Ek iyileştirmeler:
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
 
+### P1-F PR 3 — View-model + export multi-host ✅
+- `EngagementViewModel.hosts: HostViewModel[]` — primary first then by IP; `vm.ports` / `vm.hostScripts` legacy mirror retain
+- `HostViewModel { host, ports, hostScripts, isPrimary }`
+- `loadEngagementForExport` her port'u host_id'sine göre grupluyor; primary host hostScripts'leri claim ediyor (PR 4'te `port_scripts.host_id` ile düzeltilecek)
+- **Markdown:** multi-host'ta `## Host: <ip> (<hostname>) · primary` header her host için + altında ports table + port section'ları + host scripts; tek host'ta layout aynen (golden fixture byte-stable)
+- **JSON:** multi-host'ta `schema_version: "2.0"` + `scan.hosts: [{target, is_primary, ports, hostScripts, os?}]`; tek host'ta `"1.0"` + `scan.hosts` omit (downstream consumer için back-compat); legacy `scan.ports` + `scan.hostScripts` her durumda primary mirror olarak retain
+- **HTML:** multi-host'ta her host `<section class="host-block">` içinde + `<h2>Host: ...</h2>` + tablo/portlar/scripts; tek host'ta wrapper yok (golden HTML byte-stable)
+- **`/report` page:** sub-component refactor (`HostBlock`, `PortBlock`, `PortsSummaryTable`, `HostScriptsSection`); multi-host branch `vm.hosts.map(<HostBlock />)`, tek host legacy flat
+- `fixture-vm.ts`: local `EngagementViewModel/PortViewModel` shim view-model'den re-export'a dönüştü (Wave 1 cleanup); `buildMultiHostFixtureViewModel()` (2 host: dc01 primary + ws01 secondary RDP)
+- **AR multi-IP importer:** PR 3 scope dışında bırakıldı — defer karar gereği. AR zip'i hâlâ tek-IP varsayıyor; multi-IP zip yapısı ileri bir PR'da
+- 10 yeni smoke test: markdown (3) + json (4) + html (3) — multi-host header/schema/section assertion'ları
+- Tek host davranışı **byte-for-byte korundu** — engagement.md/engagement.json/engagement.html golden fixture'ları hâlâ geçiyor
+
 ### P1-F PR 2 — Parser multi-host (XML full, text/greppable deferred) ✅
 - `ParsedHost` tipi eklendi (`target`, `ports`, `hostScripts`, `os?`, `extraPorts?`, `traceroute?`)
 - `ParsedScan.hosts: ParsedHost[]` zorunlu alan; `target/ports/hostScripts/os/extraPorts/traceroute` üst seviyede `hosts[0]` mirror'ı olarak retain edildi (PR 4 cleanup)
@@ -143,13 +156,7 @@ Her görev: schema/DB → repo/server → API → UI → typecheck + test. Her g
 
 ### P1-F — Multi-host engagement (4 PR'a bölündü)
 
-PR 1 + PR 2 ✅ bitti. Kalan:
-
-**PR 3 — Importer + view-model + export:**
-- AR importer multi-IP zip yapısını destekler (results/<ip>/...)
-- `loadEngagementForExport` host gruplama; export'larda host header
-- markdown/json/html generators host section'ları ekler
-- `/report` page host bölümleri
+PR 1 + PR 2 + PR 3 ✅ bitti. Kalan:
 
 **PR 4 — UI multi-host:**
 - EngagementHeader host selector (dropdown veya tab şeridi)
@@ -400,16 +407,23 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 
 ## Resume noktası
 
-**Şu an nerede:** P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 tamam. P1-F PR 3 (importer + view-model + export) sırada.
+**Şu an nerede:** P0-A/B/C/D + P1-E + P1-F PR 1 + P1-F PR 2 + P1-F PR 3 tamam. P1-F PR 4 (UI host selector) sırada.
 
-**P1-F PR 3 başlangıç adımları:**
-1. `src/lib/importer/autorecon.ts` — multi-IP zip yapısı (`results/<ip>/...`) → `scan.hosts[]`'i populate et; tek-IP zip için tek host (mevcut davranış)
-2. `src/lib/export/view-model.ts` — `loadEngagementForExport` host gruplama: `EngagementViewModel.hosts: HostViewModel[]` ekle; her host kendi `ports: PortViewModel[]` ile
-3. `src/lib/export/markdown.ts` / `json.ts` / `html.ts` — host header section'ları + her host'un altında portlar
-4. `app/engagements/[id]/report/page.tsx` — host bölümleri (multi-host engagement varsa)
-5. Test: multi-host engagement → markdown export'ta her host header görünmeli; JSON shape'inde hosts top-level array
-6. Engagement page (`page.tsx`) PR 4'e kadar `engagement.hosts[0]`'ı kullanır (single-host UI hissi devam)
-7. typecheck + test
+**Son commit:** `a5e89aa` — "feat: v2 — search, evidence, findings, manual ports/commands, wordlists, multi-host foundation". `origin/main`'e push'landı. PR 3 değişiklikleri (view-model + 3 export + report page + 10 yeni test) commit edilmedi henüz — ayrı commit alınmalı.
+
+**P1-F PR 4 başlangıç adımları:**
+1. `EngagementHeader` — host selector (dropdown veya tab şeridi); aktif host state global store'a (`useUIStore.activeHostId`) bağlanır
+2. `EngagementHeatmap` — aktif host'a scope'lanır (mevcut `engagement.ports` yerine `engagement.hosts.find(h => h.id === activeHostId).ports`)
+3. `Sidebar` — engagement satırına host count chip ("3 hosts · 47 ports")
+4. `CommandPalette` (⌘K) — "Jump to host: dc01" / "Jump to port: dc01:445"
+5. `PortDetailPane` — `{IP}` artık port'un host'unun IP'si (engagement.target_ip değil); interpolateCommand'a host bağlamı geçir
+6. `FindingsPanel` — finding listesinde "host:port" etiketi
+7. `EvidencePane` — host context
+8. `GlobalSearchModal` — search hit'lerinde host adı
+9. `engagements.target_ip/target_hostname` deprecate kararı (kaldır vs retain — PROGRESS Açık Kararlar maddesi)
+10. typecheck + test (UI test'leri minimal kaldı — manuel Chrome doğrulaması)
+
+**P1-F PR 3 (deferred): AR multi-IP importer** — `src/lib/importer/autorecon.ts` zip yapısı `results/<ip>/...`'ı multi-host olarak parse etsin. Sonraki küçük PR.
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 
@@ -419,19 +433,11 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 ```bash
 cd /Users/0xemrek/Desktop/recon
 npx tsc --noEmit              # 0 hata bekleniyor
-npm test                       # 355+/355+
+npm test                       # 381+/381+
 nohup npx next dev -p 3030 > /tmp/nextdev.log 2>&1 &
 ```
 
-**Git önerisi (commit yok henüz, P0 tamamı mantıklı bir nokta):**
-```bash
-git add -A
-git commit -m "feat: v2 P0 — search + evidence + findings + manual ports/commands"
-```
-Bu commit içinde:
-- Migrations 0002-0005 (4 yeni tablo: search_index, port_evidence, findings, user_commands)
-- 5 yeni repo modülü
-- 5 yeni API route grubu (search, evidence, findings, ports, user-commands)
+**Git:** `a5e89aa` (origin/main'de) PR 1+2 dahil tüm v2 P0+P1-E+P1-F PR 1-2'yi içerir. PR 3 ayrı commit alınmalı (mantıklı kapsam: importer + view-model + 3 export generator + report page + testler).
 - 7 yeni UI component (GlobalSearchModal, EvidencePane, FindingsPanel, AddPortButton, CommandsEditor, ...)
 - Engagement page integration + Sidebar global search
 
@@ -444,11 +450,13 @@ Bu commit içinde:
 
 ## Açık Kararlar / Düşünülecekler
 
-- **better-sqlite3 → bun:sqlite migration'ı**: Bun binary için kritik. Adapter pattern mı, yoksa branch'ler mi?
-- **port_evidence MAX_FILE_SIZE**: 4 MB mı 8 MB mı? Pentester clipboard paste'i 1-2 MB olur genelde, 4 MB cap mantıklı.
-- **Multi-host (P1-F) zamanlama**: Tüm UI'da AD context dolaşır → büyük iş. Önce P1-E/G/H'i bitirip sonra P1-F mi yapalım?
-- **Settings sayfası**: P0-D + P1-E ikisi de settings UI istiyor. Tek `/settings` sayfası mı, yoksa context-bazlı modal'lar mı?
-- **Scan history vs raw_input**: P1-G mevcut `engagement.raw_input`'u koruyor mu, yoksa scan_history'ye taşıyıp engagement'tan kolonu kaldırıyor mu?
+- **PR 3 — AR multi-IP importer scope:** AutoRecon zip'i `results/<ip>/...` yapısında multi-IP olabilir. PR 3'te tam destek mi (zip'i her IP için ayrı host olarak parse), yoksa **defer** edip PR 3'ü sadece view-model + export'a indirgeyip AR multi-IP'i ayrı küçük PR'a mı bırakalım? Defer daha güvenli çünkü AR multi-IP fixture'ı yok, yeni edge-case'ler çıkar; tam destek daha "tam" hisseder. Önerim: **defer.** PR 3 kapsamı = sadece view-model + 3 export + report page + testler.
+- **PR 3 — JSON export shape breaking change:** Mevcut JSON export `ports: [...]` top-level. Multi-host shape'inde `hosts: [{ports: [...]}]` olmalı. SysReptor/PwnDoc gibi downstream tüketici varsa breaking change. Önerim: `export_version: 2` field'ı ekle + eski `ports` field'ını compat için **bilinçli olarak retain et** (= `hosts.flatMap(h => h.ports)`).
+- **PR 4 — `engagements.target_ip/target_hostname` sonu:** PR 4'te UI host selector eklenince bu kolonlar deprecate. Tamamen kaldır mı (migration 0008 + cascade), yoksa retain edip "primary host'un mirror'ı" olarak documente et mi? Kaldırmak temiz ama migration cost'u var; retain etmek dual-write ile kalır (createFromScan + updateTarget zaten yazıyor).
+- **better-sqlite3 → bun:sqlite migration'ı:** Bun binary için kritik. Adapter pattern mı, yoksa branch'ler mi?
+- **port_evidence MAX_FILE_SIZE:** 4 MB mı 8 MB mı? Pentester clipboard paste'i 1-2 MB olur genelde, 4 MB cap mantıklı.
+- **Scan history vs raw_input:** P1-G mevcut `engagement.raw_input`'u koruyor mu, yoksa scan_history'ye taşıyıp engagement'tan kolonu kaldırıyor mu?
+- **searchsploit cache TTL:** P2 candidate — exploit lookup cache invalidate süresi (1 hafta? manual refresh?). exploitdb haftalık update.
 
 ---
 

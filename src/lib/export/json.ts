@@ -211,6 +211,35 @@ export function generateJson(vm: EngagementViewModel): string {
 
   scan.warnings = vm.warnings;
 
+  // P1-F PR 3: multi-host engagements emit a `scan.hosts[]` array whose
+  // entries mirror ParsedHost — each host carries its own target/ports/
+  // hostScripts. The legacy top-level `scan.ports` and `scan.hostScripts`
+  // are RETAINED as a mirror of the primary host for backward compatibility
+  // with existing JSON consumers. Single-host engagements OMIT `scan.hosts`
+  // entirely so the v1 export shape stays byte-stable for them.
+  if (vm.hosts.length > 1) {
+    scan.hosts = vm.hosts.map((hvm) => {
+      const target: { ip: string; hostname?: string } = { ip: hvm.host.ip };
+      if (hvm.host.hostname != null) target.hostname = hvm.host.hostname;
+      const entry: Record<string, unknown> = {
+        target,
+        is_primary: hvm.isPrimary,
+        ports: hvm.ports.map((pvm) =>
+          buildPortEntry(pvm, vm.engagement.source),
+        ),
+        hostScripts: hvm.hostScripts.map(toScriptOutput),
+      };
+      if (hvm.host.os_name != null) {
+        const os: { name: string; accuracy?: number } = {
+          name: hvm.host.os_name,
+        };
+        if (hvm.host.os_accuracy != null) os.accuracy = hvm.host.os_accuracy;
+        entry.os = os;
+      }
+      return entry;
+    });
+  }
+
   // 4. Checklist overlay — `Record<port/proto, Record<check_key, {checked, toggled_at}>>`.
   //    Outer keys (port/proto) inserted in ASC port order via sortedPorts.
   //    Inner keys (check_key) sorted alphabetically for byte-stable output.
@@ -252,8 +281,15 @@ export function generateJson(vm: EngagementViewModel): string {
   // 6. Assemble top-level object with keys in LOCKED order (D-09). V8 preserves
   //    string-key insertion order, so the resulting JSON.stringify output will
   //    have these keys in exactly this sequence.
+  //
+  //    P1-F PR 3: schema_version bumps to "2.0" only when the export carries
+  //    multi-host shape (`scan.hosts[]`). Single-host engagements stay on
+  //    "1.0" so existing downstream consumers (SysReptor / PwnDoc etc.)
+  //    are not broken until they explicitly opt into v2 by sending a
+  //    multi-host scan.
+  const schemaVersion = vm.hosts.length > 1 ? "2.0" : "1.0";
   const output = {
-    schema_version: "1.0" as const,
+    schema_version: schemaVersion as "1.0" | "2.0",
     recon_deck_version: vm.recon_deck_version,
     engagement,
     scan,

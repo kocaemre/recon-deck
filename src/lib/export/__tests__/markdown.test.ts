@@ -21,6 +21,7 @@ import { describe, it, expect } from "vitest";
 import { generateMarkdown } from "../markdown";
 import {
   buildFixtureViewModel,
+  buildMultiHostFixtureViewModel,
   FIXTURE_EXPORTED_AT,
   type EngagementViewModel,
 } from "./fixture-vm";
@@ -313,5 +314,35 @@ describe("generateMarkdown — Golden Fixture (EXPORT-02)", () => {
     await expect(output).toMatchFileSnapshot(
       "../../../../tests/golden/engagement.md",
     );
+  });
+});
+
+describe("generateMarkdown — multi-host (P1-F PR 3)", () => {
+  it("emits a per-host H2 header for each host with primary suffix", () => {
+    const out = generateMarkdown(buildMultiHostFixtureViewModel(), {
+      exportedAt: FIXTURE_EXPORTED_AT,
+    });
+    // Primary host gets the · primary suffix; secondary host has no suffix.
+    expect(out).toContain("## Host: box.htb (10.10.10.5) · primary");
+    expect(out).toContain("## Host: ws01.htb (10.10.10.6)");
+    expect(out).not.toContain("## Host: ws01.htb (10.10.10.6) · primary");
+  });
+
+  it("single-host fixture does NOT emit a host header (legacy layout intact)", () => {
+    const out = generateMarkdown(buildFixtureViewModel(), {
+      exportedAt: FIXTURE_EXPORTED_AT,
+    });
+    expect(out).not.toContain("## Host:");
+  });
+
+  it("multi-host body still contains every port section", () => {
+    const out = generateMarkdown(buildMultiHostFixtureViewModel(), {
+      exportedAt: FIXTURE_EXPORTED_AT,
+    });
+    // Primary host's three ports + secondary host's RDP port.
+    expect(out).toContain("## Port 53/udp");
+    expect(out).toContain("## Port 80/tcp");
+    expect(out).toContain("## Port 443/tcp");
+    expect(out).toContain("## Port 3389/tcp");
   });
 });

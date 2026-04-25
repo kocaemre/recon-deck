@@ -51,7 +51,12 @@ import "server-only";
  *     EngagementViewModel (which transitively types DB rows).
  */
 
-import type { EngagementViewModel, PortViewModel } from "./view-model";
+import type {
+  EngagementViewModel,
+  HostViewModel,
+  PortViewModel,
+} from "./view-model";
+import type { PortScript } from "@/lib/db/schema";
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -167,17 +172,23 @@ function buildBody(vm: EngagementViewModel): string {
   //    in this project, so no extra suffix is added).
   parts.push(`# ${vm.engagement.name}`);
 
-  // 2. ## Ports summary table.
-  parts.push(buildPortsTable(vm));
-
-  // 3. Per-port H2 sections.
-  for (const portVm of vm.ports) {
-    parts.push(buildPortSection(portVm));
-  }
-
-  // 4. ## Host Scripts — only when host-level NSE scripts exist.
-  if (vm.hostScripts.length > 0) {
-    parts.push(buildHostScriptsSection(vm));
+  // 2. P1-F PR 3: multi-host engagements emit one block per host. Single-host
+  //    engagements keep the legacy layout byte-for-byte (golden fixtures stay
+  //    stable). The choice between the two paths uses `vm.hosts.length` —
+  //    falls back to the legacy path when the host array is empty (defensive,
+  //    shouldn't happen in practice since createFromScan always inserts ≥1).
+  if (vm.hosts.length > 1) {
+    for (const hvm of vm.hosts) {
+      parts.push(buildHostBlock(hvm));
+    }
+  } else {
+    parts.push(buildPortsTable(vm.ports));
+    for (const portVm of vm.ports) {
+      parts.push(buildPortSection(portVm));
+    }
+    if (vm.hostScripts.length > 0) {
+      parts.push(buildHostScriptsSection(vm.hostScripts));
+    }
   }
 
   // 5. v2: engagement-level enrichment sections.
@@ -192,6 +203,55 @@ function buildBody(vm: EngagementViewModel): string {
   }
 
   return parts.join("\n\n");
+}
+
+/**
+ * Build one per-host markdown block (P1-F PR 3).
+ *
+ *   ## Host: dc01.htb (10.10.10.5) · primary
+ *
+ *   ## Ports
+ *   | Port | Proto | … |
+ *
+ *   ## Port 88/tcp — kerberos-sec
+ *   …
+ *
+ *   ## Host Scripts            (when this host has scripts)
+ *
+ * Heading levels are kept at H2 inside the host block (same as legacy
+ * single-host layout). Markdown readers/renderers tolerate sibling H2s
+ * and rely on the `## Host:` prefix as a visual section break — chasing
+ * a strict H2→H3 hierarchy here would force every sub-section helper
+ * (NSE/AR/Commands/Checklist/Notes) to grow a `level` parameter, which
+ * is more refactor than this PR is meant to carry. PR 4 can revisit if
+ * Obsidian outlines turn out noisy in practice.
+ */
+function buildHostBlock(hvm: HostViewModel): string {
+  const parts: string[] = [buildHostHeading(hvm)];
+  parts.push(buildPortsTable(hvm.ports));
+  for (const portVm of hvm.ports) {
+    parts.push(buildPortSection(portVm));
+  }
+  if (hvm.hostScripts.length > 0) {
+    parts.push(buildHostScriptsSection(hvm.hostScripts));
+  }
+  return parts.join("\n\n");
+}
+
+/**
+ * Format the per-host H2 heading.
+ *
+ *   ## Host: dc01.htb (10.10.10.5) · primary
+ *   ## Host: 10.10.10.6
+ *
+ * Hostname is omitted when null; the `· primary` suffix marks the host
+ * that the engagement was originally bound to.
+ */
+function buildHostHeading(hvm: HostViewModel): string {
+  const { ip, hostname, is_primary } = hvm.host;
+  const display = hostname ? `${hostname} (${ip})` : ip;
+  const suffix = is_primary ? " · primary" : "";
+  return `## Host: ${display}${suffix}`;
 }
 
 function buildExtraPortsSection(vm: EngagementViewModel): string | null {
@@ -271,14 +331,14 @@ function buildPrePostScriptsSection(vm: EngagementViewModel): string | null {
 // Summary table
 // ---------------------------------------------------------------------------
 
-function buildPortsTable(vm: EngagementViewModel): string {
+function buildPortsTable(ports: PortViewModel[]): string {
   const lines: string[] = [
     "## Ports",
     "",
     "| Port | Proto | Service | Version | Done |",
     "|------|-------|---------|---------|------|",
   ];
-  for (const p of vm.ports) {
+  for (const p of ports) {
     const service = p.port.service ?? "";
     const versionText = joinProductVersion(p.port.product, p.port.version);
     const doneCount = p.kbChecks.filter(
@@ -415,8 +475,8 @@ function renderCpeReasonSection(p: PortViewModel): string | null {
 // Host scripts section
 // ---------------------------------------------------------------------------
 
-function buildHostScriptsSection(vm: EngagementViewModel): string {
-  const blocks = vm.hostScripts.map((s) => {
+function buildHostScriptsSection(scripts: PortScript[]): string {
+  const blocks = scripts.map((s) => {
     return `**${s.script_id}**\n\n\`\`\`text\n${s.output}\n\`\`\``;
   });
   return `## Host Scripts\n\n${blocks.join("\n\n")}`;

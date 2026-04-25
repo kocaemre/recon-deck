@@ -5,6 +5,10 @@
  * but as a Next.js 15 RSC using Tailwind `print:` variants so the user can
  * hit Ctrl/Cmd+P and save as PDF through their browser's native print dialog.
  *
+ * P1-F PR 3: multi-host engagements wrap each host's port table + per-port
+ * sections inside a `<HostBlock>`. Single-host engagements skip the host
+ * wrapper entirely so the legacy print layout stays untouched.
+ *
  * Design refs:
  *   D-17: renders engagement view model with Tailwind print: variants
  *   D-18: break-inside:avoid-page on each port's <section>
@@ -29,6 +33,11 @@ import path from "node:path";
 import { db, getById, getWordlistOverridesMap } from "@/lib/db";
 import { loadKnowledgeBase } from "@/lib/kb";
 import { loadEngagementForExport } from "@/lib/export/view-model";
+import type {
+  HostViewModel,
+  PortViewModel,
+} from "@/lib/export/view-model";
+import type { PortScript } from "@/lib/db/schema";
 
 // Load KB once at module level (same pattern as app/engagements/[id]/page.tsx)
 const kb = loadKnowledgeBase({
@@ -62,16 +71,7 @@ export default async function ReportPage({ params }: PageProps) {
   const vm = loadEngagementForExport(engagement, kb, getWordlistOverridesMap(db));
   const eng = vm.engagement;
 
-  // Pre-computed done/total per port for the summary table
-  const portRows = vm.ports.map((pd) => {
-    const versionText = [pd.port.product, pd.port.version]
-      .filter(Boolean)
-      .join(" ");
-    const done = pd.kbChecks.filter((c) => pd.checkMap.get(c.key) === true)
-      .length;
-    const total = pd.kbChecks.length;
-    return { pd, versionText, done, total };
-  });
+  const isMultiHost = vm.hosts.length > 1;
 
   return (
     <div className="mx-auto max-w-[900px] px-8 py-8 print:block print:p-0 print:text-black">
@@ -117,23 +117,89 @@ export default async function ReportPage({ params }: PageProps) {
           <strong>Coverage:</strong> {vm.coverage}% ({vm.doneChecks}/
           {vm.totalChecks})
         </p>
+        {isMultiHost && (
+          <p className="text-sm">
+            <strong>Hosts:</strong> {vm.hosts.length}
+          </p>
+        )}
       </header>
 
-      {/* Ports summary table */}
-      <section className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold">Ports</h2>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th className="border px-2 py-1 text-left">Port</th>
-              <th className="border px-2 py-1 text-left">Proto</th>
-              <th className="border px-2 py-1 text-left">Service</th>
-              <th className="border px-2 py-1 text-left">Version</th>
-              <th className="border px-2 py-1 text-left">Done</th>
-            </tr>
-          </thead>
-          <tbody>
-            {portRows.map(({ pd, versionText, done, total }) => (
+      {isMultiHost ? (
+        // P1-F PR 3: per-host blocks. Each host gets its own H2 header,
+        // ports table, port sections, and host scripts subsection.
+        vm.hosts.map((hvm) => <HostBlock key={hvm.host.id} hvm={hvm} />)
+      ) : (
+        // Single-host: legacy flat layout (no host wrapper).
+        <>
+          <PortsSummaryTable ports={vm.ports} />
+          <div className="print:block">
+            {vm.ports.map((pd) => (
+              <PortBlock key={pd.port.id} pd={pd} />
+            ))}
+          </div>
+          {vm.hostScripts.length > 0 && (
+            <HostScriptsSection scripts={vm.hostScripts} />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components (P1-F PR 3 extraction)
+// ---------------------------------------------------------------------------
+
+function HostBlock({ hvm }: { hvm: HostViewModel }) {
+  const { ip, hostname, is_primary } = hvm.host;
+  const display = hostname ? `${hostname} (${ip})` : ip;
+  return (
+    <div className="mb-10">
+      <h2 className="mb-3 border-b pb-1 text-xl font-semibold">
+        Host: {display}
+        {is_primary && (
+          <span className="ml-2 text-sm font-normal text-muted-foreground">
+            · primary
+          </span>
+        )}
+      </h2>
+      <PortsSummaryTable ports={hvm.ports} />
+      <div className="print:block">
+        {hvm.ports.map((pd) => (
+          <PortBlock key={pd.port.id} pd={pd} />
+        ))}
+      </div>
+      {hvm.hostScripts.length > 0 && (
+        <HostScriptsSection scripts={hvm.hostScripts} />
+      )}
+    </div>
+  );
+}
+
+function PortsSummaryTable({ ports }: { ports: PortViewModel[] }) {
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 text-lg font-semibold">Ports</h2>
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr>
+            <th className="border px-2 py-1 text-left">Port</th>
+            <th className="border px-2 py-1 text-left">Proto</th>
+            <th className="border px-2 py-1 text-left">Service</th>
+            <th className="border px-2 py-1 text-left">Version</th>
+            <th className="border px-2 py-1 text-left">Done</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ports.map((pd) => {
+            const versionText = [pd.port.product, pd.port.version]
+              .filter(Boolean)
+              .join(" ");
+            const done = pd.kbChecks.filter(
+              (c) => pd.checkMap.get(c.key) === true,
+            ).length;
+            const total = pd.kbChecks.length;
+            return (
               <tr key={pd.port.id}>
                 <td className="border px-2 py-1">{pd.port.port}</td>
                 <td className="border px-2 py-1">{pd.port.protocol}</td>
@@ -143,147 +209,35 @@ export default async function ReportPage({ params }: PageProps) {
                   {done}/{total}
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
 
-      {/*
-        Per-port sections. Pitfall 4 mitigation: container is a block flow in
-        print context so `print:break-inside-avoid-page` on each <section> is
-        honoured by Chromium's fragmentation engine (flex/grid containers have
-        historically caused the browser to ignore the fragmentation hint).
-      */}
-      <div className="print:block">
-        {vm.ports.map((pd) => {
-          const p = pd.port;
-          const versionBits = [p.product, p.version].filter(Boolean).join(" ");
-          const notesBody =
-            p.notes && p.notes.body.trim() !== "" ? p.notes.body : null;
+function PortBlock({ pd }: { pd: PortViewModel }) {
+  const p = pd.port;
+  const versionBits = [p.product, p.version].filter(Boolean).join(" ");
+  const notesBody =
+    p.notes && p.notes.body.trim() !== "" ? p.notes.body : null;
 
-          return (
-            <section
-              key={p.id}
-              className="mb-8 print:break-inside-avoid-page"
-              style={{ breakInside: "avoid-page" }}
-            >
-              <h2 className="border-b pb-1 text-lg font-semibold">
-                Port {p.port}/{p.protocol} — {p.service ?? "unknown"}
-                {versionBits && ` (${versionBits})`}
-              </h2>
+  return (
+    <section
+      className="mb-8 print:break-inside-avoid-page"
+      style={{ breakInside: "avoid-page" }}
+    >
+      <h2 className="border-b pb-1 text-lg font-semibold">
+        Port {p.port}/{p.protocol} — {p.service ?? "unknown"}
+        {versionBits && ` (${versionBits})`}
+      </h2>
 
-              {/* 1. NSE Output */}
-              {pd.nseScripts.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">NSE Output</h3>
-                  {pd.nseScripts.map((s) => (
-                    <div key={s.id} className="mt-2">
-                      <div className="font-mono text-xs font-semibold">
-                        {s.script_id}
-                      </div>
-                      <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs print:bg-gray-100">
-                        {s.output}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 2. AutoRecon Files */}
-              {pd.arFiles.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">AutoRecon Files</h3>
-                  {pd.arFiles.map((f, i) => (
-                    <div key={i} className="mt-2">
-                      <div className="font-mono text-xs font-semibold">
-                        {f.filename}
-                      </div>
-                      <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs print:bg-gray-100">
-                        {f.content}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 3. Commands (KB) */}
-              {pd.kbCommands.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">Commands</h3>
-                  <ul className="mt-1 space-y-1">
-                    {pd.kbCommands.map((c, i) => (
-                      <li key={i} className="text-sm">
-                        <strong>{c.label}:</strong>{" "}
-                        <code className="font-mono text-xs">{c.command}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* 4. AutoRecon Commands */}
-              {pd.arCommands.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">AutoRecon Commands</h3>
-                  <ul className="mt-1 space-y-1">
-                    {pd.arCommands.map((c, i) => (
-                      <li key={i} className="text-sm">
-                        <strong>{c.label}:</strong>{" "}
-                        <code className="font-mono text-xs">{c.command}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* 5. Checklist */}
-              {pd.kbChecks.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">Checklist</h3>
-                  <ul className="mt-1 space-y-1">
-                    {pd.kbChecks.map((c) => {
-                      const checked = pd.checkMap.get(c.key) === true;
-                      return (
-                        <li key={c.key} className="text-sm">
-                          <span
-                            className={
-                              checked
-                                ? "text-green-600 print:text-green-700"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {checked ? GLYPH_DONE : GLYPH_PENDING}
-                          </span>{" "}
-                          {c.label}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-
-              {/* 6. Notes — D-06: skip empty (null OR whitespace-only body). */}
-              {notesBody && (
-                <div className="mt-3">
-                  <h3 className="text-sm font-semibold">Notes</h3>
-                  <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 text-sm print:bg-gray-100">
-                    {notesBody}
-                  </pre>
-                </div>
-              )}
-            </section>
-          );
-        })}
-      </div>
-
-      {/* Host-level scripts (if any) */}
-      {vm.hostScripts.length > 0 && (
-        <section
-          className="mb-8 print:break-inside-avoid-page"
-          style={{ breakInside: "avoid-page" }}
-        >
-          <h2 className="border-b pb-1 text-lg font-semibold">Host Scripts</h2>
-          {vm.hostScripts.map((s) => (
+      {/* 1. NSE Output */}
+      {pd.nseScripts.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">NSE Output</h3>
+          {pd.nseScripts.map((s) => (
             <div key={s.id} className="mt-2">
               <div className="font-mono text-xs font-semibold">
                 {s.script_id}
@@ -293,8 +247,108 @@ export default async function ReportPage({ params }: PageProps) {
               </pre>
             </div>
           ))}
-        </section>
+        </div>
       )}
-    </div>
+
+      {/* 2. AutoRecon Files */}
+      {pd.arFiles.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">AutoRecon Files</h3>
+          {pd.arFiles.map((f, i) => (
+            <div key={i} className="mt-2">
+              <div className="font-mono text-xs font-semibold">{f.filename}</div>
+              <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs print:bg-gray-100">
+                {f.content}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 3. Commands (KB) */}
+      {pd.kbCommands.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">Commands</h3>
+          <ul className="mt-1 space-y-1">
+            {pd.kbCommands.map((c, i) => (
+              <li key={i} className="text-sm">
+                <strong>{c.label}:</strong>{" "}
+                <code className="font-mono text-xs">{c.command}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 4. AutoRecon Commands */}
+      {pd.arCommands.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">AutoRecon Commands</h3>
+          <ul className="mt-1 space-y-1">
+            {pd.arCommands.map((c, i) => (
+              <li key={i} className="text-sm">
+                <strong>{c.label}:</strong>{" "}
+                <code className="font-mono text-xs">{c.command}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 5. Checklist */}
+      {pd.kbChecks.length > 0 && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">Checklist</h3>
+          <ul className="mt-1 space-y-1">
+            {pd.kbChecks.map((c) => {
+              const checked = pd.checkMap.get(c.key) === true;
+              return (
+                <li key={c.key} className="text-sm">
+                  <span
+                    className={
+                      checked
+                        ? "text-green-600 print:text-green-700"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {checked ? GLYPH_DONE : GLYPH_PENDING}
+                  </span>{" "}
+                  {c.label}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* 6. Notes — D-06: skip empty (null OR whitespace-only body). */}
+      {notesBody && (
+        <div className="mt-3">
+          <h3 className="text-sm font-semibold">Notes</h3>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 text-sm print:bg-gray-100">
+            {notesBody}
+          </pre>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HostScriptsSection({ scripts }: { scripts: PortScript[] }) {
+  return (
+    <section
+      className="mb-8 print:break-inside-avoid-page"
+      style={{ breakInside: "avoid-page" }}
+    >
+      <h2 className="border-b pb-1 text-lg font-semibold">Host Scripts</h2>
+      {scripts.map((s) => (
+        <div key={s.id} className="mt-2">
+          <div className="font-mono text-xs font-semibold">{s.script_id}</div>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-muted p-2 font-mono text-xs print:bg-gray-100">
+            {s.output}
+          </pre>
+        </div>
+      ))}
+    </section>
   );
 }
