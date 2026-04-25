@@ -369,6 +369,13 @@ export default async function EngagementPage({
         engagementId={engagement.id}
         ports={paletteContextPorts}
         kbCommands={paletteContextCommands}
+        hosts={engagement.hosts.map((h) => ({
+          id: h.id,
+          ip: h.ip,
+          hostname: h.hostname,
+          is_primary: h.is_primary,
+        }))}
+        activeHostId={activeHostId}
       />
 
       <KeyboardShortcutHandler
@@ -423,12 +430,18 @@ export default async function EngagementPage({
       <FindingsPanel
         engagementId={engagement.id}
         findings={engagement.findings}
-        ports={portData.map((p) => ({
-          id: p.id,
-          port: p.port,
-          protocol: p.protocol,
-          service: p.service,
-        }))}
+        ports={engagement.ports.map((p) => {
+          const host = engagement.hosts.find((h) => h.id === p.host_id);
+          return {
+            id: p.id,
+            port: p.port,
+            protocol: p.protocol,
+            service: p.service,
+            hostIp: host?.ip ?? null,
+            hostHostname: host?.hostname ?? null,
+          };
+        })}
+        isMultiHost={isMultiHost}
       />
 
       <EngagementExtras

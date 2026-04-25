@@ -99,6 +99,20 @@ interface UIState {
       risk: string;
     }>;
     kbCommands: Array<{ portId: number; label: string; command: string }>;
+    /**
+     * P1-F PR 4-B: hosts in the engagement, drives the palette's "Switch
+     * to host: …" group. Empty/undefined for single-host engagements (no
+     * group rendered). Active host is identified by `?host=<id>` and
+     * resolved server-side in the page route.
+     */
+    hosts?: Array<{
+      id: number;
+      ip: string;
+      hostname: string | null;
+      is_primary: boolean;
+    }>;
+    /** Active host id when set — chip highlight uses this. */
+    activeHostId?: number | null;
   } | null;
   /** Set or clear the engagement context. */
   setEngagementContext: (ctx: UIState["engagementContext"]) => void;

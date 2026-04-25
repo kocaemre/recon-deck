@@ -152,6 +152,44 @@ export function CommandPalette() {
 
           {onEngagementPage && engagementContext && (
             <>
+              {/* P1-F PR 4-B: host switcher group — only multi-host. */}
+              {engagementContext.hosts &&
+                engagementContext.hosts.length > 1 && (
+                  <CommandGroup
+                    heading="Hosts"
+                    className="[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-[10.5px] [&_[cmdk-group-heading]]:px-[14px] [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1"
+                  >
+                    {engagementContext.hosts.map((h) => {
+                      const display = h.hostname
+                        ? `${h.hostname} (${h.ip})`
+                        : h.ip;
+                      const isActive =
+                        engagementContext.activeHostId === h.id;
+                      return (
+                        <PaletteRow
+                          key={`host-${h.id}`}
+                          value={`switch host ${h.ip} ${h.hostname ?? ""}`}
+                          onSelect={() => {
+                            router.push(
+                              `/engagements/${engagementContext.engagementId}?host=${h.id}`,
+                            );
+                            setOpen(false);
+                          }}
+                          label={display}
+                          hint={
+                            h.is_primary
+                              ? "primary"
+                              : isActive
+                                ? "active"
+                                : ""
+                          }
+                          actionLabel={isActive ? "Active" : "Switch"}
+                        />
+                      );
+                    })}
+                  </CommandGroup>
+                )}
+
               <CommandGroup
                 heading="Ports"
                 className="[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-[10.5px] [&_[cmdk-group-heading]]:px-[14px] [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1"

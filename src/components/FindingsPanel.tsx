@@ -47,13 +47,30 @@ const SEVERITY_VAR: Record<Severity, string> = {
 interface FindingsPanelProps {
   engagementId: number;
   findings: Finding[];
-  ports: Array<{ id: number; port: number; protocol: string; service: string | null }>;
+  /**
+   * P1-F PR 4-B: every port across the entire engagement (not just the
+   * active host). Findings span the whole engagement; restricting to the
+   * active host's ports would hide findings from other hosts. Each port
+   * carries optional `hostIp`/`hostHostname` so multi-host engagements can
+   * label "DC01:445" instead of just "445".
+   */
+  ports: Array<{
+    id: number;
+    port: number;
+    protocol: string;
+    service: string | null;
+    hostIp?: string | null;
+    hostHostname?: string | null;
+  }>;
+  /** Multi-host: render "<host>:<port>" labels in the FindingRow. */
+  isMultiHost?: boolean;
 }
 
 export function FindingsPanel({
   engagementId,
   findings,
   ports,
+  isMultiHost = false,
 }: FindingsPanelProps) {
   const [editing, setEditing] = useState<Finding | "new" | null>(null);
   const router = useRouter();
@@ -189,6 +206,7 @@ export function FindingsPanel({
                               ? portMap.get(f.port_id)
                               : undefined
                           }
+                          isMultiHost={isMultiHost}
                           onEdit={() => setEditing(f)}
                           onDelete={() => onDelete(f)}
                         />
@@ -253,16 +271,31 @@ function SeverityCountBar({ findings }: { findings: Finding[] }) {
 function FindingRow({
   finding,
   portInfo,
+  isMultiHost,
   onEdit,
   onDelete,
 }: {
   finding: Finding;
   portInfo:
-    | { port: number; protocol: string; service: string | null }
+    | {
+        port: number;
+        protocol: string;
+        service: string | null;
+        hostIp?: string | null;
+        hostHostname?: string | null;
+      }
     | undefined;
+  isMultiHost: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  // P1-F PR 4-B: in multi-host engagements the port chip prefixes the
+  // host's hostname (or IP) so operators can distinguish "DC01:445" from
+  // "ws01:445" at a glance.
+  const hostLabel =
+    isMultiHost && portInfo
+      ? portInfo.hostHostname ?? portInfo.hostIp ?? null
+      : null;
   return (
     <div
       className="flex items-start gap-3"
@@ -288,6 +321,11 @@ function FindingRow({
                 color: "var(--fg-muted)",
               }}
             >
+              {hostLabel && (
+                <span style={{ marginRight: 4, color: "var(--accent)" }}>
+                  {hostLabel}:
+                </span>
+              )}
               {portInfo.port}/{portInfo.protocol}
               {portInfo.service && (
                 <span style={{ marginLeft: 4, color: "var(--fg-subtle)" }}>
