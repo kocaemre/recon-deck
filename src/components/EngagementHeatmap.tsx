@@ -67,6 +67,8 @@ interface PortTileData {
   kbCommands: Array<{ label: string; command: string }>;
   kbChecks: Array<{ key: string; label: string }>;
   kbResources: Array<{ title: string; url: string }>;
+  /** P2: KB known_vulns matches for this port's product+version. */
+  knownVulns?: Array<{ match: string; note: string; link: string }>;
   arFiles: Array<{ filename: string; content: string }>;
   arCommands: Array<{ label: string; command: string }>;
   /** v2/P0-D: user-defined snippets that matched this port. */
@@ -302,6 +304,7 @@ export function EngagementHeatmap({
           kbCommands={selected.kbCommands}
           kbChecks={selected.kbChecks}
           kbResources={selected.kbResources}
+          knownVulns={selected.knownVulns}
           arFiles={selected.arFiles}
           arCommands={selected.arCommands}
           userCommands={selected.userCommands}

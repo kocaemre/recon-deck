@@ -54,6 +54,11 @@ interface PortDetailPaneProps {
    * port switches yet.
    */
   exploitQuery?: string;
+  /**
+   * P2 follow-up: KB known_vulns auto-matched against the port's
+   * product+version. Empty array → section suppressed.
+   */
+  knownVulns?: Array<{ match: string; note: string; link: string }>;
 }
 
 export function PortDetailPane({
@@ -71,6 +76,7 @@ export function PortDetailPane({
   cpe,
   evidence = [],
   exploitQuery,
+  knownVulns = [],
 }: PortDetailPaneProps) {
   const checkMap = new Map(checks.map((c) => [c.check_key, c.checked]));
 
@@ -84,6 +90,57 @@ export function PortDetailPane({
     >
       {/* Left column */}
       <div className="flex flex-col gap-4">
+        {knownVulns.length > 0 && (
+          <Section label="Known Vulnerabilities" count={knownVulns.length}>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {knownVulns.map((v, i) => (
+                <li
+                  key={i}
+                  style={{
+                    padding: "6px 8px",
+                    borderTop: i === 0 ? "none" : "1px solid var(--border-subtle)",
+                    fontSize: 12,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 9.5,
+                        letterSpacing: "0.06em",
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: "transparent",
+                        border: "1px solid var(--risk-high)",
+                        color: "var(--risk-high)",
+                      }}
+                      title={`KB match string: ${v.match}`}
+                    >
+                      {v.match}
+                    </span>
+                    <span style={{ color: "var(--fg)", flex: 1, minWidth: 0 }}>
+                      {v.note}
+                    </span>
+                    <a
+                      href={v.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        color: "var(--accent)",
+                        fontSize: 11,
+                        textDecoration: "none",
+                      }}
+                      title={safeHostname(v.link) || "external link"}
+                    >
+                      ref ↗
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
         {exploitQuery && (
           <ExploitsSection key={`exploits-${exploitQuery}`} query={exploitQuery} />
         )}

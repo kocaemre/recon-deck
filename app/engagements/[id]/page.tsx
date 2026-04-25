@@ -267,6 +267,23 @@ export default async function EngagementPage({
       url: r.url,
     }));
 
+    // P2 follow-up: KB known_vulns auto-match. Each KB entry can list
+    // version-specific advisories (e.g. "Apache 2.4.49" → CVE-2021-41773).
+    // Surface only the entries whose `match` string is a case-insensitive
+    // substring of the port's product+version line — substrings without a
+    // strong anchor ("Apache" alone) would over-match, so the KB authors
+    // are expected to scope their `match` strings tightly.
+    const productVersion = [p.product, p.version]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const knownVulns = (kbEntry.known_vulns ?? [])
+      .filter((v) =>
+        productVersion.length > 0 &&
+        productVersion.includes(v.match.toLowerCase()),
+      )
+      .map((v) => ({ match: v.match, note: v.note, link: v.link }));
+
     const checkMap = new Map(p.checks.map((c) => [c.check_key, c.checked]));
     totalChecks += kbChecks.length;
     doneChecks += kbChecks.filter((c) => checkMap.get(c.key) === true).length;
@@ -326,6 +343,7 @@ export default async function EngagementPage({
       kbCommands,
       kbChecks,
       kbResources,
+      knownVulns,
       arFiles,
       arCommands,
       userCommands,
