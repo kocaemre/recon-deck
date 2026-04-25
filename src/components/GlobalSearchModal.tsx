@@ -24,6 +24,8 @@ interface SearchHit {
   title: string;
   snippet: string;
   rank: number;
+  /** P1-F PR 4 follow-up: host name (or IP) for port-bound hits. */
+  hostLabel: string | null;
 }
 
 const KIND_LABEL: Record<SearchHit["kind"], string> = {
@@ -314,6 +316,27 @@ export function GlobalSearchModal() {
                       >
                         {KIND_LABEL[h.kind]}
                       </span>
+                      {/* P1-F PR 4 follow-up: host label for port-bound hits
+                          (multi-host engagements). Single-host hits and
+                          engagement-level results render hostLabel === null
+                          and skip this chip entirely. */}
+                      {h.hostLabel && (
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: 10,
+                            padding: "1px 6px",
+                            borderRadius: 3,
+                            background: "transparent",
+                            border: "1px solid var(--accent)",
+                            color: "var(--accent)",
+                            letterSpacing: "0.06em",
+                          }}
+                          title="Host"
+                        >
+                          {h.hostLabel}
+                        </span>
+                      )}
                       <span
                         style={{
                           fontSize: 13,

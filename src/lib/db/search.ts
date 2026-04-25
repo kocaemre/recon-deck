@@ -32,6 +32,13 @@ export interface SearchHit {
   /** snippet with <mark> highlights around the match. */
   snippet: string;
   rank: number;
+  /**
+   * P1-F PR 4 follow-up: host label for port/script/finding hits in
+   * multi-host engagements. `hostname` if non-null, otherwise the IP.
+   * `null` when the hit isn't bound to a port (engagement/note kinds, or
+   * a finding/script with port_id=null).
+   */
+  hostLabel: string | null;
 }
 
 /**
@@ -65,6 +72,12 @@ export function searchEngagements(
   // Join search_index back to engagements to surface engagement name in hits.
   // `bm25(search_index)` returns lower-is-better — we sort ASC and surface as
   // `rank` (negated for downstream "higher is better" UX if needed).
+  //
+  // P1-F PR 4 follow-up: `host_label` correlates each port-bound hit back
+  // to its host so the global search modal can render "DC01" / "ws01.htb"
+  // alongside the snippet. Engagement-/note-kind hits return NULL; finding
+  // and script hits with no port (port_id=null) likewise return NULL via
+  // the LEFT JOIN chain.
   const rows = db.all(
     sql`
       SELECT
@@ -74,7 +87,30 @@ export function searchEngagements(
         si.ref_id         AS ref_id,
         si.title          AS title,
         snippet(search_index, 4, '<mark>', '</mark>', '…', 16) AS snippet,
-        bm25(search_index) AS rank
+        bm25(search_index) AS rank,
+        CASE
+          WHEN si.kind = 'port' THEN (
+            SELECT COALESCE(h.hostname, h.ip)
+            FROM ports p
+            LEFT JOIN hosts h ON h.id = p.host_id
+            WHERE p.id = si.ref_id
+          )
+          WHEN si.kind = 'script' THEN (
+            SELECT COALESCE(h.hostname, h.ip)
+            FROM port_scripts ps
+            LEFT JOIN ports p ON p.id = ps.port_id
+            LEFT JOIN hosts h ON h.id = p.host_id
+            WHERE ps.id = si.ref_id
+          )
+          WHEN si.kind = 'finding' THEN (
+            SELECT COALESCE(h.hostname, h.ip)
+            FROM findings f
+            LEFT JOIN ports p ON p.id = f.port_id
+            LEFT JOIN hosts h ON h.id = p.host_id
+            WHERE f.id = si.ref_id
+          )
+          ELSE NULL
+        END AS host_label
       FROM search_index si
       JOIN engagements e ON e.id = si.engagement_id
       WHERE search_index MATCH ${fts}
@@ -91,6 +127,7 @@ export function searchEngagements(
     title: String(r.title ?? ""),
     snippet: String(r.snippet ?? ""),
     rank: Number(r.rank),
+    hostLabel: r.host_label != null ? String(r.host_label) : null,
   }));
 }
 
@@ -102,4 +139,5 @@ interface RawHit {
   title: string | null;
   snippet: string | null;
   rank: number;
+  host_label: string | null;
 }
