@@ -29,22 +29,14 @@
  */
 
 import { notFound } from "next/navigation";
-import path from "node:path";
 import { db, getById, getWordlistOverridesMap } from "@/lib/db";
-import { loadKnowledgeBase } from "@/lib/kb";
+import { getKb } from "@/lib/kb";
 import { loadEngagementForExport } from "@/lib/export/view-model";
 import type {
   HostViewModel,
   PortViewModel,
 } from "@/lib/export/view-model";
 import type { PortScript } from "@/lib/db/schema";
-
-// Load KB once at module level (same pattern as app/engagements/[id]/page.tsx)
-const kb = loadKnowledgeBase({
-  shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
-  shippedDefaultFile: path.join(process.cwd(), "knowledge", "default.yaml"),
-  userDir: process.env.RECON_KB_USER_DIR ?? undefined,
-});
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -65,6 +57,10 @@ export default async function ReportPage({ params }: PageProps) {
   if (!engagement) {
     notFound();
   }
+
+  // KB resolves through the cached singleton — picks up user YAML
+  // edits since the last fs.watch tick without a server restart.
+  const kb = getKb();
 
   // P1-E: thread wordlist overrides through so the printed PDF matches the
   // engagement page's resolved {WORDLIST_*} paths.

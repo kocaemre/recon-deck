@@ -12,6 +12,7 @@ import "server-only";
  */
 
 export { loadKnowledgeBase, type KnowledgeBase } from "./loader";
+export { getKb, invalidateKb, __resetKbCacheForTests } from "./cached";
 export { matchPort } from "./matcher";
 export {
   KbEntrySchema,

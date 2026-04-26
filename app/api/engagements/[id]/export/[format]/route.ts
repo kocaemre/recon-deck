@@ -28,10 +28,9 @@
  * convention; the guard is only required for `src/lib/**` modules.
  */
 
-import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { db, getById, getWordlistOverridesMap } from "@/lib/db";
-import { loadKnowledgeBase } from "@/lib/kb";
+import { getKb } from "@/lib/kb";
 import { loadEngagementForExport } from "@/lib/export/view-model";
 import { generateMarkdown } from "@/lib/export/markdown";
 import { generateJson } from "@/lib/export/json";
@@ -39,16 +38,6 @@ import { generateHtml } from "@/lib/export/html";
 import { generateFindingsCsv } from "@/lib/export/findings-csv";
 import { generateSysReptor } from "@/lib/export/sysreptor";
 import { generatePwndoc } from "@/lib/export/pwndoc";
-
-// Module-level KB cache — matches app/engagements/[id]/page.tsx. Reading the
-// shipped YAML on every request would add 50-200ms per export (RESEARCH.md
-// Pitfall 5). `loadKnowledgeBase` is safe to call at module scope because it
-// is synchronous and only touches filesystem on first invocation.
-const kb = loadKnowledgeBase({
-  shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
-  shippedDefaultFile: path.join(process.cwd(), "knowledge", "default.yaml"),
-  userDir: process.env.RECON_KB_USER_DIR ?? undefined,
-});
 
 // Format dispatch table — Content-Type values are locked by D-23.
 // P1-H: csv / sysreptor / pwndoc added as reporting-tool feeds.
@@ -139,7 +128,13 @@ export async function GET(
   try {
     // P1-E: pass wordlist overrides so exported markdown/json/html embeds the
     // operator's customized {WORDLIST_*} paths (DB read is cheap — ~tens of bytes).
-    const vm = loadEngagementForExport(engagement, kb, getWordlistOverridesMap(db));
+    // KB resolves through the cached singleton so user YAML edits surface
+    // in exports without a server restart.
+    const vm = loadEngagementForExport(
+      engagement,
+      getKb(),
+      getWordlistOverridesMap(db),
+    );
     switch (format) {
       case "markdown":
         body = generateMarkdown(vm);

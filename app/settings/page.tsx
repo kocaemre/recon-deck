@@ -61,6 +61,11 @@ export default function SettingsIndexPage() {
             title="Custom commands"
             description="Personal command snippets surfaced alongside KB commands."
           />
+          <SettingsLink
+            href="/settings/kb"
+            title="KB editor"
+            description="Validate and save user knowledge-base entries against the schema. Hot-reloads."
+          />
         </div>
       </section>
 

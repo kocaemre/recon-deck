@@ -29,6 +29,10 @@ vi.mock("@/lib/db", () => ({
 // Mock the KB loader so no real YAML reads occur during tests.
 vi.mock("@/lib/kb", () => ({
   loadKnowledgeBase: () => ({}),
+  // The route now reads through the cached singleton; mock returns an
+  // empty KB shell that matchPort below works against.
+  getKb: () => ({}),
+  invalidateKb: () => {},
   matchPort: () => ({
     commands: [],
     checks: [],

@@ -8,7 +8,6 @@
  */
 
 import { notFound } from "next/navigation";
-import path from "node:path";
 import {
   db,
   getById,
@@ -16,7 +15,7 @@ import {
   getWordlistOverridesMap,
   listScanHistory,
 } from "@/lib/db";
-import { loadKnowledgeBase, matchPort } from "@/lib/kb";
+import { getKb, matchPort } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { EngagementHeader } from "@/components/EngagementHeader";
 import { EngagementResetExpand } from "@/components/EngagementResetExpand";
@@ -34,12 +33,6 @@ import type {
   ScriptTable,
   ParsedScan,
 } from "@/lib/parser/types";
-
-const kb = loadKnowledgeBase({
-  shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
-  shippedDefaultFile: path.join(process.cwd(), "knowledge", "default.yaml"),
-  userDir: process.env.RECON_KB_USER_DIR ?? undefined,
-});
 
 function interpolateCommand(
   template: string,
@@ -72,6 +65,10 @@ export default async function EngagementPage({
 
   const engagement = getById(db, id);
   if (!engagement) notFound();
+
+  // KB resolves through the cached singleton — picks up user YAML
+  // edits since the last fs.watch tick without a server restart.
+  const kb = getKb();
 
   // P1-E: read once per render so every command (KB, AR, user) gets the
   // same {WORDLIST_*} resolution.

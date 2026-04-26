@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import path from "node:path";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -9,14 +8,8 @@ import { CheatSheetModal } from "@/components/CheatSheetModal";
 import { GlobalSearchModal } from "@/components/GlobalSearchModal";
 import { db, listSummaries } from "@/lib/db";
 import { ports as portsTable } from "@/lib/db/schema";
-import { loadKnowledgeBase, matchPort } from "@/lib/kb";
+import { getKb, matchPort } from "@/lib/kb";
 import { SCHEMA_VERSION_LABEL } from "@/lib/db/migration-version";
-
-const sidebarKb = loadKnowledgeBase({
-  shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
-  shippedDefaultFile: path.join(process.cwd(), "knowledge", "default.yaml"),
-  userDir: process.env.RECON_KB_USER_DIR ?? undefined,
-});
 
 const fontUI = Inter({
   subsets: ["latin"],
@@ -78,6 +71,9 @@ export default function RootLayout({
     portsByEngagement.set(p.engagement_id, list);
   }
 
+  // KB resolves through the cached singleton so user YAML edits picked
+  // up by fs.watch surface in the sidebar without a server restart.
+  const sidebarKb = getKb();
   const engagements = summaries.map((s) => {
     const enPorts = portsByEngagement.get(s.id) ?? [];
     let total = 0;
