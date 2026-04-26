@@ -116,11 +116,14 @@ export function EngagementHeader({
   const [hostname, setHostname] = useState(targetHostname ?? "");
   const [ipError, setIpError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [rescanOpen, setRescanOpen] = useState(false);
   const router = useRouter();
   const prevIpRef = useRef(targetIp);
   const prevHostnameRef = useRef(targetHostname ?? "");
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
+  // Lifted into the store so the CommandPalette's "Re-import" action can
+  // trigger the same modal without prop-drilling.
+  const rescanOpen = useUIStore((s) => s.rescanOpen);
+  const setRescanOpen = useUIStore((s) => s.setRescanOpen);
 
   async function handleTargetSave() {
     const trimmedIp = ip.trim();

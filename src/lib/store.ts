@@ -134,6 +134,16 @@ interface UIState {
   } | null;
   /** Stage a prefill — FindingsPanel auto-opens its modal when this is set. */
   setFindingPrefill: (prefill: UIState["findingPrefill"]) => void;
+
+  /**
+   * Re-import (rescan) modal open/closed. Lifted into the UI store so the
+   * CommandPalette ("Re-import" action) can trigger it without prop-drilling
+   * through the engagement header. EngagementHeader still owns the modal
+   * mount; both reads/writes flow through this slice.
+   */
+  rescanOpen: boolean;
+  /** Set the re-import modal open state. */
+  setRescanOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -200,4 +210,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   findingPrefill: null,
   setFindingPrefill: (prefill) => set({ findingPrefill: prefill }),
+
+  rescanOpen: false,
+  setRescanOpen: (open) => set({ rescanOpen: open }),
 }));

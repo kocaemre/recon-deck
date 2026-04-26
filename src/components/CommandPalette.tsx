@@ -57,7 +57,15 @@ export function CommandPalette() {
   const onEngagementPage =
     engagementContext !== null && /^\/engagements\/\d+/.test(pathname);
 
-  async function downloadExport(format: "markdown" | "json" | "html") {
+  async function downloadExport(
+    format:
+      | "markdown"
+      | "json"
+      | "html"
+      | "csv"
+      | "sysreptor"
+      | "pwndoc",
+  ) {
     if (!engagementContext) return;
     setOpen(false);
     try {
@@ -72,18 +80,87 @@ export function CommandPalette() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const ext = format === "markdown" ? "md" : format;
+      // Mirrors the API route's per-format extension (D-21). Keeping the
+      // map alongside the label table below so adding a format only
+      // touches one place.
+      const ext =
+        format === "markdown"
+          ? "md"
+          : format === "sysreptor"
+            ? "sysreptor.json"
+            : format === "pwndoc"
+              ? "pwndoc.yaml"
+              : format;
       a.download = `engagement-${engagementContext.engagementId}.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
       const label =
-        format === "markdown" ? "Markdown" : format === "json" ? "JSON" : "HTML";
+        format === "markdown"
+          ? "Markdown"
+          : format === "json"
+            ? "JSON"
+            : format === "html"
+              ? "HTML"
+              : format === "csv"
+                ? "CSV"
+                : format === "sysreptor"
+                  ? "SysReptor"
+                  : "PwnDoc";
       toast.success(`${label} exported`);
     } catch {
       toast.error("Export failed.");
     }
+  }
+
+  async function deleteEngagementAction() {
+    if (!engagementContext) return;
+    if (
+      !window.confirm(
+        "Delete this engagement? Wipes all ports, scripts, notes, evidence, and findings — cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setOpen(false);
+    try {
+      const res = await fetch(
+        `/api/engagements/${engagementContext.engagementId}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Delete failed.");
+        return;
+      }
+      toast.success("Engagement deleted");
+      router.push("/");
+    } catch {
+      toast.error("Delete failed.");
+    }
+  }
+
+  function openAddFinding() {
+    if (!engagementContext) return;
+    setOpen(false);
+    // Stage an empty prefill — FindingsPanel's effect picks this up and
+    // opens its modal in "new" mode with default severity. Scrolling
+    // happens via the modal's own focus; the prefill's portId is null
+    // so the finding defaults to engagement-level scope.
+    useUIStore.getState().setFindingPrefill({
+      title: "",
+      severity: "medium",
+      cve: null,
+      description: "",
+      portId: null,
+    });
+  }
+
+  function openRescan() {
+    if (!engagementContext) return;
+    setOpen(false);
+    useUIStore.getState().setRescanOpen(true);
   }
 
   function openPrintReport() {
@@ -98,7 +175,9 @@ export function CommandPalette() {
 
   const portCount = engagementContext?.ports.length ?? 0;
   const commandCount = engagementContext?.kbCommands.length ?? 0;
-  const actionCount = onEngagementPage ? 4 : 1;
+  // Engagement-scoped: Add finding, Re-import, 6 export formats, Print,
+  // Delete = 10. Off-engagement: just the 2 navigation rows.
+  const actionCount = onEngagementPage ? 10 : 2;
 
   return (
     <CommandDialog
@@ -146,6 +225,16 @@ export function CommandPalette() {
               }}
               label="New engagement"
               hint="/"
+              actionLabel="Go"
+            />
+            <PaletteRow
+              value="settings preferences config"
+              onSelect={() => {
+                router.push("/settings");
+                setOpen(false);
+              }}
+              label="Settings"
+              hint="/settings"
               actionLabel="Go"
             />
           </CommandGroup>
@@ -245,6 +334,20 @@ export function CommandPalette() {
                 className="[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-[10.5px] [&_[cmdk-group-heading]]:px-[14px] [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1"
               >
                 <PaletteRow
+                  value="add finding new"
+                  onSelect={openAddFinding}
+                  label="Add finding"
+                  hint="engagement-level"
+                  actionLabel="Run"
+                />
+                <PaletteRow
+                  value="re-import rescan reimport"
+                  onSelect={openRescan}
+                  label="Re-import nmap output"
+                  hint="rescan"
+                  actionLabel="Run"
+                />
+                <PaletteRow
                   onSelect={() => downloadExport("markdown")}
                   label="Export as Markdown"
                   hint=".md"
@@ -263,10 +366,36 @@ export function CommandPalette() {
                   actionLabel="Run"
                 />
                 <PaletteRow
+                  onSelect={() => downloadExport("csv")}
+                  label="Export findings as CSV"
+                  hint=".csv"
+                  actionLabel="Run"
+                />
+                <PaletteRow
+                  onSelect={() => downloadExport("sysreptor")}
+                  label="Export as SysReptor"
+                  hint=".sysreptor.json"
+                  actionLabel="Run"
+                />
+                <PaletteRow
+                  onSelect={() => downloadExport("pwndoc")}
+                  label="Export as PwnDoc"
+                  hint=".pwndoc.yaml"
+                  actionLabel="Run"
+                />
+                <PaletteRow
                   onSelect={openPrintReport}
                   label="Print / PDF view"
                   hint="report"
                   actionLabel="Run"
+                />
+                <PaletteRow
+                  value="delete engagement remove"
+                  onSelect={deleteEngagementAction}
+                  label="Delete engagement"
+                  hint="cannot be undone"
+                  actionLabel="Run"
+                  risk="critical"
                 />
               </CommandGroup>
             </>
