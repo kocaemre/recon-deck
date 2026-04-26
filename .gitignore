@@ -17,3 +17,7 @@ next-env.d.ts
 
 # Local notes (untracked drafts)
 prd.md
+
+# Local export / archive artifacts (manual zips of the repo, AR test bundles, etc.)
+/recon-deck.zip
+*.local.zip
