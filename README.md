@@ -22,6 +22,7 @@ Paste nmap text / XML / greppable output (or import an AutoRecon `results/` fold
 - **Known-vulns auto-match** — when a port's `<product> <version>` matches a KB pattern (e.g. `vsFTPd 2.3.4`), the vulnerability + CVE + reference link surface directly on the port card
 - **searchsploit lookup** — one-click `searchsploit -t "<product>"` per port, results cached, friendly error if exploitdb isn't installed
 - **Findings catalog** — pentester-discovered findings (severity / title / description / CVE / evidence refs), grouped by severity in the side panel
+- **One-click "Add as finding"** — every KB known-vuln row and every searchsploit hit gets a `+ finding` button that pre-populates the finding modal (severity = KB risk tier, CVE auto-extracted from the note/title, port scope locked to the active port)
 - **Evidence pane** — per-port drag-drop / clipboard-paste screenshots; AutoRecon's gowitness PNGs auto-import into the right port's evidence list
 - **Manual ports** — heatmap "+ Add port" for services nmap missed (custom DNS zone transfer, alternate banner, etc.)
 - **Custom commands** — personal command snippets stored in `/settings/commands`, surfaced alongside KB commands, scoped by service / port
@@ -29,7 +30,12 @@ Paste nmap text / XML / greppable output (or import an AutoRecon `results/` fold
 - **Cross-engagement search** — `⌃⇧F` opens an FTS5 modal, BM25-ranked across every engagement, hit rows show host context
 - **Six export formats** — Markdown (Obsidian frontmatter), JSON, single-file HTML, Findings CSV, SysReptor JSON, PwnDoc YAML, plus print-to-PDF report route
 - **Multi-host aware exports** — SysReptor scope and PwnDoc scope list every host; markdown / HTML render one section per host
-- **Settings index** — `/settings` central page lists every engagement with a destructive **Delete** action (cascades through ports, scripts, evidence, findings, scan history) plus jump-off links to the wordlist / custom command libraries
+- **Sidebar engagement actions** — every row gets a hover-kebab with **Rename** (free-form label override), **Duplicate** (deep-copy: clone an engagement plus every port, script, note, evidence, finding, and scan history into a fresh row), and **Delete** (shadcn `AlertDialog` confirmation, no native `confirm()` dialogs)
+- **Command palette parity** (`⌘K`) — every action that lives in the UI also lives in the palette: **Add finding**, **Re-import**, **Settings**, **Delete engagement**, plus the six exports + Print
+- **KB editor** — `/settings/kb` paste-validate-save form for user YAML entries; live `KbEntrySchema` validation with field-level Zod issues, atomic save under `RECON_KB_USER_DIR` via a strict alnum/`-`/`_` filename allowlist, in-memory cache invalidated immediately so the new entry surfaces without a server restart
+- **KB hot-reload** — `fs.watch` on the shipped + user KB directories flips a "dirty" flag that the next request rebuilds; edit a YAML in your editor and the next page render picks it up
+- **Settings index** — `/settings` central page lists every engagement with a destructive **Delete** action (cascades through ports, scripts, evidence, findings, scan history) plus jump-off links to the **wordlist / custom command / KB editor** libraries
+- **Migration safety** — boot snapshots the live DB to `data/recon-deck.db.backup-pre-NNNN` via `VACUUM INTO` before applying anything new, wraps `migrate()` in try/catch with a copy-pasteable rollback message, and runs `PRAGMA integrity_check` + `PRAGMA foreign_key_check` after every migration
 
 ---
 
@@ -169,8 +175,9 @@ Open `/settings` (footer link in the sidebar) for:
 - **Engagement list** — every engagement with an inline **Delete** button (cascades through ports, scripts, evidence, findings, scan history). Confirms with the host / port count so you know what you're nuking.
 - **Wordlist library** (`/settings/wordlists`) — override `{WORDLIST_*}` placeholders to your own SecLists / dirb paths.
 - **Custom command library** (`/settings/commands`) — personal command snippets surfaced alongside KB commands. Scope by service / port (or leave blank for global).
+- **KB editor** (`/settings/kb`) — paste a YAML KB entry, validate against `KbEntrySchema`, and (with `RECON_KB_USER_DIR` configured) save it to your user dir. Save invalidates the in-memory KB cache so the new entry surfaces in subsequent renders without a server restart.
 
-Engagement renames stay where they belong — inline edit on the engagement header (click the IP or hostname field, type, blur).
+Engagement renames live in two places: the **inline edit on the engagement header** (click the IP or hostname field, type, blur) for target identity, and the **sidebar hover-kebab → Rename** for the engagement's display label. Hover-kebab also exposes **Duplicate** (deep-copy SQL transaction — every child row gets fresh primary keys; the clone is fully independent) and **Delete** (shadcn `AlertDialog` confirmation; same destructive cascade as the settings list, no native browser dialog).
 
 ---
 
@@ -229,7 +236,18 @@ docker run --rm \
 docker start recon-deck   # or re-run the docker run command from Quick Start
 ```
 
-**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0009`** (drop legacy `engagements.target_ip`/`target_hostname`). Backing up an `0009` DB and restoring it under a build that expects `≥ 0009` works — Drizzle migrations are forward-only, so restoring a `0009` snapshot under an older `0008` build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v1.0`) for production restores rather than rolling with `:latest`.
+**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0010`** (`port_scripts.host_id` for multi-host attribution). Backing up an `0010` DB and restoring it under a build that expects `≥ 0010` works — Drizzle migrations are forward-only, so restoring a snapshot under an older build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v1.1`) for production restores rather than rolling with `:latest`.
+
+**Pre-migration snapshots (boot-time safety net).** When the journal lists more entries than `__drizzle_migrations` has applied, the boot sequence runs `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` *before* invoking `migrate()`. `NNNN` is the applied count when the snapshot was written, so `backup-pre-0009` means "captured at schema 0009, restoring puts you back there". On any migration failure the log surfaces the snapshot path with a copy-pasteable rollback command:
+
+```bash
+# Inside the container (or directly on the host if you bind-mounted /data):
+cp data/recon-deck.db.backup-pre-0009 data/recon-deck.db
+rm -f data/recon-deck.db-wal data/recon-deck.db-shm
+# restart — boot retries from the restored state
+```
+
+After every successful migration, `PRAGMA integrity_check` + `PRAGMA foreign_key_check` run; either failing aborts boot. Snapshots accumulate on disk one per migration tier (`backup-pre-0007`, `…-0008`, `…-0009`, `…-0010`) — recycle them manually when you trust the new schema. See [CONTRIBUTING.md](CONTRIBUTING.md) › "Migration safety and recovery" for the full procedure.
 
 ---
 
