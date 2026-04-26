@@ -153,11 +153,14 @@ export function generateJson(vm: EngagementViewModel): string {
 
   // 3. Scan sub-object — ParsedScan shape verbatim. Optional keys
   //    (target.hostname, scannedAt, os) omitted when null/undefined.
+  // Migration 0009: target identity sourced from primary host (hosts[0]
+  // is sorted primary-first by getById).
+  const primaryHost = vm.engagement.hosts[0];
   const scanTarget: { ip: string; hostname?: string } = {
-    ip: vm.engagement.target_ip,
+    ip: primaryHost.ip,
   };
-  if (vm.engagement.target_hostname != null) {
-    scanTarget.hostname = vm.engagement.target_hostname;
+  if (primaryHost.hostname != null) {
+    scanTarget.hostname = primaryHost.hostname;
   }
 
   const scan: Record<string, unknown> = {

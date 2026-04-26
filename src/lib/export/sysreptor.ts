@@ -73,9 +73,10 @@ export function generateSysReptor(vm: EngagementViewModel): string {
   }
   // Defensive fallback — pre-PR-3 engagements with empty vm.hosts.
   if (scope.length === 0) {
-    const fallbackLabel = vm.engagement.target_hostname
-      ? `${vm.engagement.target_hostname} (${vm.engagement.target_ip})`
-      : vm.engagement.target_ip;
+    const primaryHost = vm.engagement.hosts[0];
+    const fallbackLabel = primaryHost?.hostname
+      ? `${primaryHost.hostname} (${primaryHost.ip})`
+      : primaryHost?.ip ?? vm.engagement.name;
     scope.push(fallbackLabel);
     for (const pvm of vm.ports) {
       portIndex.set(pvm.port.id, {

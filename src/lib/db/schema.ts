@@ -46,14 +46,13 @@ export const engagements = sqliteTable(
      * Human-readable name auto-generated at insert time.
      * D-01: uses `hostname (ip)` when hostname present, falls back to `ip`.
      * D-02: mutable — Phase 4 allows inline sidebar rename.
+     *
+     * Migration 0009 dropped the legacy `target_ip` / `target_hostname`
+     * columns. Target identity now lives in `hosts.is_primary = 1`; this
+     * `name` field is the only IP/hostname-bearing surface on engagements
+     * (used by the FTS5 trigger as the search body).
      */
     name: text("name").notNull(),
-
-    /** ParsedScan.target.ip */
-    target_ip: text("target_ip").notNull(),
-
-    /** ParsedScan.target.hostname — null when nmap returns no PTR/rDNS. */
-    target_hostname: text("target_hostname"),
 
     /**
      * ParsedScan.source — "nmap-text" | "nmap-xml" | "autorecon".

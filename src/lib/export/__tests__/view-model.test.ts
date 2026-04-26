@@ -69,8 +69,6 @@ function buildEngagement(): FullEngagement {
   return {
     id: 1,
     name: "box.htb (10.10.10.5)",
-    target_ip: "10.10.10.5",
-    target_hostname: "box.htb",
     source: "nmap-xml",
     scanned_at: null,
     os_name: null,
@@ -330,9 +328,11 @@ describe("loadEngagementForExport (Plan 06-01 Task 2)", () => {
 
   it("Test 3: interpolation — {IP}, {PORT}, {HOST}; HOST falls back to IP when hostname null", () => {
     // Rebuild engagement with hostname = null to exercise {HOST} fallback.
+    const base = buildEngagement();
     const engNoHost: FullEngagement = {
-      ...buildEngagement(),
-      target_hostname: null,
+      ...base,
+      // Migration 0009: hostname now lives on the primary host row.
+      hosts: base.hosts.map((h, i) => (i === 0 ? { ...h, hostname: null } : h)),
       ports: [
         {
           id: 10,
@@ -403,7 +403,8 @@ describe("loadEngagementForExport (Plan 06-01 Task 2)", () => {
     // Engagement passed through verbatim
     expect(vm.engagement.id).toBe(1);
     expect(vm.engagement.name).toBe("box.htb (10.10.10.5)");
-    expect(vm.engagement.target_ip).toBe("10.10.10.5");
+    // Migration 0009: target identity sourced from primary host (hosts[0]).
+    expect(vm.engagement.hosts[0].ip).toBe("10.10.10.5");
 
     // hostScripts pass-through
     expect(vm.hostScripts).toHaveLength(1);

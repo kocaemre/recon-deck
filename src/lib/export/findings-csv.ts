@@ -77,13 +77,14 @@ export function generateFindingsCsv(vm: EngagementViewModel): string {
   // Fall back to legacy flat ports for single-host engagements that don't
   // populate vm.hosts (defensive — shouldn't happen post-PR-3).
   if (portIndex.size === 0) {
+    const primaryHost = vm.engagement.hosts[0];
     for (const pvm of vm.ports) {
       portIndex.set(pvm.port.id, {
         port: pvm.port.port,
         protocol: pvm.port.protocol,
         service: pvm.port.service,
-        hostIp: vm.engagement.target_ip,
-        hostHostname: vm.engagement.target_hostname,
+        hostIp: primaryHost?.ip ?? "",
+        hostHostname: primaryHost?.hostname ?? null,
       });
     }
   }

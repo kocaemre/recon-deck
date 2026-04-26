@@ -14,6 +14,12 @@ checks:
     label: "Identified naming contexts (defaultNamingContext)"
   - key: ldap-user-enum
     label: "Enumerated users / groups"
+  - key: ldap-pass-pol
+    label: "Read domain password policy via LDAP"
+  - key: ldap-bloodhound
+    label: "Collected BloodHound data (bloodhound-python / nxc)"
+  - key: ldap-machine-acct-quota
+    label: "Checked ms-DS-MachineAccountQuota (default 10 → user can join machines)"
 commands:
   - label: "Anonymous bind base info"
     template: "ldapsearch -H ldap://{IP}:{PORT} -x -s base -b '' '(objectClass=*)'"
@@ -21,6 +27,20 @@ commands:
     template: "ldapsearch -H ldap://{IP}:{PORT} -x -b 'DC=example,DC=local' '(objectClass=user)'"
   - label: "nmap LDAP scripts"
     template: "nmap -p{PORT} --script=ldap-rootdse,ldap-search,ldap-novell-getpass {IP}"
+  - label: "netexec / nxc ldap enumeration"
+    template: "nxc ldap {IP} -u <user> -p <pass> --users --groups --pass-pol"
+  - label: "netexec ldap kerberoast"
+    template: "nxc ldap {IP} -u <user> -p <pass> --kerberoast krb.hash"
+  - label: "netexec ldap asreproast (no creds)"
+    template: "nxc ldap {IP} -u users.txt -p '' --asreproast asrep.hash"
+  - label: "netexec ldap BloodHound collection"
+    template: "nxc ldap {IP} -u <user> -p <pass> --bloodhound --collection All --dns-server {IP}"
+  - label: "bloodhound-python (cross-platform collector)"
+    template: "bloodhound-python -d EXAMPLE.LOCAL -u <user> -p <pass> -ns {IP} -c All --zip"
+  - label: "ldapdomaindump (full domain snapshot)"
+    template: "ldapdomaindump ldap://{IP} -u 'EXAMPLE\\<user>' -p <pass> -o ldap-dump/"
+  - label: "windapsearch user listing"
+    template: "windapsearch -d EXAMPLE.LOCAL --dc-ip {IP} -u <user> -p <pass> -U"
 resources:
   - title: "389 - Pentesting LDAP"
     url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"

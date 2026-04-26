@@ -64,6 +64,13 @@
       "when": 1777800000000,
       "tag": "0008_add-scan-history",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1777900000000,
+      "tag": "0009_drop-engagement-target",
+      "breakpoints": true
     }
   ]
 }

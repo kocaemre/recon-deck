@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "../../../../tests/helpers/db.js";
-import { createFromScan, getById, listSummaries } from "../engagement-repo.js";
+import {
+  createFromScan,
+  deleteEngagement,
+  getById,
+  listSummaries,
+} from "../engagement-repo.js";
 import { engagements, ports, port_scripts, hosts } from "../schema.js";
 import { eq, and } from "drizzle-orm";
 import type { ParsedScan } from "../../parser/types.js";
@@ -135,9 +140,9 @@ describe("createFromScan (Plan 03)", () => {
     const summaries = listSummaries(db);
     expect(summaries).toHaveLength(2);
 
-    // Find by target_ip to avoid ordering ambiguity when timestamps are identical
-    const summary5 = summaries.find((s) => s.target_ip === "10.10.10.5");
-    const summary6 = summaries.find((s) => s.target_ip === "10.10.10.6");
+    // Find by primary_ip to avoid ordering ambiguity when timestamps are identical
+    const summary5 = summaries.find((s) => s.primary_ip === "10.10.10.5");
+    const summary6 = summaries.find((s) => s.primary_ip === "10.10.10.6");
     expect(summary5).toBeDefined();
     expect(summary6).toBeDefined();
     expect(summary5!.port_count).toBe(2);
@@ -346,5 +351,47 @@ describe("createFromScan (Plan 03)", () => {
       .where(eq(port_scripts.engagement_id, result.id))
       .all();
     expect(scriptsAfter).toHaveLength(0);
+  });
+
+  it("deleteEngagement cascades through every child table", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+
+    // Sanity: rows exist before delete.
+    const portsBefore = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, result.id))
+      .all();
+    expect(portsBefore.length).toBeGreaterThan(0);
+
+    const removed = deleteEngagement(db, result.id);
+    expect(removed).toBe(true);
+
+    // Engagement gone.
+    const engAfter = getById(db, result.id);
+    expect(engAfter).toBeNull();
+
+    // Cascade — child tables empty.
+    const portsAfter = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, result.id))
+      .all();
+    const scriptsAfter = db
+      .select()
+      .from(port_scripts)
+      .where(eq(port_scripts.engagement_id, result.id))
+      .all();
+    const hostsAfter = db
+      .select()
+      .from(hosts)
+      .where(eq(hosts.engagement_id, result.id))
+      .all();
+    expect(portsAfter).toHaveLength(0);
+    expect(scriptsAfter).toHaveLength(0);
+    expect(hostsAfter).toHaveLength(0);
+
+    // Second delete is a no-op (already gone).
+    expect(deleteEngagement(db, result.id)).toBe(false);
   });
 });

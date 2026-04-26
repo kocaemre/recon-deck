@@ -113,13 +113,12 @@ export function createFromScan(
   return db.transaction((tx) => {
     const now = new Date().toISOString();
 
-    // Insert root engagement row
+    // Insert root engagement row. Migration 0009 dropped target_ip /
+    // target_hostname — primary host identity lives in the `hosts` table.
     const eng = tx
       .insert(engagements)
       .values({
         name: generateName(scan),
-        target_ip: scan.target.ip,
-        target_hostname: scan.target.hostname ?? null,
         source: scan.source,
         scanned_at: scan.scannedAt ?? null,
         os_name: scan.os?.name ?? null,
@@ -490,12 +489,13 @@ export function getById(db: Db, id: number): FullEngagement | null {
  * @returns Array of EngagementSummary (may be empty)
  */
 export function listSummaries(db: Db): EngagementSummary[] {
+  // Migration 0009: target_ip / target_hostname were dropped. We surface the
+  // primary host's IP / hostname via correlated subqueries — same shape the
+  // sidebar consumed before, just sourced from `hosts.is_primary = 1`.
   return db
     .select({
       id: engagements.id,
       name: engagements.name,
-      target_ip: engagements.target_ip,
-      target_hostname: engagements.target_hostname,
       source: engagements.source,
       created_at: engagements.created_at,
       port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
@@ -503,6 +503,8 @@ export function listSummaries(db: Db): EngagementSummary[] {
       // when > 1. Single-host engagements still render the legacy compact
       // row (no chip) — the Sidebar component branches on host_count > 1.
       host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
+      primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
+      primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
     })
     .from(engagements)
     .orderBy(desc(engagements.created_at))
@@ -539,21 +541,17 @@ export function updateTarget(
   const now = new Date().toISOString();
   const name = hostname && hostname !== ip ? `${hostname} (${ip})` : ip;
   db.transaction((tx) => {
+    // Migration 0009: target_ip / target_hostname were dropped from
+    // engagements. Only refresh the display name + bookkeeping fields here;
+    // identity itself lives on the primary host row.
     tx.update(engagements)
       .set({
-        target_ip: ip,
-        target_hostname: hostname,
         name,
         updated_at: now,
       })
       .where(eq(engagements.id, engagementId))
       .run();
 
-    // P1-F PR 1: keep the primary host row in sync with the legacy
-    // engagement.target_ip/hostname columns. PR 4 will swap the UI to read
-    // from `hosts` directly and drop this dual-write — until then both
-    // surfaces must agree or the heatmap shows different addresses than
-    // the header.
     tx.update(hosts)
       .set({ ip, hostname })
       .where(
@@ -561,4 +559,29 @@ export function updateTarget(
       )
       .run();
   });
+}
+
+// ---------------------------------------------------------------------------
+// deleteEngagement
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete an engagement and every row owned by it.
+ *
+ * All child tables (ports, port_scripts, port_commands, check_states,
+ * port_notes, port_evidence, findings, hosts, scan_history) declare
+ * `ON DELETE CASCADE` against `engagements.id`, so a single DELETE on
+ * the parent reaps the entire object graph. The FTS5 trigger
+ * `engagements_search_ad` removes the search_index rows scoped to this
+ * engagement in the same statement.
+ *
+ * Returns true when a row was actually deleted, false when no engagement
+ * matched the id (caller can return 404).
+ */
+export function deleteEngagement(db: Db, engagementId: number): boolean {
+  const result = db
+    .delete(engagements)
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
 }

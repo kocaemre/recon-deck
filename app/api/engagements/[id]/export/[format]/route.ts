@@ -116,15 +116,16 @@ export async function GET(
     );
   }
 
-  // 4. Defense-in-depth: target_ip must match the IPv4/IPv6 character set
-  //    before it can be interpolated into the filename template. Anything else
-  //    is a data-integrity issue — log it and return 500 with a generic body
-  //    (T-06-18 mitigation).
-  if (!SAFE_IP_REGEX.test(engagement.target_ip)) {
+  // 4. Defense-in-depth: primary host's IP must match the IPv4/IPv6 character
+  //    set before it can be interpolated into the filename template. Anything
+  //    else is a data-integrity issue — log it and return 500 with a generic
+  //    body (T-06-18 mitigation).
+  const primaryIp = engagement.hosts[0]?.ip;
+  if (!primaryIp || !SAFE_IP_REGEX.test(primaryIp)) {
     console.error(
-      "Export: unexpected target_ip shape for engagement",
+      "Export: unexpected primary host IP shape for engagement",
       id,
-      engagement.target_ip,
+      primaryIp,
     );
     return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
@@ -168,7 +169,7 @@ export async function GET(
   //    from ISO timestamp is stable across TZs and always ASCII.
   const { ext, contentType } = FORMATS[format];
   const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const filename = `${engagement.target_ip}-${date}.${ext}`;
+  const filename = `${primaryIp}-${date}.${ext}`;
 
   // 7. RFC 6266 §5 — `filename=` (ASCII fallback) appears BEFORE `filename*=`
   //    (UTF-8 variant). Reversing the order breaks older download managers

@@ -108,7 +108,6 @@ describe("DB boot sequence (Plan 02)", () => {
         .insert(engagements)
         .values({
           name: "Test Engagement",
-          target_ip: "10.10.10.1",
           source: "nmap-text",
           raw_input: "nmap output here",
           created_at: now,

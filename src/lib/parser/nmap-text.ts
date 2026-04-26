@@ -5,12 +5,12 @@ import "server-only";
  *
  * Contract: `(raw: string) => ParsedScan` — see `./types.ts` (D-01).
  *
- * Design notes:
- * - Line-oriented regex. Split on host boundaries first, extract port table
- *   lines within each host block. Prevents cross-host port attribution
- *   (see §Architecture Patterns Anti-Patterns in 02-RESEARCH.md).
- * - First-host-only per D-09 / CD-03: mirrors XML parser behavior for
- *   consistency. Remaining hosts surface as a `warnings[]` entry.
+ * Multi-host: every `Nmap scan report for ...` block produces one
+ * `ParsedHost` entry inside `result.hosts[]`. Top-level legacy fields
+ * (`target`, `ports`, `hostScripts`, `os`, `extraPorts`, `traceroute`)
+ * mirror `hosts[0]` for backward compatibility.
+ *
+ * Other contracts:
  * - State normalization per D-02: `open|filtered` → `filtered` with warning;
  *   `closed` / `closed|filtered` / `unfiltered` ports are dropped silently.
  * - Service names lowercased + trimmed (D-05); product/version/extrainfo
@@ -20,13 +20,15 @@ import "server-only";
  *   (TEST-02: `/at Object\.|at new |\s+at /` must not match).
  * - NSE output collected under each port from `| line` / `|_ line` continuation
  *   prefixes until the next port header or `Host script results:` section.
- *   Host-level scripts captured into `hostScripts[]` (D-04, PARSE-03).
+ *   Host-level scripts captured into the active builder's `hostScripts[]`.
  *
  * Keep server-side only per ARCHITECTURE.md bundle strategy — this module must not
  * ship to the browser bundle.
  */
 
 import type {
+  Hop,
+  OsInfo,
   ParsedHost,
   ParsedPort,
   ParsedScan,
@@ -51,26 +53,19 @@ function parseHostLine(
   if (!m) return undefined;
   const rest = m[1].trim();
 
-  // Form: "name (ip)"
   const withParens = /^(.+?)\s+\(([^)]+)\)$/.exec(rest);
   if (withParens) {
     const name = withParens[1].trim();
     const ip = withParens[2].trim();
-    // Guard: only treat `name` as hostname when the paren-value is actually an IP.
     if (IP_RE.test(ip)) {
       return { ip, hostname: name };
     }
-    // Paren content is not an IP — treat the whole rest as IP/host best effort.
-    // Fall through to bare-form handling below.
   }
 
-  // Bare IP (v4 or v6)
   if (IP_RE.test(rest)) {
     return { ip: rest };
   }
 
-  // Bare hostname with no IP (uncommon; nmap usually resolves). Treat
-  // value as ip slot so downstream code has *something* to display.
   return { ip: rest };
 }
 
@@ -79,37 +74,15 @@ function parseHostLine(
  *   `22/tcp  open  ssh     OpenSSH 8.9p1 Ubuntu 3ubuntu0.6`
  *   `53/udp  open|filtered domain`
  *   `443/tcp open  ssl/http`
- *
- * Groups: 1=port, 2=protocol, 3=state, 4=service, 5=version-blob (optional)
- *
- * Pitfall 5 guard: pipe character inside the state group must be a literal,
- * not an alternation boundary (see 02-RESEARCH.md Pitfall 5).
  */
 const PORT_LINE_RE =
   /^(\d+)\/(tcp|udp|sctp|ip)\s+(open(?:\|filtered)?|filtered|closed(?:\|filtered)?|unfiltered)\s+(\S+)(?:\s+(.+?))?\s*$/;
 
-/** NSE per-port continuation line: `|   key: value` or `| text`. */
 const NSE_CONT_RE = /^\|\s+(.+)$/;
-/** NSE per-port terminator line: `|_text`. */
 const NSE_TERM_RE = /^\|_\s*(.+)$/;
-
-/** Host-script section header. */
 const HOST_SCRIPT_HEADER_RE = /^Host script results:\s*$/;
-
-/**
- * Detect a script-id header within an NSE block:
- *   `| http-title: Example Domain`   → id='http-title', rest='Example Domain'
- *   `| smb-os-discovery:`            → id='smb-os-discovery', rest=''
- */
 const NSE_ID_HEADER_RE = /^([A-Za-z0-9][\w-]*):\s*(.*)$/;
 
-/**
- * Product/version split heuristic: the text parser concatenates product +
- * version + extrainfo into one VERSION column. `-oN` doesn't structure these
- * as separate fields, so we do a conservative split: first whitespace-separated
- * token is `product`, remainder is `version`. Extra parenthesized info goes
- * verbatim into `extrainfo` if easily detectable; otherwise stays in version.
- */
 function splitVersionBlob(
   blob: string | undefined,
 ): Pick<ParsedPort, "product" | "version" | "extrainfo"> {
@@ -117,7 +90,6 @@ function splitVersionBlob(
   const trimmed = blob.trim();
   if (!trimmed) return {};
 
-  // Try to peel a trailing `(...)` extrainfo group.
   let extrainfo: string | undefined;
   let head = trimmed;
   const paren = /\s*\(([^()]*)\)\s*$/.exec(trimmed);
@@ -126,7 +98,6 @@ function splitVersionBlob(
     head = trimmed.slice(0, paren.index).trim();
   }
 
-  // First token = product, rest = version.
   const firstSpace = head.indexOf(" ");
   if (firstSpace === -1) {
     return { product: head || undefined, extrainfo };
@@ -140,19 +111,12 @@ function splitVersionBlob(
   };
 }
 
-/**
- * Finalize an accumulated NSE buffer into a ScriptOutput.
- * The first continuation line that matches `id: rest` names the script;
- * remaining lines are joined with `\n`.
- */
 function finalizeScript(lines: string[]): ScriptOutput | undefined {
   if (lines.length === 0) return undefined;
 
-  // Locate the id header (usually the first line).
   const first = lines[0];
   const idMatch = NSE_ID_HEADER_RE.exec(first);
   if (!idMatch) {
-    // No id header — return as anonymous script so we at least preserve text.
     return { id: "", output: lines.join("\n") };
   }
   const id = idMatch[1];
@@ -164,37 +128,72 @@ function finalizeScript(lines: string[]): ScriptOutput | undefined {
 }
 
 /**
- * Main entry point.
+ * Per-host accumulator. Built up while parsing one host block, finalized
+ * into a ParsedHost when the next `Nmap scan report for ...` line arrives
+ * or at EOF.
  */
+type HostBuilder = {
+  target: { ip: string; hostname?: string };
+  ports: ParsedPort[];
+  hostScripts: ScriptOutput[];
+  extraPorts: { state: string; count: number }[];
+  osMatches: { name: string; accuracy?: number }[];
+  osDetailsLine?: string;
+  tracerouteHops: Hop[];
+  tracerouteProto?: string;
+};
+
+function newBuilder(target: { ip: string; hostname?: string }): HostBuilder {
+  return {
+    target,
+    ports: [],
+    hostScripts: [],
+    extraPorts: [],
+    osMatches: [],
+    tracerouteHops: [],
+  };
+}
+
+function finalizeBuilder(b: HostBuilder): ParsedHost {
+  const host: ParsedHost = {
+    target: b.target,
+    ports: b.ports,
+    hostScripts: b.hostScripts,
+  };
+  if (b.extraPorts.length > 0) host.extraPorts = b.extraPorts;
+  if (b.osMatches.length > 0 || b.osDetailsLine) {
+    const sorted = [...b.osMatches].sort(
+      (a, c) => (c.accuracy ?? 0) - (a.accuracy ?? 0),
+    );
+    const best = sorted[0];
+    const os: OsInfo = { matches: sorted };
+    if (best?.name) os.name = best.name;
+    if (best?.accuracy !== undefined) os.accuracy = best.accuracy;
+    host.os = os;
+  }
+  if (b.tracerouteHops.length > 0) {
+    host.traceroute = { hops: b.tracerouteHops };
+    if (b.tracerouteProto) host.traceroute.proto = b.tracerouteProto;
+  }
+  return host;
+}
+
 export function parseNmapText(input: string): ParsedScan {
   if (!input || !input.trim()) {
-    // D-07: actionable, no stack frame syntax.
     throw new Error(
       "Empty nmap output — paste the full scan result (the text between the first 'Nmap scan report' header and the final 'Nmap done' line).",
     );
   }
 
   const warnings: string[] = [];
-  const ports: ParsedPort[] = [];
-  const hostScripts: ScriptOutput[] = [];
-  let target: { ip: string; hostname?: string } | undefined;
+  const parsedHosts: ParsedHost[] = [];
+  let builder: HostBuilder | undefined;
 
-  // Count hosts up front for the D-09 warning.
-  const hostHeaders = input.match(/^Nmap scan report for /gm) ?? [];
-  const hostCount = hostHeaders.length;
-
-  const lines = input.split(/\r?\n/);
-
-  // State machine:
-  //   phase: 'preamble' | 'ports' | 'hostscript' | 'done'
-  //   currentPort: the ParsedPort whose `scripts[]` accumulates NSE lines
-  //   nseBuffer: lines of the currently-open script block (per-port OR host)
-  //   hostIndex: 0 = active host, >0 = additional hosts we ignore
-  type Phase = "preamble" | "ports" | "hostscript" | "done";
+  type Phase = "preamble" | "ports" | "hostscript";
   let phase: Phase = "preamble";
   let currentPort: ParsedPort | undefined;
   let nseBuffer: string[] = [];
-  let hostIndex = -1;
+  let tracerouteCollecting = false;
 
   const flushNseBufferTo = (dest: ScriptOutput[]) => {
     if (nseBuffer.length === 0) return;
@@ -203,37 +202,47 @@ export function parseNmapText(input: string): ParsedScan {
     nseBuffer = [];
   };
 
-  /**
-   * Accumulator for `<extraports>`-equivalent text lines:
-   *   "Not shown: 996 closed tcp ports (reset)"
-   *   "Not shown: 65530 filtered tcp ports (no-response), 1 closed tcp port (reset)"
-   * Multiple comma-separated groups are flattened into one entry per state.
-   */
-  const extraPortAccum: { state: string; count: number }[] = [];
+  const flushPendingNseToCurrentScope = () => {
+    if (nseBuffer.length === 0) return;
+    const dest =
+      phase === "hostscript"
+        ? builder?.hostScripts
+        : currentPort?.scripts;
+    if (dest) flushNseBufferTo(dest);
+    else nseBuffer = [];
+  };
 
-  /** OS detection accumulator. nmap text format examples:
-   *   "OS details: Linux 4.15 - 5.6"
-   *   "Aggressive OS guesses: Linux 4.15 (95%), Linux 4.4 (94%), ..."
-   *   "Running: Linux 4.X|5.X"
-   */
-  const osMatchAccum: { name: string; accuracy?: number }[] = [];
-  let osDetailsLine: string | undefined;
-
-  /** Traceroute accumulator — captured between "TRACEROUTE" header and a blank line. */
-  const tracerouteHops: {
-    ttl: number;
-    rtt?: number;
-    ipaddr: string;
-    host?: string;
-  }[] = [];
-  let tracerouteProto: string | undefined;
-  let tracerouteCollecting = false;
+  const lines = input.split(/\r?\n/);
 
   for (const rawLine of lines) {
-    const line = rawLine.replace(/\s+$/, ""); // trim trailing whitespace only
+    const line = rawLine.replace(/\s+$/, "");
 
-    // "Not shown:" summary line — accumulate before falling through to
-    // the unrecognized branch.
+    // Host boundary first — closes the previous host block before any
+    // host-scoped pattern (NSE, OS, traceroute, port table) gets a chance
+    // to pollute the next builder.
+    if (/^Nmap scan report for /.test(line)) {
+      // Close NSE buffers and attribute them to the previous host.
+      if (builder) {
+        if (phase === "hostscript") {
+          flushNseBufferTo(builder.hostScripts);
+        } else if (currentPort) {
+          flushNseBufferTo(currentPort.scripts);
+        }
+        // Finalize the outgoing builder.
+        parsedHosts.push(finalizeBuilder(builder));
+      }
+      const parsed = parseHostLine(line);
+      builder = parsed ? newBuilder(parsed) : undefined;
+      currentPort = undefined;
+      tracerouteCollecting = false;
+      phase = "preamble";
+      continue;
+    }
+
+    // Everything below requires an active host builder. Lines before the
+    // first `Nmap scan report` header (preamble comments) are tossed.
+    if (!builder) continue;
+
     if (/^Not shown:/.test(line)) {
       const groups = line.replace(/^Not shown:\s*/, "").split(/,\s*/);
       for (const g of groups) {
@@ -241,107 +250,66 @@ export function parseNmapText(input: string): ParsedScan {
           g,
         );
         if (m) {
-          extraPortAccum.push({ state: m[2], count: Number(m[1]) });
+          builder.extraPorts.push({ state: m[2], count: Number(m[1]) });
         }
       }
       continue;
     }
 
-    // OS detection — pattern matches BEFORE port-line / NSE handling.
     if (/^OS details:/.test(line)) {
-      osDetailsLine = line.replace(/^OS details:\s*/, "").trim();
-      // Split comma-separated OS guesses if any.
-      for (const g of osDetailsLine.split(/,\s*/)) {
-        if (g.length > 0) osMatchAccum.push({ name: g });
+      builder.osDetailsLine = line.replace(/^OS details:\s*/, "").trim();
+      for (const g of builder.osDetailsLine.split(/,\s*/)) {
+        if (g.length > 0) builder.osMatches.push({ name: g });
       }
       continue;
     }
     if (/^Aggressive OS guesses:/.test(line)) {
       const rest = line.replace(/^Aggressive OS guesses:\s*/, "");
-      // "Linux 4.15 (95%), Linux 4.4 (94%)"
       const items = rest.split(/,\s*/);
       for (const it of items) {
         const m = /^(.+?)\s*\((\d+)%\)\s*$/.exec(it);
         if (m) {
-          osMatchAccum.push({ name: m[1].trim(), accuracy: Number(m[2]) });
+          builder.osMatches.push({
+            name: m[1].trim(),
+            accuracy: Number(m[2]),
+          });
         } else if (it.trim().length > 0) {
-          osMatchAccum.push({ name: it.trim() });
+          builder.osMatches.push({ name: it.trim() });
         }
       }
       continue;
     }
 
-    // TRACEROUTE block — header line opens collection until a blank line closes.
-    // "TRACEROUTE (using port 80/tcp)"
     if (/^TRACEROUTE/.test(line)) {
       tracerouteCollecting = true;
       const m = /\(using port\s+(\d+)\/(tcp|udp)\)/.exec(line);
-      if (m) tracerouteProto = m[2];
+      if (m) builder.tracerouteProto = m[2];
       continue;
     }
     if (tracerouteCollecting) {
-      // header table line: "HOP RTT    ADDRESS"
       if (/^HOP\s+RTT/.test(line)) continue;
       if (line.trim() === "") {
         tracerouteCollecting = false;
         continue;
       }
-      // Hop line patterns:
-      //   "1   1.21 ms 10.10.14.1"
-      //   "1   ...    10.10.10.5 (box.htb)"
-      //   "2   2.34 ms 10.10.10.5"
-      //   "1   ... 10.10.14.1"        (no-response RTT shown as "...")
       const m =
         /^\s*(\d+)\s+(?:(\d+(?:\.\d+)?)\s*ms|\.\.\.)\s+([0-9a-fA-F:.]+)(?:\s+\(([^)]+)\))?\s*$/.exec(
           line,
         );
       if (m) {
-        const hop: { ttl: number; rtt?: number; ipaddr: string; host?: string } = {
+        const hop: Hop = {
           ttl: Number(m[1]),
           ipaddr: m[3],
         };
         if (m[2] !== undefined) hop.rtt = Number(m[2]);
         if (m[4]) hop.host = m[4];
-        tracerouteHops.push(hop);
+        builder.tracerouteHops.push(hop);
         continue;
       }
-      // unrecognized inside traceroute → close it
       tracerouteCollecting = false;
     }
 
-    // Host boundary: `Nmap scan report for ...`
-    if (/^Nmap scan report for /.test(line)) {
-      hostIndex += 1;
-
-      if (hostIndex === 0) {
-        // First host → bind target.
-        const parsed = parseHostLine(line);
-        if (parsed) target = parsed;
-        phase = "preamble";
-        continue;
-      }
-
-      // Second+ host → stop accumulating for it (D-09 mirrored via CD-03).
-      // Flush any currently-open NSE buffer into the active destination
-      // before we shut down host-level parsing.
-      if (phase === "hostscript") {
-        flushNseBufferTo(hostScripts);
-      } else if (currentPort) {
-        flushNseBufferTo(currentPort.scripts);
-      }
-      currentPort = undefined;
-      phase = "done";
-      continue;
-    }
-
-    if (phase === "done") {
-      // Past the first host — skip everything.
-      continue;
-    }
-
-    // Host-level scripts section header.
     if (HOST_SCRIPT_HEADER_RE.test(line)) {
-      // Close any trailing per-port script buffer.
       if (currentPort) {
         flushNseBufferTo(currentPort.scripts);
       }
@@ -350,16 +318,13 @@ export function parseNmapText(input: string): ParsedScan {
       continue;
     }
 
-    // Port table column header: `PORT   STATE SERVICE VERSION`
     if (/^PORT\s+STATE\s+SERVICE(?:\s+VERSION)?\s*$/.test(line)) {
       phase = "ports";
       continue;
     }
 
-    // Port line.
     const portMatch = PORT_LINE_RE.exec(line);
     if (portMatch && (phase === "ports" || phase === "preamble")) {
-      // Close out any open NSE buffer attached to the previous port.
       if (currentPort) {
         flushNseBufferTo(currentPort.scripts);
       }
@@ -375,7 +340,6 @@ export function parseNmapText(input: string): ParsedScan {
         continue;
       }
 
-      // D-08: skip unsupported protocols (sctp/ip) with warning.
       if (protoStr !== "tcp" && protoStr !== "udp") {
         warnings.push(
           `Skipped port ${portStr}/${protoStr}: protocol not supported in v1.0 (only tcp/udp).`,
@@ -384,7 +348,6 @@ export function parseNmapText(input: string): ParsedScan {
         continue;
       }
 
-      // D-02: drop closed/unfiltered; normalize open|filtered → filtered.
       let state: "open" | "filtered";
       if (
         stateStr === "closed" ||
@@ -400,17 +363,12 @@ export function parseNmapText(input: string): ParsedScan {
       } else if (stateStr === "filtered") {
         state = "filtered";
       } else {
-        // open|filtered
         state = "filtered";
         warnings.push(
           `Port ${portStr}/${protoStr}: nmap reported 'open|filtered' — normalized to 'filtered'. Re-run with -sS or -sT to disambiguate.`,
         );
       }
 
-      // ssl/<svc> and tcpwrapped/<svc> compound service strings (e.g. ssl/http,
-      // ssl/imap) — strip the ssl/ prefix and tag tunnel="ssl" so KB matching
-      // resolves to the underlying service entry (e.g. https). Mirrors the XML
-      // parser's `<service tunnel="ssl">` handling.
       let serviceField = serviceStr;
       let tunnel: "ssl" | undefined;
       if (serviceField && /^ssl\//.test(serviceField)) {
@@ -434,43 +392,37 @@ export function parseNmapText(input: string): ParsedScan {
         scripts: [],
       };
       if (tunnel) newPort.tunnel = tunnel;
-      ports.push(newPort);
+      builder.ports.push(newPort);
       currentPort = newPort;
       phase = "ports";
       continue;
     }
 
-    // NSE continuation lines (applies to both per-port scripts and host scripts).
     const nseContMatch = NSE_CONT_RE.exec(line);
     const nseTermMatch = NSE_TERM_RE.exec(line);
 
     if (nseContMatch || nseTermMatch) {
       const body = (nseContMatch ?? nseTermMatch)![1];
 
-      // Starting-a-new-script detection: a line that begins with `|` and looks
-      // like `<id>: ...` kicks off a fresh buffer IF the buffer already holds
-      // a different id. The simple rule used here: whenever we match an
-      // id-header on a continuation line AND the buffer already has content,
-      // flush the previous script and start a new one.
       const idHdr = NSE_ID_HEADER_RE.exec(body);
       if (idHdr && nseBuffer.length > 0) {
         const dest =
           phase === "hostscript"
-            ? hostScripts
+            ? builder.hostScripts
             : currentPort?.scripts ?? [];
         flushNseBufferTo(dest);
       }
 
       nseBuffer.push(body);
 
-      // `|_` is the terminator — finalize immediately.
       if (nseTermMatch) {
         const dest =
-          phase === "hostscript" ? hostScripts : currentPort?.scripts;
+          phase === "hostscript"
+            ? builder.hostScripts
+            : currentPort?.scripts;
         if (dest) {
           flushNseBufferTo(dest);
         } else {
-          // Orphaned script (no owning port). Drop buffer with a warning.
           warnings.push(
             `Orphaned NSE output line ignored (no owning port): ${body.slice(0, 40)}`,
           );
@@ -480,93 +432,50 @@ export function parseNmapText(input: string): ParsedScan {
       continue;
     }
 
-    // Blank line closes an open NSE buffer.
     if (line.trim() === "") {
-      if (nseBuffer.length > 0) {
-        const dest =
-          phase === "hostscript" ? hostScripts : currentPort?.scripts;
-        if (dest) flushNseBufferTo(dest);
-        else nseBuffer = [];
-      }
+      flushPendingNseToCurrentScope();
       continue;
     }
 
-    // Otherwise: it's a line we don't recognize (e.g. "Service Info:",
-    // "Not shown:", "Host is up", "# Nmap done"). Close any open NSE buffer
-    // and move on. If the line looks like a port table entry but we didn't
-    // match, surface a warning for forensic value.
-    if (nseBuffer.length > 0) {
-      const dest =
-        phase === "hostscript" ? hostScripts : currentPort?.scripts;
-      if (dest) flushNseBufferTo(dest);
-      else nseBuffer = [];
-    }
+    flushPendingNseToCurrentScope();
 
     if (/^\d+\//.test(line) && phase === "ports") {
-      // Looked like a port line but didn't match the full regex.
       warnings.push(`Skipped unparseable port line: ${line.trim()}`);
     }
   }
 
-  // Tail flush: close any lingering NSE buffer at EOF.
-  if (nseBuffer.length > 0) {
-    const dest =
-      phase === "hostscript" ? hostScripts : currentPort?.scripts;
-    if (dest) flushNseBufferTo(dest);
+  // Tail: flush any open NSE buffer + finalize the trailing host builder.
+  if (builder) {
+    if (nseBuffer.length > 0) {
+      const dest =
+        phase === "hostscript"
+          ? builder.hostScripts
+          : currentPort?.scripts;
+      if (dest) flushNseBufferTo(dest);
+    }
+    parsedHosts.push(finalizeBuilder(builder));
   }
 
-  // P1-F PR 2: the legacy multi-host warning is gone. The XML parser now
-  // returns every host inside `scan.hosts`; the text parser is still
-  // first-host-only (text scans rarely cover multiple hosts in practice and
-  // a full text multi-host loop is a larger refactor scheduled for a later
-  // PR). For now, a multi-host text paste silently surfaces only the first
-  // host — operators with multi-host text scans should re-run with `-oX`.
-
-  // If we never found a target line, raise a clear error — D-07 spirit.
-  if (!target) {
+  if (parsedHosts.length === 0) {
     throw new Error(
       "No 'Nmap scan report for' header found — paste the full nmap -oN output, or use -oX (XML) for structured input.",
     );
   }
 
+  const primary = parsedHosts[0];
   const result: ParsedScan = {
-    hosts: [],
-    target,
+    hosts: parsedHosts,
+    target: primary.target,
     source: "nmap-text",
-    ports,
-    hostScripts,
+    ports: primary.ports,
+    hostScripts: primary.hostScripts,
     warnings,
   };
-  if (extraPortAccum.length > 0) {
-    result.extraPorts = extraPortAccum;
+  if (primary.os) result.os = primary.os;
+  if (primary.extraPorts && primary.extraPorts.length > 0) {
+    result.extraPorts = primary.extraPorts;
   }
-  if (osMatchAccum.length > 0 || osDetailsLine) {
-    const sorted = [...osMatchAccum].sort(
-      (a, b) => (b.accuracy ?? 0) - (a.accuracy ?? 0),
-    );
-    const best = sorted[0];
-    result.os = {
-      matches: sorted,
-    };
-    if (best?.name) result.os.name = best.name;
-    if (best?.accuracy !== undefined) result.os.accuracy = best.accuracy;
-  }
-  if (tracerouteHops.length > 0) {
-    result.traceroute = { hops: tracerouteHops };
-    if (tracerouteProto) result.traceroute.proto = tracerouteProto;
-  }
-
-  // P1-F PR 2: populate `scan.hosts[]` from the legacy fields. Text parser
-  // is still first-host-only; one entry mirrors the top-level fields.
-  const primary: ParsedHost = {
-    target,
-    ports,
-    hostScripts,
-  };
-  if (result.os) primary.os = result.os;
-  if (result.extraPorts) primary.extraPorts = result.extraPorts;
-  if (result.traceroute) primary.traceroute = result.traceroute;
-  result.hosts = [primary];
+  if (primary.traceroute) result.traceroute = primary.traceroute;
 
   return result;
 }

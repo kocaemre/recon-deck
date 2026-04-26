@@ -77,6 +77,9 @@ interface EngagementHeaderProps {
     ip: string;
     hostname: string | null;
     is_primary: boolean;
+    /** Active host's OS chip uses these fields when present. */
+    os_name?: string | null;
+    os_accuracy?: number | null;
   }>;
   /** P1-F PR 4: id of the currently-selected host (driven by `?host=<id>`). */
   activeHostId?: number | null;
@@ -246,6 +249,27 @@ export function EngagementHeader({
             finished {finishedAt.slice(0, 10)}
           </Chip>
         )}
+        {(() => {
+          // OS chip — sourced from the active host (or primary, or
+          // engagement-level fallback baked into hosts[0] by getById).
+          const active = hosts?.find((h) => h.id === activeHostId)
+            ?? hosts?.find((h) => h.is_primary)
+            ?? hosts?.[0];
+          if (!active?.os_name) return null;
+          const accuracy = active.os_accuracy
+            ? ` · ${active.os_accuracy}%`
+            : "";
+          return (
+            <Chip
+              variant="solid"
+              mono
+              title={`OS detection${accuracy} (active host)`}
+            >
+              OS {active.os_name}
+              {accuracy}
+            </Chip>
+          );
+        })()}
         {/* v2: secondary addresses/hostnames — render only the ones not already
            shown as primary (targetIp / targetHostname). */}
         {addresses

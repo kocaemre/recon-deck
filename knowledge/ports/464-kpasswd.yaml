@@ -1,0 +1,29 @@
+schema_version: 1
+port: 464
+service: kpasswd5
+protocol: tcp
+risk: low
+aliases:
+  - kpasswd
+quick_facts:
+  - "Kerberos password change service — strong indicator the host is a Domain Controller"
+  - "Pair with port 88 (kerberos) and 389/636 (ldap) — all three on one host == DC"
+  - "Useful for the password-change attack chain after compromising a low-priv user"
+checks:
+  - key: kpasswd-dc-confirmed
+    label: "Confirmed DC role (88 + 389 + 464 all open)"
+  - key: kpasswd-change-tested
+    label: "Tested password change with kpasswd / smbpasswd / nxc"
+commands:
+  - label: "kpasswd interactive change"
+    template: "kpasswd <user>@EXAMPLE.LOCAL"
+  - label: "smbpasswd remote change"
+    template: "smbpasswd -r {IP} -U <user>"
+  - label: "netexec / nxc smb password change"
+    template: "nxc smb {IP} -u <user> -p <oldpass> --change-pw <newpass>"
+  - label: "rpcclient SAMR setuserinfo (with creds)"
+    template: "rpcclient -U 'EXAMPLE\\<user>%<pass>' {IP} -c 'setuserinfo2 <target> 23 <newpass>'"
+resources:
+  - title: "464 - Pentesting Kpasswd"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/464-pentesting-kpasswd"
+    author: HackTricks

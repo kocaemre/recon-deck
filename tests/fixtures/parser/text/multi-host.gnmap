@@ -1,0 +1,8 @@
+# Nmap 7.94 scan initiated Wed Apr  1 00:00:00 2026 as: nmap -sV -oG multi.gnmap 10.10.10.5-7
+Host: 10.10.10.5 (box1.htb)	Status: Up
+Host: 10.10.10.5 (box1.htb)	Ports: 22/open/tcp//ssh//OpenSSH 8.9p1/, 80/open/tcp//http//Apache 2.4.52/, 443/open/tcp//ssl|http//Apache 2.4.52/	Ignored State: closed (997)
+Host: 10.10.10.6 ()	Status: Up
+Host: 10.10.10.6 ()	Ports: 3306/open/tcp//mysql//MariaDB 10.5/	Ignored State: closed (999)
+Host: 10.10.10.7 (box3.htb)	Status: Up
+Host: 10.10.10.7 (box3.htb)	Ports: 21/open/tcp//ftp//vsFTPd 2.3.4/, 22/open/tcp//ssh//OpenSSH 7.9/	Ignored State: filtered (998)
+# Nmap done at Wed Apr  1 00:00:49 2026 -- 3 IP addresses (3 hosts up) scanned in 49.12 seconds

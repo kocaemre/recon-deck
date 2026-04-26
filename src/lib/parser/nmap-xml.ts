@@ -77,7 +77,11 @@ export function parseNmapXml(raw: string): ParsedScan {
     );
   }
 
-  const prologueMatches = stripped.match(/<\?xml/g) ?? [];
+  // Count "real" XML declarations (`<?xml ?>` / `<?xml version=...?>`) but
+  // ignore other processing instructions like `<?xml-stylesheet ...?>` that
+  // nmap's -oA / -oX output emits. Only `<?xml` immediately followed by a
+  // whitespace or the closing `?` qualifies as a prologue.
+  const prologueMatches = stripped.match(/<\?xml(?=[\s?])/g) ?? [];
   if (prologueMatches.length > 1) {
     throw new Error(
       "Multiple XML prologues detected (likely from --append-output). " +

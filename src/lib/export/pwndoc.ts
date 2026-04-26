@@ -78,9 +78,10 @@ export function generatePwndoc(vm: EngagementViewModel): string {
     }
   }
   if (scope.length === 0) {
-    const fb = vm.engagement.target_hostname
-      ? `${vm.engagement.target_hostname} (${vm.engagement.target_ip})`
-      : vm.engagement.target_ip;
+    const primaryHost = vm.engagement.hosts[0];
+    const fb = primaryHost?.hostname
+      ? `${primaryHost.hostname} (${primaryHost.ip})`
+      : primaryHost?.ip ?? vm.engagement.name;
     scope.push(fb);
     for (const pvm of vm.ports) {
       portIndex.set(pvm.port.id, {

@@ -16,7 +16,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plus, Search, Check as CheckIcon, Globe } from "lucide-react";
+import { Plus, Search, Check as CheckIcon, Globe, Cog } from "lucide-react";
 import type { EngagementSummary } from "@/lib/db/types";
 import { useUIStore } from "@/lib/store";
 
@@ -40,8 +40,8 @@ export function Sidebar({ engagements }: SidebarProps) {
     return engagements.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
-        e.target_ip.toLowerCase().includes(q) ||
-        (e.target_hostname?.toLowerCase().includes(q) ?? false),
+        e.primary_ip.toLowerCase().includes(q) ||
+        (e.primary_hostname?.toLowerCase().includes(q) ?? false),
     );
   }, [filter, engagements]);
 
@@ -198,7 +198,7 @@ export function Sidebar({ engagements }: SidebarProps) {
                     href={href}
                     active={active}
                     name={e.name}
-                    ip={e.target_ip}
+                    ip={e.primary_ip}
                     portCount={e.port_count}
                     hostCount={e.host_count}
                     createdAt={e.created_at}
@@ -231,6 +231,24 @@ export function Sidebar({ engagements }: SidebarProps) {
           }}
         />
         <span>offline · local db</span>
+        <Link
+          href="/settings"
+          style={{
+            marginLeft: "auto",
+            color: "var(--fg-muted)",
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "2px 6px",
+            borderRadius: 4,
+            border: "1px solid transparent",
+          }}
+          title="Open settings"
+        >
+          <Cog size={11} />
+          Settings
+        </Link>
       </div>
     </aside>
   );

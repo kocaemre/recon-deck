@@ -289,12 +289,12 @@ const hostScript: PortScript = {
   source: "nmap",
 };
 
-// Engagement metadata — "autorecon" source to exercise AR rendering end-to-end
+// Engagement metadata — "autorecon" source to exercise AR rendering end-to-end.
+// Migration 0009: target identity comes from `hosts` (primaryHost below);
+// legacy target_ip / target_hostname columns no longer exist on Engagement.
 const engagement: Engagement = {
   id: ENGAGEMENT_ID,
   name: "box.htb (10.10.10.5)",
-  target_ip: TARGET_IP,
-  target_hostname: TARGET_HOSTNAME,
   source: "autorecon",
   scanned_at: SCANNED_AT,
   os_name: "Linux 5.x",

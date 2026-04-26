@@ -73,8 +73,6 @@ import { generateHtml } from "@/lib/export/html";
 const FIXTURE_ENG = {
   id: 1,
   name: "box.htb",
-  target_ip: "10.10.10.5",
-  target_hostname: null,
   source: "nmap-xml" as const,
   raw_input: "",
   warnings_json: "[]",
@@ -85,6 +83,23 @@ const FIXTURE_ENG = {
   updated_at: "2026-04-17T00:00:00.000Z",
   ports: [],
   hostScripts: [],
+  engagementArtifacts: [],
+  evidence: [],
+  findings: [],
+  // Migration 0009: target identity sourced from primary host row.
+  hosts: [
+    {
+      id: 1,
+      engagement_id: 1,
+      ip: "10.10.10.5",
+      hostname: null,
+      state: null,
+      os_name: null,
+      os_accuracy: null,
+      is_primary: true,
+      scanned_at: null,
+    },
+  ],
 };
 
 function makeReq(): any {
@@ -257,10 +272,15 @@ describe("GET /api/engagements/[id]/export/[format]", () => {
       spy.mockRestore();
     });
 
-    it("returns 500 when target_ip fails the allowlist regex", async () => {
+    it("returns 500 when primary host IP fails the allowlist regex", async () => {
       vi.mocked(getById).mockReturnValue({
         ...FIXTURE_ENG,
-        target_ip: "../etc/passwd",
+        hosts: [
+          {
+            ...FIXTURE_ENG.hosts[0],
+            ip: "../etc/passwd",
+          },
+        ],
       } as any);
       const spy = vi.spyOn(console, "error").mockImplementation(() => {});
       const res = await GET(makeReq(), makeParams("1", "markdown"));

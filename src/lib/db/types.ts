@@ -71,9 +71,18 @@ export type FullEngagement = Engagement & {
 /** Lightweight engagement for sidebar list (no nested port data) */
 export type EngagementSummary = Pick<
   Engagement,
-  "id" | "name" | "target_ip" | "target_hostname" | "source" | "created_at"
+  "id" | "name" | "source" | "created_at"
 > & {
   port_count: number;
   /** P1-F PR 4: number of hosts in the engagement (≥1 always). */
   host_count: number;
+  /**
+   * Migration 0009: target identity sourced from the engagement's primary
+   * host (`hosts.is_primary = 1`). Replaces the legacy
+   * `engagements.target_ip` column. Always present — every engagement has
+   * at least one host since migration 0007.
+   */
+  primary_ip: string;
+  /** Primary host's hostname (null when nmap returned no PTR/rDNS). */
+  primary_hostname: string | null;
 };

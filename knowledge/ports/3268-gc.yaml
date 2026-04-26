@@ -1,0 +1,38 @@
+schema_version: 1
+port: 3268
+service: globalcatldap
+protocol: tcp
+risk: medium
+aliases:
+  - msft-gc
+  - ldap-gc
+  - globalcat-ldap
+quick_facts:
+  - "Global Catalog port — LDAP query interface that spans every domain in the forest"
+  - "Forest-wide user / group enumeration without binding to each domain separately"
+  - "3269 = the SSL/TLS variant; same data, encrypted transport"
+checks:
+  - key: gc-bind
+    label: "Bound to Global Catalog (with creds or anonymous if allowed)"
+  - key: gc-cross-domain-enum
+    label: "Enumerated objects across every forest domain"
+  - key: gc-trust-discovery
+    label: "Mapped trust relationships via trustedDomain objects"
+commands:
+  - label: "ldapsearch via Global Catalog"
+    template: "ldapsearch -H ldap://{IP}:{PORT} -x -b 'DC=example,DC=local' '(objectClass=user)'"
+  - label: "netexec / nxc ldap on GC port"
+    template: "nxc ldap {IP} -u <user> -p <pass> --port {PORT} --users --groups"
+  - label: "nxc ldap forest trusts query"
+    template: "nxc ldap {IP} -u <user> -p <pass> --port {PORT} --trusted-for-delegation"
+  - label: "BloodHound collection over GC"
+    template: "bloodhound-python -d EXAMPLE.LOCAL -u <user> -p <pass> -gc {IP} -c All --zip"
+  - label: "windapsearch trust enumeration"
+    template: "windapsearch -d EXAMPLE.LOCAL --dc-ip {IP} -u <user> -p <pass> -t trusts"
+resources:
+  - title: "Global Catalog overview"
+    url: "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/component-updates/the-global-catalog"
+    author: Microsoft Learn
+  - title: "389,636 - Pentesting LDAP"
+    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    author: HackTricks

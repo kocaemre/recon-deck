@@ -257,10 +257,11 @@ function renderExtraSections(vm: EngagementViewModel): string | null {
 
 function renderHeader(vm: EngagementViewModel): string {
   const { engagement } = vm;
+  const primaryHost = engagement.hosts[0];
   const name = escapeHtml(engagement.name);
-  const ip = escapeHtml(engagement.target_ip);
-  const host = engagement.target_hostname
-    ? ` (${escapeHtml(engagement.target_hostname)})`
+  const ip = escapeHtml(primaryHost.ip);
+  const host = primaryHost.hostname
+    ? ` (${escapeHtml(primaryHost.hostname)})`
     : "";
   const lines: string[] = [
     "<header>",

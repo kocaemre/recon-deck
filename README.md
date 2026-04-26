@@ -6,9 +6,30 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-15.5-black)
 
-Paste nmap text or XML (or import an AutoRecon `results/` folder) and every open port becomes a card with pre-filled commands (IP interpolated), HackTricks links, tickable checks, and a notes field. Built for OSCP/HTB students and solo pentesters who currently juggle 8 browser tabs and a scratch Obsidian file per box.
+Paste nmap text / XML / greppable output (or import an AutoRecon `results/` folder) and every open port becomes a card with pre-filled commands (IP interpolated), HackTricks links, tickable checks, evidence screenshots, and a notes field. Multi-host engagements get a host selector and per-host scoping. Built for OSCP/HTB students and solo pentesters who currently juggle 8 browser tabs and a scratch Obsidian file per box.
 
 <!-- ![recon-deck demo](docs/demo.gif) (GIF to be added — record an 8-12 second clip of nmap paste → cards) -->
+
+---
+
+## Features at a glance
+
+- **Multi-format ingest** — nmap `-oN` text, `-oX` XML, `-oG` greppable; multi-host scans become a host selector in the header
+- **AutoRecon import** — drag a `results/` zip; per-port files, manual commands, gowitness screenshots, patterns / errors logs all surface in the right places
+- **Re-import + diff** — re-paste an nmap output to refresh an engagement; the heatmap badges new ports `NEW` and previously-open ports `CLOSED` (`scans: N` chip in the header tracks how many imports you've done)
+- **KB-driven port cards** — port, service, product/version match shipped YAML KB; commands have `{IP}` / `{HOST}` / `{PORT}` / `{WORDLIST_*}` placeholders interpolated for the active host
+- **Active Directory tooling baked in** — netexec (`nxc`) for SMB / LDAP / WinRM / RDP enumeration + spraying + LAPS dump + secretsdump; impacket suite for AS-REP roasting (`GetNPUsers`), Kerberoasting (`GetUserSPNs`), DCSync (`secretsdump`), TGT request, RPC dump; kerbrute for user enum + lockout-safe password spray; bloodhound-python (LDAP / LDAPS / Global Catalog); coercion helpers (PetitPotam, PrinterBug); shadow-credentials via pyWhisker. Ships as part of the `88` / `135` / `389` / `445` / `464` / `636` / `3268` / `3389` / `5985` KB entries — every relevant DC port surfaces the right command.
+- **Known-vulns auto-match** — when a port's `<product> <version>` matches a KB pattern (e.g. `vsFTPd 2.3.4`), the vulnerability + CVE + reference link surface directly on the port card
+- **searchsploit lookup** — one-click `searchsploit -t "<product>"` per port, results cached, friendly error if exploitdb isn't installed
+- **Findings catalog** — pentester-discovered findings (severity / title / description / CVE / evidence refs), grouped by severity in the side panel
+- **Evidence pane** — per-port drag-drop / clipboard-paste screenshots; AutoRecon's gowitness PNGs auto-import into the right port's evidence list
+- **Manual ports** — heatmap "+ Add port" for services nmap missed (custom DNS zone transfer, alternate banner, etc.)
+- **Custom commands** — personal command snippets stored in `/settings/commands`, surfaced alongside KB commands, scoped by service / port
+- **Wordlist overrides** — `/settings/wordlists` rewrites `{WORDLIST_*}` placeholders to your own SecLists / dirb paths
+- **Cross-engagement search** — `⌃⇧F` opens an FTS5 modal, BM25-ranked across every engagement, hit rows show host context
+- **Six export formats** — Markdown (Obsidian frontmatter), JSON, single-file HTML, Findings CSV, SysReptor JSON, PwnDoc YAML, plus print-to-PDF report route
+- **Multi-host aware exports** — SysReptor scope and PwnDoc scope list every host; markdown / HTML render one section per host
+- **Settings index** — `/settings` central page lists every engagement with a destructive **Delete** action (cascades through ports, scripts, evidence, findings, scan history) plus jump-off links to the wordlist / custom command libraries
 
 ---
 
@@ -99,18 +120,73 @@ Or use a Docker named volume (`-v recondeck-kb:/kb`), which inherits container o
 2. Zip the folder: `cd results && zip -r my-target.zip <ip>/`.
 3. Drag the `.zip` onto the import panel in recon-deck.
 
-The importer unpacks server-side, parses the XML scan, and seeds port cards with any NSE script output found under `scans/`. No client-side unzipping — keeps the browser bundle lean.
+The importer unpacks server-side, parses the full / quick TCP XML scan, and seeds port cards with everything it finds:
+
+- per-port files (`tcp80/...`, `tcp_22_ssh_*`) → port detail pane
+- `_manual_commands.txt` → "Manual commands" section per port
+- `_patterns.log`, `_errors.log`, `_commands.log` → engagement-level warning panel
+- `report/screenshots/*.png` (gowitness / aquatone) → port_evidence rows, filename-matched to the right port
+- `loot/`, `report/`, `exploit/` → engagement artifacts
+
+Multi-IP zips (`results/<ip1>/`, `results/<ip2>/`) are detected — primary host inherits AR data, secondary hosts get ports + scripts only (a warning surfaces on import).
+
+---
+
+## Multi-host engagements
+
+A single engagement holds N hosts (DC + workstations during an AD pentest, two related boxes, etc.). The engagement header surfaces a **Hosts** row with switchable chips; the heatmap, command palette, and per-port commands all rescope to the active host. Use `?host=<id>` in the URL or the keyboard palette (`⌘K` → host name).
+
+Multi-host arrives via three paths:
+
+- **XML upload** — every `<host>` in the scan becomes its own host row.
+- **Text / greppable upload** — every `Nmap scan report for ...` block (or distinct `Host:` IP in greppable) becomes its own host row.
+- **AutoRecon multi-IP zip** — every `results/<ip>/` directory becomes a host row.
+
+---
+
+## Re-import + scan diff
+
+Hit **Re-import** in the engagement header and paste a fresh nmap output. The reconciler:
+
+- Adds new ports (`NEW` chip on the heatmap)
+- Refreshes `last_seen_scan_id` for re-observed ports
+- Marks ports the new scan didn't see as `closed` (`CLOSED` chip, dim tile)
+- Surfaces a `scans: N` chip in the header so you know multi-import diff context applies
+- Toast: `1 new · 1 closed · 2 unchanged` after import
+
+---
+
+## Cross-engagement search
+
+Press `⌃⇧F` (or `⌘⇧F` on Mac, or click "Search all engagements" in the sidebar). Searches port services / products / versions, NSE script output, port notes, finding titles + descriptions, and engagement names across every engagement in your local DB. Results are FTS5 + BM25 ranked, port hits show a host-context chip when the engagement has multiple hosts.
+
+---
+
+## Settings
+
+Open `/settings` (footer link in the sidebar) for:
+
+- **Engagement list** — every engagement with an inline **Delete** button (cascades through ports, scripts, evidence, findings, scan history). Confirms with the host / port count so you know what you're nuking.
+- **Wordlist library** (`/settings/wordlists`) — override `{WORDLIST_*}` placeholders to your own SecLists / dirb paths.
+- **Custom command library** (`/settings/commands`) — personal command snippets surfaced alongside KB commands. Scope by service / port (or leave blank for global).
+
+Engagement renames stay where they belong — inline edit on the engagement header (click the IP or hostname field, type, blur).
 
 ---
 
 ## Exports
 
-Every engagement is export-ready in four formats:
+Every engagement is export-ready in six formats plus a print route:
 
 - **Markdown** — Obsidian-compatible frontmatter, one file per engagement. Paste into your vault.
-- **JSON** — structured dump of ports, commands, checks, notes. For scripting.
+- **JSON** — structured dump of hosts / ports / commands / checks / notes / findings. For scripting.
 - **HTML** — single-file standalone report, opens in any browser offline.
+- **Findings CSV** — flat severity / title / host / port / cve / description rows for spreadsheet triage.
+- **SysReptor JSON** — generic `projects/v1` shape with multi-host scope; map onto your SysReptor design template.
+- **PwnDoc YAML** — minimal `findings + scope` document; multi-host aware.
 - **Print-to-PDF** — dedicated `/report` route with print-optimized CSS. Ctrl+P → Save as PDF in your browser.
+
+Multi-host engagements export every host in `scope[]` (SysReptor / PwnDoc) and one section per host (Markdown / HTML).
 
 ---
 

@@ -226,14 +226,12 @@ export default async function EngagementPage({
     }
   }
 
-  // P1-F PR 4: command interpolation now uses the *active host's* IP and
-  // hostname rather than the legacy engagements.target_ip column. For
-  // single-host engagements activeHost === primary host so this is the same
-  // value; for multi-host engagements the operator-selected host drives
-  // {IP}/{HOST} resolution. Fallback to legacy columns is defensive — every
-  // engagement has at least one host after migration 0007.
-  const targetIp = activeHost?.ip ?? engagement.target_ip;
-  const targetHostname = activeHost?.hostname ?? engagement.target_hostname;
+  // Migration 0009: target_ip / target_hostname columns dropped. Identity
+  // sourced from `hosts.is_primary = 1` (always present after migration
+  // 0007). `activeHost` is set above and falls through to the primary host
+  // when the URL doesn't pin a specific one.
+  const targetIp = activeHost?.ip ?? engagement.hosts[0].ip;
+  const targetHostname = activeHost?.hostname ?? engagement.hosts[0].hostname;
 
   const portData = sortedPorts.map((p) => {
     const kbEntry = matchPort(kb, p.port, p.service ?? undefined);
@@ -442,6 +440,13 @@ export default async function EngagementPage({
           ip: h.ip,
           hostname: h.hostname,
           is_primary: h.is_primary,
+          // Active-host OS chip is sourced here. Falls back to the
+          // engagement-level os_name/accuracy on the primary host so
+          // single-host engagements that never wrote per-host OS still
+          // surface something.
+          os_name: h.os_name ?? (h.is_primary ? engagement.os_name : null),
+          os_accuracy:
+            h.os_accuracy ?? (h.is_primary ? engagement.os_accuracy : null),
         }))}
         activeHostId={activeHostId}
         scanCount={scanHistory.length}

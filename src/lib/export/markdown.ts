@@ -100,13 +100,16 @@ function buildFrontmatter(vm: EngagementViewModel, exportedAt: string): string {
   const { engagement } = vm;
   const lines: string[] = ["---"];
 
+  // Migration 0009: target identity sourced from primary host.
+  const primaryHost = engagement.hosts[0];
+
   lines.push(`target: ${yamlQuote(engagement.name)}`);
-  lines.push(`ip: ${yamlQuote(engagement.target_ip)}`);
+  lines.push(`ip: ${yamlQuote(primaryHost.ip)}`);
 
   // Optional — omit when null. Obsidian treats absent and `null` keys
   // differently; absent is the unambiguous way to say "no data".
-  if (engagement.target_hostname) {
-    lines.push(`hostname: ${yamlQuote(engagement.target_hostname)}`);
+  if (primaryHost.hostname) {
+    lines.push(`hostname: ${yamlQuote(primaryHost.hostname)}`);
   }
 
   // Aliases: v1.0 has no aliases concept in the engagement schema. Omit the

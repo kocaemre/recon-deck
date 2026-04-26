@@ -88,8 +88,8 @@ export default async function ReportPage({ params }: PageProps) {
         <h1 className="text-2xl font-semibold">{eng.name}</h1>
         <p className="mt-1 text-sm">
           <strong>Target:</strong>{" "}
-          <code className="font-mono">{eng.target_ip}</code>
-          {eng.target_hostname ? ` (${eng.target_hostname})` : ""}
+          <code className="font-mono">{eng.hosts[0].ip}</code>
+          {eng.hosts[0].hostname ? ` (${eng.hosts[0].hostname})` : ""}
         </p>
         {eng.os_name && (
           <p className="text-sm">

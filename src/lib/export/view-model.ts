@@ -277,16 +277,37 @@ export function loadEngagementForExport(
   let totalChecks = 0;
   let doneChecks = 0;
 
+  // Migration 0009: target identity sourced from the host the port belongs
+  // to (not the legacy engagements.target_ip column). Multi-host bonus:
+  // each port now interpolates with its own host's IP/hostname instead of
+  // always resolving to the primary host.
+  const hostById = new Map<number, (typeof engagement.hosts)[number]>(
+    engagement.hosts.map((h) => [h.id, h]),
+  );
+  const primaryHost = engagement.hosts[0];
+  const ipFor = (port: (typeof sortedPorts)[number]): string => {
+    const h = port.host_id !== null ? hostById.get(port.host_id) : undefined;
+    return h?.ip ?? primaryHost.ip;
+  };
+  const hostnameFor = (
+    port: (typeof sortedPorts)[number],
+  ): string | null => {
+    const h = port.host_id !== null ? hostById.get(port.host_id) : undefined;
+    return h?.hostname ?? primaryHost.hostname;
+  };
+
   const portVms: PortViewModel[] = sortedPorts.map((p) => {
     const kbEntry = matchPort(kb, p.port, p.service ?? undefined);
+    const portIp = ipFor(p);
+    const portHostname = hostnameFor(p);
 
     const kbCommands = kbEntry.commands.map((cmd) => ({
       label: cmd.label,
       command: interpolateCommand(
         cmd.template,
-        engagement.target_ip,
+        portIp,
         p.port,
-        engagement.target_hostname,
+        portHostname,
         wordlistOverrides,
       ),
     }));
@@ -319,9 +340,9 @@ export function loadEngagementForExport(
       label: cmd.label,
       command: interpolateCommand(
         cmd.template,
-        engagement.target_ip,
+        portIp,
         p.port,
-        engagement.target_hostname,
+        portHostname,
         wordlistOverrides,
       ),
     }));

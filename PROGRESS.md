@@ -2,9 +2,9 @@
 
 > Bu dosya, "evidence + findings + cross-engagement search + reporting bridge" yönündeki strateji değişikliğinin kanlı canlı durumunu tutar. Bir oturum kesilirse buradan devam edilir.
 >
-> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP + P2 searchsploit + searchsploit cache + KB known_vulns auto-match + scan count chip + Docker UX bitti). Geriye kalanlar: nmap-text/greppable multi-host (defer — XML kapsıyor), target_ip deprecate (opsiyonel schema temizliği), NVD CVE local mirror (yeni feature, büyük iş). **DIST/Bun binary roadmap'ten çıkarıldı** — Docker yeterli.
+> Son güncelleme: 2026-04-26 (P0 + P1-E + P1-F + P1-G + P1-H + GlobalSearch host context + AR multi-IP + P2 searchsploit + searchsploit cache + KB known_vulns auto-match + scan count chip + Docker UX + **nmap-text/greppable multi-host** + **target_ip deprecate (migration 0009)** + **`<?xml-stylesheet?>` parser fix** + gerçek nmap & AutoRecon QA bitti). Geriye kalan tek opsiyonel: NVD CVE local mirror (backlog'da). **DIST/Bun binary roadmap'ten çıkarıldı** — Docker yeterli.
 >
-> Test durumu: **397/397 yeşil**, TypeScript: 0 hata.
+> Test durumu: **400/400 yeşil**, TypeScript: 0 hata. Gerçek scanme.nmap.org / 8.8.8.8 / 1.1.1.1 nmap çıktıları + AutoRecon zip mock canlıda doğrulandı (engagement #8–14).
 
 ---
 
@@ -96,6 +96,33 @@ Ek iyileştirmeler:
 - `report/page.tsx` + export `[format]` route — DB'den override map çekip `loadEngagementForExport`'a pass ediyor (print/PDF + MD/JSON/HTML export aynı resolved komutu görür)
 - Resolution sırası: override → shipped default → token verbatim
 - Test: 10 yeni unit test (interpolateWordlists + isValidWordlistKey) + 2 lint test case + route mock'u + base-table assertion 11→12
+
+### nmap-text + nmap-greppable multi-host parser ✅ (2026-04-26)
+- `nmap-text.ts` per-host `HostBuilder` ile yeniden yazıldı; her `Nmap scan report for ...` boundary önceki host'u finalize → `parsedHosts[]`'a ekler. extraPorts / OS matches / traceroute her host'a ait.
+- `nmap-greppable.ts` `Map<ip, HostBuilder>` ile rebuild; aynı IP'nin Status / Ports / Ignored State satırları aynı builder'a merge olur. Section delimiter regex `\s+` (tab + double space hepsi).
+- Multi-host fixture: `tests/fixtures/parser/text/multi-host.nmap` (3 hosts) + `multi-host.gnmap` (3 hosts)
+- 8 yeni unit test (text + greppable multi-host + back-compat assertions)
+- Gerçek dünya: `nmap -sV -p 22,53,80,443 8.8.8.8 1.1.1.1 scanme.nmap.org` text + greppable upload → 2 hosts × 4 ports parse, HOSTS row UI'da görünür
+
+### target_ip / target_hostname deprecate ✅ (2026-04-26, migration 0009)
+- Migration 0009: `engagements.target_ip` ve `target_hostname` DROP. Önce FTS5 trigger'ları yeniden yarat (body = `NEW.name` — `name` zaten "hostname (ip)" formatında, search experience korundu)
+- `EngagementSummary`: `target_ip / target_hostname` çıkarıldı, yerine `primary_ip` + `primary_hostname` (listSummaries hosts JOIN ile dolduruyor)
+- `createFromScan` + `updateTarget` dual-write kaldırıldı; sadece `hosts` (primary) yazılıyor
+- `Sidebar`, `engagement page`, `report page`, tüm 5 export modülü (markdown / json / sysreptor / pwndoc / html / csv) + export route → `engagement.hosts[0].ip` / `.hostname` (primary host) okuyor
+- **Bonus multi-host fix:** view-model `interpolateCommand` artık her port için kendi host'unun IP/hostname'ini kullanıyor (önceden hep primary'i kullanıyordu — multi-host export bug)
+- 7 test fixture güncellendi, 0 regression
+
+### `<?xml-stylesheet?>` parser fix ✅ (2026-04-26, gerçek dünya bug)
+- `nmap-xml.ts` "multiple XML prologues" guard regex'i `/<\?xml/g` → `/<\?xml(?=[\s?])/g` — `<?xml-stylesheet ...?>` PI'ı artık ikinci prologue sayılmıyor
+- nmap'in `-oA` / `-oX` çıktılarında her zaman bulunan stylesheet PI artık reject olmuyor
+- Tetiklendi: gerçek scanme.nmap.org çıktısı upload edildiğinde 422 alındı
+
+### Gerçek nmap + AutoRecon canlı QA ✅ (2026-04-26)
+- 6 gerçek nmap upload (engagement #8–13): `nmap -sV -sC scanme.nmap.org` (XML / text / greppable) + multi-host `nmap -sV 8.8.8.8 1.1.1.1 scanme.nmap.org` (XML / text / greppable)
+- Multi-host text + greppable parser canlıda 2 hosts × 4 ports parse etti, HOSTS row UI'da çoklu host gösteriyor, sidebar `2h · 8p` chip
+- AR zip mock (engagement #14): `results/scanme.nmap.org/scans/xml/_full_tcp_nmap.xml` + `_manual_commands.txt` + `_patterns.log` + `_errors.log` + per-port HTML + screenshot PNG. Upload → autorecon source chip + AR pattern/error warning panel + per-port commands
+- SysReptor + PwnDoc multi-host scope çoklu hosts içeriyor (`["dns.google (8.8.8.8)", "one.one.one.one (1.1.1.1)"]`)
+- Cross-engagement search "openssh" → BM25 ranked hit'ler, host context chip'leri her hit'te
 
 ### Docker UX ✅
 - `install.sh` repo root — `curl … | sh` one-liner: docker daemon check + image pull + persistent named volumes + 127.0.0.1:3000 bind + browser auto-open
@@ -487,11 +514,10 @@ ALTER TABLE ports ADD COLUMN closed_at_scan_id  INTEGER;
 - `1972040` P1-F PR 3 (view-model + 3 export + report page)
 - `a5e89aa` v2 batch (P0 + P1-E + P1-F PR 1+2)
 
-**Sıradaki seçenekler (kalanlar):**
-1. **nmap-text/greppable multi-host parser** — defer'd. XML zaten tam multi-host. Pentester'lar genelde XML upload eder. Düşük öncelik.
-2. **target_ip deprecate** — `engagements.target_ip/target_hostname` retain edilmiş (primary host mirror, dual-write çalışıyor). Schema temizliği için migration 0009 + cascade gerekir; büyük + riskli + faydası düşük.
-3. **NVD CVE / vulners ek lookup'lar** — searchsploit'a benzer pattern. NVD JSON feed ~5GB local mirror büyük iş; pragmatik MVP olarak CVE-XXXX-YYYY pattern detection + auto-link sonra eklenebilir.
-4. **Manuel Chrome doğrulaması** — kullanıcı tarafı. Multi-host upload + Re-import + Export menü + searchsploit Lookup + known_vulns hit'leri.
+**Sıradaki seçenekler (kalanlar):** _Yok — tüm aktif maddeler 2026-04-26 oturumunda kapatıldı._
+
+**Sonraya bırakılanlar (backlog):**
+- **NVD CVE / vulners ek lookup'lar** — searchsploit'a benzer pattern. NVD JSON feed ~5GB local mirror büyük iş; pragmatik MVP olarak CVE-XXXX-YYYY pattern detection + auto-link sonra eklenebilir. _Karar (2026-04-26): şimdilik ertelendi, ileride ele alınacak._
 
 **P1-G (diff between scans) ve P1-H (SysReptor exports) görece izole, sırayla yapılabilir — P1-F PR'ları bittikten sonra.**
 

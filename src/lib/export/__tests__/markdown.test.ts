@@ -125,8 +125,11 @@ describe("generateMarkdown — Frontmatter (EXPORT-02)", () => {
       ...base,
       engagement: {
         ...base.engagement,
-        target_hostname: null,
         os_name: null,
+        // Migration 0009: hostname now lives on the primary host row.
+        hosts: base.engagement.hosts.map((h, i) =>
+          i === 0 ? { ...h, hostname: null } : h,
+        ),
       },
     };
     const md = generateMarkdown(nullified, { exportedAt: FIXTURE_EXPORTED_AT });
