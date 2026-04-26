@@ -422,7 +422,13 @@ export function CommandPalette() {
         engagementName={engagementContext.engagementName}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        onDeleted={() => router.push("/")}
+        onDeleted={() => {
+          // Bounce to dashboard + refresh the RSC tree so the deleted
+          // row drops out of the sidebar immediately. router.push
+          // alone keeps the cached layout.
+          router.push("/");
+          router.refresh();
+        }}
       />
     )}
     </>

@@ -404,11 +404,13 @@ function SidebarRow({
   function onDeleted() {
     // Active row gone — bounce to the dashboard so we're not stuck on a
     // stale URL. Otherwise just refresh in place to drop the row.
+    // Both branches need router.refresh() so the sidebar's RSC tree
+    // re-fetches and the deleted row disappears immediately;
+    // router.push alone keeps the cached tree.
     if (active) {
       router.push("/");
-    } else {
-      router.refresh();
     }
+    router.refresh();
   }
 
   return (
