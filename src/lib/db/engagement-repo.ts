@@ -410,9 +410,26 @@ export function getById(db: Db, id: number): FullEngagement | null {
     .where(eq(port_commands.engagement_id, id))
     .all();
 
-  // v2: per-port evidence (screenshots / attachments).
+  // v2: per-port evidence (screenshots / attachments). The base64 payload
+  // (`data_b64`, up to 4 MB per row) is intentionally OMITTED — it ships
+  // separately via `GET /api/engagements/[id]/evidence/[evidenceId]/raw`
+  // so the engagement page render isn't a multi-megabyte HTML response.
   const evidenceRows = db
-    .select()
+    .select({
+      id: port_evidence.id,
+      engagement_id: port_evidence.engagement_id,
+      port_id: port_evidence.port_id,
+      filename: port_evidence.filename,
+      mime: port_evidence.mime,
+      caption: port_evidence.caption,
+      source: port_evidence.source,
+      created_at: port_evidence.created_at,
+      // Stand-in for the full-shape `PortEvidence` consumer contract.
+      // Empty string keeps the type narrow without adding a separate
+      // "metadata only" alias type. Consumers that actually need the
+      // bytes hit the streaming route.
+      data_b64: sql<string>`''`,
+    })
     .from(port_evidence)
     .where(eq(port_evidence.engagement_id, id))
     .all()
@@ -485,6 +502,11 @@ export function listSummaries(db: Db): EngagementSummary[] {
   // Migration 0009: target_ip / target_hostname were dropped. We surface the
   // primary host's IP / hostname via correlated subqueries — same shape the
   // sidebar consumed before, just sourced from `hosts.is_primary = 1`.
+  //
+  // Also pre-aggregates `done_check_count` so the layout doesn't have to
+  // pull every row from `check_states` and group in JS. KB-driven `total`
+  // can't be SQL-derived (it requires KB matching per port at read time);
+  // see app/layout.tsx for the in-memory totals loop.
   return db
     .select({
       id: engagements.id,
@@ -498,6 +520,7 @@ export function listSummaries(db: Db): EngagementSummary[] {
       host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
       primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
       primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
+      done_check_count: sql<number>`(SELECT COUNT(*) FROM check_states WHERE check_states.engagement_id = engagements.id AND check_states.checked = 1)`,
     })
     .from(engagements)
     .orderBy(desc(engagements.created_at))

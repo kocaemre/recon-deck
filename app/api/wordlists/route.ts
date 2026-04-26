@@ -14,6 +14,7 @@ import {
   upsertWordlistOverride,
   isValidWordlistKey,
 } from "@/lib/db";
+import { readJsonBody } from "@/lib/api/body";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { key?: string; path?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  const parsed = await readJsonBody<{ key?: string; path?: string }>(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   const key = (body.key ?? "").trim();
   const path = (body.path ?? "").trim();

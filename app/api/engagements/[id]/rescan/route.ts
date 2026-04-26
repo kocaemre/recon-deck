@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db, getById, rescanEngagement } from "@/lib/db";
 import { parseAny } from "@/lib/parser";
+import { readJsonBody } from "@/lib/api/body";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -44,12 +45,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
-  let body: { raw?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  // Generous cap — large XML re-imports (autorecon `_full_tcp_nmap.xml`)
+  // can run several MB. The /api/scan route uses 5 MB; mirror that here.
+  const parsed = await readJsonBody<{ raw?: unknown }>(request, {
+    maxBytes: 5 * 1024 * 1024,
+  });
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const raw = typeof body.raw === "string" ? body.raw : "";
   if (!raw.trim()) {
     return NextResponse.json(

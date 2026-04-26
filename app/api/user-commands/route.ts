@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db, listUserCommands, createUserCommand } from "@/lib/db";
+import { readJsonBody } from "@/lib/api/body";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +15,14 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  let body: {
+  const parsed = await readJsonBody<{
     service?: string | null;
     port?: number | null;
     label?: string;
     template?: string;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  }>(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   const label = (body.label ?? "").trim();
   const template = (body.template ?? "").trim();

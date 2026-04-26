@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db, updateUserCommand, deleteUserCommand } from "@/lib/db";
+import { readJsonBody } from "@/lib/api/body";
 
 interface RouteContext {
   params: Promise<{ commandId: string }>;
@@ -17,17 +18,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!Number.isInteger(id)) {
     return NextResponse.json({ error: "Invalid id." }, { status: 400 });
   }
-  let body: {
+  const parsed = await readJsonBody<{
     service?: string | null;
     port?: number | null;
     label?: string;
     template?: string;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  }>(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const updated = updateUserCommand(db, id, {
     service: body.service ?? null,
     port: body.port ?? null,

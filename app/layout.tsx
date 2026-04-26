@@ -8,7 +8,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { CheatSheetModal } from "@/components/CheatSheetModal";
 import { GlobalSearchModal } from "@/components/GlobalSearchModal";
 import { db, listSummaries } from "@/lib/db";
-import { ports as portsTable, check_states } from "@/lib/db/schema";
+import { ports as portsTable } from "@/lib/db/schema";
 import { loadKnowledgeBase, matchPort } from "@/lib/kb";
 import { SCHEMA_VERSION_LABEL } from "@/lib/db/migration-version";
 
@@ -58,36 +58,34 @@ export default function RootLayout({
 }) {
   const summaries = listSummaries(db);
 
-  // Enrich each summary with KB-derived check stats. Performance-conscious:
-  // 3 SELECTs total (engagements + ports + check_states) instead of N×getById,
-  // then aggregate in-memory. KB lookup is in-memory (loadKnowledgeBase is
-  // cached at module level via sidebarKb).
-  const allPorts = db.select().from(portsTable).all();
-  const allChecks = db.select().from(check_states).all();
-  const portsByEngagement = new Map<number, typeof allPorts>();
-  for (const p of allPorts) {
+  // KB-driven check totals can't be computed in SQL (each port matches
+  // shipped KB entries dynamically). We pull only the columns the matcher
+  // needs (engagement_id, port, service) instead of every row's full
+  // payload. The `done` count comes pre-aggregated from listSummaries
+  // (correlated COUNT subquery) so check_states never gets fully scanned.
+  const portRows = db
+    .select({
+      engagement_id: portsTable.engagement_id,
+      port: portsTable.port,
+      service: portsTable.service,
+    })
+    .from(portsTable)
+    .all();
+  const portsByEngagement = new Map<number, typeof portRows>();
+  for (const p of portRows) {
     const list = portsByEngagement.get(p.engagement_id) ?? [];
     list.push(p);
     portsByEngagement.set(p.engagement_id, list);
   }
-  const checkedKeys = new Set(
-    allChecks
-      .filter((c) => c.checked)
-      .map((c) => `${c.engagement_id}:${c.port_id}:${c.check_key}`),
-  );
 
   const engagements = summaries.map((s) => {
     const enPorts = portsByEngagement.get(s.id) ?? [];
     let total = 0;
-    let done = 0;
     for (const p of enPorts) {
       const kbEntry = matchPort(sidebarKb, p.port, p.service ?? undefined);
       total += kbEntry.checks.length;
-      for (const c of kbEntry.checks) {
-        if (checkedKeys.has(`${s.id}:${p.id}:${c.key}`)) done++;
-      }
     }
-    return { ...s, total, done };
+    return { ...s, total, done: s.done_check_count };
   });
 
   return (

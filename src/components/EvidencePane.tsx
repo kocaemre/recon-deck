@@ -226,8 +226,9 @@ export function EvidencePane({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`data:${ev.mime};base64,${ev.data_b64}`}
+                  src={`/api/engagements/${engagementId}/evidence/${ev.id}/raw`}
                   alt={ev.filename}
+                  loading="lazy"
                   style={{
                     display: "block",
                     width: "100%",
@@ -298,7 +299,7 @@ export function EvidencePane({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`data:${lightbox.mime};base64,${lightbox.data_b64}`}
+              src={`/api/engagements/${engagementId}/evidence/${lightbox.id}/raw`}
               alt={lightbox.filename}
               style={{
                 maxWidth: "92vw",

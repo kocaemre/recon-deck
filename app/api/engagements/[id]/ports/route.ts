@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db, addManualPort } from "@/lib/db";
+import { readJsonBody } from "@/lib/api/body";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Invalid engagement id." }, { status: 400 });
   }
 
-  let body: {
+  const parsed = await readJsonBody<{
     port?: number;
     protocol?: string;
     state?: string;
@@ -28,12 +29,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     tunnel?: string | null;
     /** Optional explicit host (multi-host engagement). Falls back to primary. */
     hostId?: number;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  }>(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   if (typeof body.port !== "number") {
     return NextResponse.json({ error: "Port is required." }, { status: 400 });

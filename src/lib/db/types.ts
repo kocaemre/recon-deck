@@ -85,4 +85,10 @@ export type EngagementSummary = Pick<
   primary_ip: string;
   /** Primary host's hostname (null when nmap returned no PTR/rDNS). */
   primary_hostname: string | null;
+  /**
+   * Pre-aggregated count of check_states.checked = 1 rows for this
+   * engagement. Lets the sidebar progress bar avoid pulling every row
+   * from check_states on every layout render.
+   */
+  done_check_count: number;
 };

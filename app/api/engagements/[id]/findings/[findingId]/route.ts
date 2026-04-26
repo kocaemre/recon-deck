@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db, updateFinding, deleteFinding, type Severity } from "@/lib/db";
+import { readJsonBody } from "@/lib/api/body";
 
 const ALLOWED_SEVERITY: Severity[] = ["info", "low", "medium", "high", "critical"];
 
@@ -21,19 +22,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Invalid id." }, { status: 400 });
   }
 
-  let body: {
+  const parsed = await readJsonBody<{
     portId?: number | null;
     severity?: string;
     title?: string;
     description?: string;
     cve?: string | null;
     evidenceRefs?: number[];
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
+  }>(request);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   if (body.severity && !ALLOWED_SEVERITY.includes(body.severity as Severity)) {
     return NextResponse.json(
