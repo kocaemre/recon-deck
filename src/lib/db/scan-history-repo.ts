@@ -203,6 +203,7 @@ export function rescanEngagement(
               .values({
                 engagement_id: engagementId,
                 port_id: existing.id,
+                host_id: hostId,
                 script_id: s.id,
                 output: s.output,
                 is_host_script: false,
@@ -238,6 +239,7 @@ export function rescanEngagement(
               .values({
                 engagement_id: engagementId,
                 port_id: insertedPort.id,
+                host_id: hostId,
                 script_id: s.id,
                 output: s.output,
                 is_host_script: false,

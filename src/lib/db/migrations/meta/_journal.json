@@ -71,6 +71,13 @@
       "when": 1777900000000,
       "tag": "0009_drop-engagement-target",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1778000000000,
+      "tag": "0010_add-port-scripts-host-id",
+      "breakpoints": true
     }
   ]
 }

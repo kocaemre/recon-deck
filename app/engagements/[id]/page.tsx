@@ -367,10 +367,23 @@ export default async function EngagementPage({
     };
   });
 
-  const enrichedHostScripts = engagement.hostScripts.map((hs) => {
-    const structured = structuredByKey.get(`host:${hs.script_id}`);
-    return structured ? { ...hs, structured } : hs;
-  });
+  // Migration 0010: host scripts now carry host_id, so multi-host
+  // engagements scope the Host-Level Findings card to whichever host
+  // the operator has activated via `?host=<id>`. Single-host
+  // engagements (and legacy rows without host_id from the historical
+  // multi-host conflation) fall through to the unfiltered list, which
+  // matches the pre-migration behavior.
+  const enrichedHostScripts = engagement.hostScripts
+    .filter(
+      (hs) =>
+        activeHostId === null ||
+        hs.host_id === null ||
+        hs.host_id === activeHostId,
+    )
+    .map((hs) => {
+      const structured = structuredByKey.get(`host:${hs.script_id}`);
+      return structured ? { ...hs, structured } : hs;
+    });
 
   const paletteContextPorts = portData.map((p) => ({
     id: p.id,

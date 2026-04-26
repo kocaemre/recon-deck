@@ -127,6 +127,7 @@ const portA_nseScripts: PortScript[] = [
     id: 1,
     engagement_id: ENGAGEMENT_ID,
     port_id: PORT_A_ID,
+    host_id: PRIMARY_HOST_ID,
     script_id: "ssl-cert",
     output: "Subject: CN=box.htb",
     is_host_script: false,
@@ -139,6 +140,7 @@ const portA_arFiles: PortScript[] = [
     id: 2,
     engagement_id: ENGAGEMENT_ID,
     port_id: PORT_A_ID,
+    host_id: PRIMARY_HOST_ID,
     script_id: "tcp_443_https_curl.txt",
     output: "HTTP/1.1 200 OK",
     is_host_script: false,
@@ -202,6 +204,7 @@ const portB_nseScripts: PortScript[] = [
     id: 3,
     engagement_id: ENGAGEMENT_ID,
     port_id: PORT_B_ID,
+    host_id: PRIMARY_HOST_ID,
     script_id: "http-title",
     output: "<script>alert(1)</script> Site Title",
     is_host_script: false,
@@ -278,11 +281,15 @@ const portC_detail: PortWithDetails = {
   commands: [],
 };
 
-// Host-level script (port_id = null, is_host_script = true)
+// Host-level script (port_id = null, host_id = primary host).
+// Migration 0010: host_id is the attribution primitive for host scripts
+// in multi-host engagements; in this single-host fixture it pins to the
+// primary host so the shape mirrors what createFromScan now writes.
 const hostScript: PortScript = {
   id: 99,
   engagement_id: ENGAGEMENT_ID,
   port_id: null,
+  host_id: PRIMARY_HOST_ID,
   script_id: "smb-os-discovery",
   output: "OS: Windows Server 2019",
   is_host_script: true,

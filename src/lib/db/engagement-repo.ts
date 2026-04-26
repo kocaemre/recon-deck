@@ -208,6 +208,7 @@ export function createFromScan(
             .values({
               engagement_id: eng.id,
               port_id: port.id,
+              host_id: insertedHost.id,
               script_id: s.id,
               output: s.output,
               is_host_script: false,
@@ -226,6 +227,7 @@ export function createFromScan(
                 .values({
                   engagement_id: eng.id,
                   port_id: port.id,
+                  host_id: insertedHost.id,
                   script_id: f.filename,
                   output: f.content,
                   is_host_script: false,
@@ -256,17 +258,19 @@ export function createFromScan(
         }
       }
 
-      // Host scripts: port_id is null, is_host_script is true (D-08). One
-      // group per host — they live on the engagement but logically belong
-      // to a specific host (smb-os-discovery surfaces THIS host's OS, etc.).
-      // PR 4 will surface host attribution in the UI; the schema stays
-      // engagement-scoped for now to avoid a migration churn.
+      // Host scripts: port_id is null, is_host_script is true (D-08).
+      // Migration 0010 added host_id so multi-host engagements can split
+      // host scripts by their owning host (smb-os-discovery on DC01 vs
+      // smb-os-discovery on ws01). The host_id is the only attribution
+      // primitive — port_id stays NULL because host scripts run against
+      // the host as a whole, not a specific port.
       for (const hs of ph.hostScripts) {
         tx
           .insert(port_scripts)
           .values({
             engagement_id: eng.id,
             port_id: null,
+            host_id: insertedHost.id,
             script_id: hs.id,
             output: hs.output,
             is_host_script: true,

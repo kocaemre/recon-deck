@@ -270,6 +270,20 @@ export const port_scripts = sqliteTable(
       onDelete: "cascade",
     }),
 
+    /**
+     * FK → hosts.id with CASCADE delete (migration 0010).
+     *
+     * Populated for both port-level (mirrors ports.host_id) and
+     * host-level scripts so the multi-host UI can split host scripts
+     * by their owning host. Engagement-level AutoRecon artifacts
+     * (port_id IS NULL, is_host_script = 0, source = 'autorecon-*')
+     * keep host_id NULL — they're scoped to the engagement, not to
+     * any one host.
+     */
+    host_id: integer("host_id").references(() => hosts.id, {
+      onDelete: "cascade",
+    }),
+
     /** ScriptOutput.id — NSE script name, e.g. "http-title", "smb-os-discovery". */
     script_id: text("script_id").notNull(),
 
@@ -321,6 +335,7 @@ export const port_scripts = sqliteTable(
   (t) => [
     index("port_scripts_port_id_idx").on(t.port_id),
     index("port_scripts_engagement_id_idx").on(t.engagement_id),
+    index("port_scripts_host_id_idx").on(t.host_id),
   ],
 );
 

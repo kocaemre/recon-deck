@@ -318,6 +318,89 @@ describe("createFromScan (Plan 03)", () => {
     expect(portsByHost.get(ws02Id)).toEqual([22]);
   });
 
+  it("migration 0010: host scripts in a multi-host engagement carry their owning host_id", () => {
+    const dc = {
+      target: { ip: "10.10.10.5", hostname: "dc01.htb" },
+      ports: [],
+      hostScripts: [
+        { id: "smb-os-discovery", output: "OS: Windows Server 2019" },
+      ],
+    };
+    const ws01 = {
+      target: { ip: "10.10.10.6", hostname: "ws01.htb" },
+      ports: [],
+      hostScripts: [
+        { id: "smb-os-discovery", output: "OS: Windows 10" },
+      ],
+    };
+
+    const scan = makeScan({
+      target: dc.target,
+      ports: [],
+      hosts: [dc, ws01],
+    });
+    const result = createFromScan(db, scan, "<raw>");
+
+    const full = getById(db, result.id);
+    expect(full).not.toBeNull();
+    const dcId = full!.hosts.find((h) => h.ip === "10.10.10.5")!.id;
+    const ws01Id = full!.hosts.find((h) => h.ip === "10.10.10.6")!.id;
+
+    // Both host scripts present, each tagged with its owning host —
+    // proving they're no longer collapsed onto the engagement.
+    expect(full!.hostScripts).toHaveLength(2);
+    const dcScript = full!.hostScripts.find((s) => s.host_id === dcId);
+    const ws01Script = full!.hostScripts.find((s) => s.host_id === ws01Id);
+    expect(dcScript?.output).toBe("OS: Windows Server 2019");
+    expect(ws01Script?.output).toBe("OS: Windows 10");
+  });
+
+  it("migration 0010: port-level scripts inherit host_id from their owning host", () => {
+    const dc = {
+      target: { ip: "10.10.10.5", hostname: "dc01.htb" },
+      ports: [
+        {
+          port: 445,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "microsoft-ds",
+          scripts: [{ id: "smb2-time", output: "DC time" }],
+        },
+      ],
+      hostScripts: [],
+    };
+    const ws01 = {
+      target: { ip: "10.10.10.6", hostname: "ws01.htb" },
+      ports: [
+        {
+          port: 22,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "ssh",
+          scripts: [{ id: "ssh-hostkey", output: "WS01 hostkey" }],
+        },
+      ],
+      hostScripts: [],
+    };
+
+    const scan = makeScan({
+      target: dc.target,
+      ports: dc.ports,
+      hosts: [dc, ws01],
+    });
+    const result = createFromScan(db, scan, "<raw>");
+
+    const full = getById(db, result.id);
+    expect(full).not.toBeNull();
+    const dcId = full!.hosts.find((h) => h.ip === "10.10.10.5")!.id;
+    const ws01Id = full!.hosts.find((h) => h.ip === "10.10.10.6")!.id;
+
+    const dcPort = full!.ports.find((p) => p.port === 445)!;
+    const wsPort = full!.ports.find((p) => p.port === 22)!;
+    expect(dcPort.scripts[0].host_id).toBe(dcId);
+    expect(wsPort.scripts[0].host_id).toBe(ws01Id);
+  });
+
   it("cascade delete removes all ports and scripts when engagement is deleted", () => {
     const result = createFromScan(db, makeScan(), "<raw>");
 
