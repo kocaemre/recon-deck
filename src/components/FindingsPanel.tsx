@@ -12,11 +12,12 @@
  * state explains how to add one.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Finding } from "@/lib/db/schema";
+import { useUIStore } from "@/lib/store";
 
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -74,6 +75,20 @@ export function FindingsPanel({
 }: FindingsPanelProps) {
   const [editing, setEditing] = useState<Finding | "new" | null>(null);
   const router = useRouter();
+  const findingPrefill = useUIStore((s) => s.findingPrefill);
+  const setFindingPrefill = useUIStore((s) => s.setFindingPrefill);
+
+  // PortDetailPane stages a prefill when the operator clicks "+ Add as
+  // finding" on a KB known_vuln or searchsploit hit. Open the modal in
+  // "new" mode (FindingFormModal seeds its inputs from the prefill via
+  // initial* props) and clear the slot so re-clicking the same hit fires
+  // again. Setting `editing` to a Finding object would mean "edit existing"
+  // — we explicitly stay in "new" so the POST hits /findings, not PATCH.
+  useEffect(() => {
+    if (findingPrefill) {
+      setEditing("new");
+    }
+  }, [findingPrefill]);
 
   // Group by severity, in canonical order. Skip empty groups but keep the
   // section header visible when total > 0 to communicate the dimension.
@@ -224,7 +239,11 @@ export function FindingsPanel({
           engagementId={engagementId}
           ports={ports}
           finding={editing === "new" ? null : editing}
-          onClose={() => setEditing(null)}
+          prefill={editing === "new" ? findingPrefill : null}
+          onClose={() => {
+            setEditing(null);
+            setFindingPrefill(null);
+          }}
         />
       )}
     </div>
@@ -415,20 +434,41 @@ function FindingFormModal({
   engagementId,
   ports,
   finding,
+  prefill,
   onClose,
 }: {
   engagementId: number;
   ports: Array<{ id: number; port: number; protocol: string; service: string | null }>;
   finding: Finding | null;
+  /**
+   * One-shot seed used only when `finding === null` (new-finding flow).
+   * Powers the "+ Add as finding" buttons on KB known_vulns and
+   * searchsploit hits in PortDetailPane. Editing an existing finding
+   * always wins over the prefill — the prefill is ignored when `finding`
+   * is non-null.
+   */
+  prefill?: {
+    title: string;
+    severity: Severity;
+    cve: string | null;
+    description: string;
+    portId: number | null;
+  } | null;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState(finding?.title ?? "");
-  const [description, setDescription] = useState(finding?.description ?? "");
-  const [severity, setSeverity] = useState<Severity>(
-    (finding?.severity as Severity) ?? "medium",
+  const [title, setTitle] = useState(
+    finding?.title ?? prefill?.title ?? "",
   );
-  const [cve, setCve] = useState(finding?.cve ?? "");
-  const [portId, setPortId] = useState<number | null>(finding?.port_id ?? null);
+  const [description, setDescription] = useState(
+    finding?.description ?? prefill?.description ?? "",
+  );
+  const [severity, setSeverity] = useState<Severity>(
+    (finding?.severity as Severity) ?? prefill?.severity ?? "medium",
+  );
+  const [cve, setCve] = useState(finding?.cve ?? prefill?.cve ?? "");
+  const [portId, setPortId] = useState<number | null>(
+    finding?.port_id ?? prefill?.portId ?? null,
+  );
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 

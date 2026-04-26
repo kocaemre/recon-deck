@@ -323,6 +323,7 @@ export function EngagementHeatmap({
           cpe={selected.cpe}
           evidence={selected.evidence}
           exploitQuery={selected.exploitQuery}
+          risk={selected.risk}
         />
       </div>
     </div>

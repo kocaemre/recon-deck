@@ -116,6 +116,24 @@ interface UIState {
   } | null;
   /** Set or clear the engagement context. */
   setEngagementContext: (ctx: UIState["engagementContext"]) => void;
+
+  /**
+   * Prefill payload for FindingsPanel's "New finding" modal. Set by
+   * "+ Add as finding" buttons on KB known_vulns / searchsploit hits in
+   * PortDetailPane; consumed (and cleared) by FindingsPanel which opens
+   * the modal with these fields populated. Null when no prefill is
+   * pending. Auto-cleared after the panel handles it so re-clicking the
+   * same hit re-opens the modal.
+   */
+  findingPrefill: {
+    title: string;
+    severity: "info" | "low" | "medium" | "high" | "critical";
+    cve: string | null;
+    description: string;
+    portId: number | null;
+  } | null;
+  /** Stage a prefill — FindingsPanel auto-opens its modal when this is set. */
+  setFindingPrefill: (prefill: UIState["findingPrefill"]) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -179,4 +197,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   engagementContext: null,
   setEngagementContext: (ctx) => set({ engagementContext: ctx }),
+
+  findingPrefill: null,
+  setFindingPrefill: (prefill) => set({ findingPrefill: prefill }),
 }));

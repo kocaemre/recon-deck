@@ -18,9 +18,43 @@ import { ChecklistItem } from "@/components/ChecklistItem";
 import { NotesField } from "@/components/NotesField";
 import { StructuredScriptOutput } from "@/components/StructuredScriptOutput";
 import { EvidencePane } from "@/components/EvidencePane";
-import { ExternalLink, Search as SearchIcon } from "lucide-react";
+import { ExternalLink, Plus, Search as SearchIcon } from "lucide-react";
 import type { ScriptElem, ScriptTable } from "@/lib/parser/types";
 import type { PortEvidence } from "@/lib/db/schema";
+import { useUIStore } from "@/lib/store";
+
+type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
+
+/**
+ * Map a KB risk tier to the finding severity used when staging a prefill
+ * from a known_vuln "+ Add as finding" click. Mirrors the canonical
+ * severity ladder; defaults unrecognised values to "medium" so we never
+ * stage a prefill with an invalid severity.
+ */
+function riskToSeverity(risk: string | undefined): FindingSeverity {
+  switch (risk) {
+    case "critical":
+    case "high":
+    case "medium":
+    case "low":
+    case "info":
+      return risk;
+    default:
+      return "medium";
+  }
+}
+
+/**
+ * Try to extract the first CVE-NNNN-NNNNN identifier from a free-text
+ * note. Used when prefilling a finding from a KB known_vuln so the CVE
+ * field is populated automatically when the KB author embedded it in
+ * the note string. Returns null when no match — callers should leave
+ * the CVE field blank in that case rather than guess.
+ */
+function extractCve(text: string): string | null {
+  const m = text.match(/CVE-\d{4}-\d{4,7}/i);
+  return m ? m[0].toUpperCase() : null;
+}
 
 interface ScriptData {
   id: number;
@@ -59,6 +93,12 @@ interface PortDetailPaneProps {
    * product+version. Empty array → section suppressed.
    */
   knownVulns?: Array<{ match: string; note: string; link: string }>;
+  /**
+   * KB risk tier for this port — drives the severity heuristic when
+   * staging a finding prefill from a known_vuln "+ Add as finding"
+   * click. Falls back to "medium" when undefined.
+   */
+  risk?: string;
 }
 
 export function PortDetailPane({
@@ -77,8 +117,24 @@ export function PortDetailPane({
   evidence = [],
   exploitQuery,
   knownVulns = [],
+  risk,
 }: PortDetailPaneProps) {
   const checkMap = new Map(checks.map((c) => [c.check_key, c.checked]));
+  const setFindingPrefill = useUIStore((s) => s.setFindingPrefill);
+
+  // Stage a finding prefill from a KB known_vuln. Severity follows the
+  // port's KB risk tier (critical/high/medium/low/info); description
+  // includes the original note and the reference link so the operator
+  // doesn't lose context even if they discard the link in the modal.
+  function addVulnAsFinding(v: { match: string; note: string; link: string }) {
+    setFindingPrefill({
+      title: v.note,
+      severity: riskToSeverity(risk),
+      cve: extractCve(v.note),
+      description: `${v.note}\n\nMatched: ${v.match}\nReference: ${v.link}`,
+      portId,
+    });
+  }
 
   return (
     <div
@@ -134,6 +190,16 @@ export function PortDetailPane({
                     >
                       ref ↗
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => addVulnAsFinding(v)}
+                      title="Add as finding"
+                      aria-label="Add as finding"
+                      style={addFindingBtn}
+                    >
+                      <Plus size={10} />
+                      finding
+                    </button>
                   </div>
                 </li>
               ))}
@@ -142,7 +208,11 @@ export function PortDetailPane({
         )}
 
         {exploitQuery && (
-          <ExploitsSection key={`exploits-${exploitQuery}`} query={exploitQuery} />
+          <ExploitsSection
+            key={`exploits-${exploitQuery}`}
+            query={exploitQuery}
+            portId={portId}
+          />
         )}
 
         {userCommands.length > 0 && (
@@ -452,7 +522,14 @@ interface ExploitHit {
 
 const exploitCache = new Map<string, ExploitHit[]>();
 
-function ExploitsSection({ query }: { query: string }) {
+function ExploitsSection({
+  query,
+  portId,
+}: {
+  query: string;
+  portId: number;
+}) {
+  const setFindingPrefill = useUIStore((s) => s.setFindingPrefill);
   // P2 follow-up: seed state from the cache so a port switch back into a
   // previously-looked-up product surfaces results without re-hitting
   // searchsploit. Cache key is the verbatim query string (already trimmed
@@ -599,6 +676,27 @@ function ExploitsSection({ query }: { query: string }) {
                       EDB-{h.id} ↗
                     </a>
                   )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFindingPrefill({
+                        title: h.title,
+                        // searchsploit hits aren't tier-tagged — surface
+                        // them as "medium" by default; the operator
+                        // adjusts in the modal before saving.
+                        severity: "medium",
+                        cve: extractCve(h.title),
+                        description: `Exploit hit (${h.type} · ${h.platform}) for "${query}"\n\n${h.title}${h.url ? `\n${h.url}` : ""}`,
+                        portId,
+                      })
+                    }
+                    title="Add as finding"
+                    aria-label="Add as finding"
+                    style={addFindingBtn}
+                  >
+                    <Plus size={10} />
+                    finding
+                  </button>
                 </div>
               </li>
             ))}
@@ -608,3 +706,18 @@ function ExploitsSection({ query }: { query: string }) {
     </Section>
   );
 }
+
+const addFindingBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 3,
+  padding: "1px 6px",
+  borderRadius: 3,
+  border: "1px solid var(--border)",
+  background: "var(--bg-2)",
+  color: "var(--fg-muted)",
+  fontSize: 10.5,
+  fontWeight: 500,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
