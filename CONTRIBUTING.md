@@ -251,7 +251,54 @@ under `src/lib/db/migrations/NNNN_description.sql` and tracked in
    together in the same PR.
 7. The first dev-server boot after pulling the migration applies it
    automatically; you can sanity-check with `sqlite3 data/recon-deck.db
-   ".schema engagements"`.
+   ".schema engagements"`. Boot also takes a `VACUUM INTO` snapshot to
+   `data/recon-deck.db.backup-pre-NNNN` before applying anything new
+   — see "Migration safety and recovery" below.
+
+### Migration safety and recovery
+
+Every dev-server boot runs through `src/lib/db/client.ts`, which wraps
+drizzle's `migrate()` with three guard rails:
+
+- **Pre-migration snapshot.** When the journal lists more entries than
+  `__drizzle_migrations` has applied, the boot sequence runs `VACUUM
+  INTO 'data/recon-deck.db.backup-pre-NNNN'` first. `NNNN` is the
+  applied count *before* migrating, so `backup-pre-0009` means
+  "captured at schema 0009". Existing snapshots are reused, never
+  overwritten — the operator decides when to recycle them.
+- **Try/catch around `migrate()`.** Any failure logs the error and
+  the snapshot path with a copy-pasteable rollback command, then
+  re-throws so the process exits instead of serving requests against
+  a half-migrated DB.
+- **Post-migration integrity check.** When at least one new migration
+  applied, `PRAGMA integrity_check` and `PRAGMA foreign_key_check`
+  run; either failing aborts boot. A clean boot emits
+  `[recon-deck] Applied N migration(s); now at M.` so you can confirm
+  what actually changed.
+
+If a migration fails, the recovery path is:
+
+```bash
+# 1. Stop the dev server.
+# 2. Copy the snapshot back over the live DB and clear the WAL/SHM
+#    side-cars so SQLite reads from the restored file, not stale WAL.
+cp data/recon-deck.db.backup-pre-0009 data/recon-deck.db
+rm -f data/recon-deck.db-wal data/recon-deck.db-shm
+
+# 3. Fix the migration SQL (and any schema.ts / repo code that
+#    referenced the broken shape).
+# 4. Restart the dev server. Boot will retry from the restored state.
+```
+
+If you'd rather start over from an empty DB instead of restoring,
+"Resetting local state" below works the same way — it just discards
+your data along with the broken migration. Snapshots written under
+`data/` are gitignored (they're large, and per-machine).
+
+The helpers (`countAppliedMigrations`, `takePreMigrationSnapshot`,
+`verifyDbIntegrity`) live in `src/lib/db/migration-safety.ts` and have
+unit coverage in `src/lib/db/__tests__/migration-safety.test.ts` —
+add cases there if you change the boot logic.
 
 ### Resetting local state
 
