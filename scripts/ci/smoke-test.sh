@@ -21,13 +21,13 @@ trap cleanup EXIT
 echo "::group::Starting container from $IMAGE"
 docker run -d --rm --name "$CONTAINER_NAME" \
   -e HOSTNAME=0.0.0.0 \
-  -p 127.0.0.1:3000:3000 \
+  -p 127.0.0.1:13337:13337 \
   "$IMAGE"
 echo "::endgroup::"
 
 echo "Polling /api/health..."
 deadline=$((SECONDS + 45))
-until curl -sf http://127.0.0.1:3000/api/health | grep -q '"ok":true'; do
+until curl -sf http://127.0.0.1:13337/api/health | grep -q '"ok":true'; do
   if (( SECONDS > deadline )); then
     echo "FAILED: /api/health did not return 200 within 45 seconds"
     exit 1

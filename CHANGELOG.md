@@ -41,6 +41,10 @@ All notable changes to recon-deck. Format follows [Keep a Changelog](https://kee
 
 - Schema version `0009` → `0010` (`port_scripts.host_id` migration). Pre-migration snapshot at `data/recon-deck.db.backup-pre-0010` is automatic.
 
+### Breaking
+
+- **Default port `3000` → `13337`.** Picked to dodge the dev-server crowd on 3000/8080 (Next.js / React / Grafana / etc.). Container image, install.sh, docker-compose.yml, smoke-test.sh, the host-header allowlist default in `host-validation.ts`, and all docs migrated together. Existing users running on `:3000` should add `-e PORT=3000` (and adjust their `-p` mapping) on their next pull, or just open `http://localhost:13337` after a rebuild. `npm run dev` and `npm run start` both bind `13337` now too. Lint-fix for `app/settings/commands/page.tsx` apostrophes (production build was failing on `react/no-unescaped-entities`).
+
 ## [1.0.0] — 2026-04-26
 
 Initial public release. Multi-host engagements, AutoRecon import, KB-driven port cards, AD tooling, six export formats, FTS5 cross-engagement search, evidence pane, findings catalog. See git history for the v1.0 commit log.

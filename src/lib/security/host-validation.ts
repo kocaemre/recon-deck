@@ -14,15 +14,16 @@
 /**
  * Build the Host-header allowlist.
  *
- * Reads PORT from the environment (defaults to 3000) so the allowlist
- * stays correct when the app is started on a non-default port (e.g.,
- * PORT=8080). Includes localhost/127.0.0.1/::1 on the resolved port
- * plus any comma-separated hosts from the RECON_DECK_TRUSTED_HOSTS
- * environment variable. Users who expose recon-deck on a LAN or
- * mDNS hostname opt in explicitly via this env var.
+ * Reads PORT from the environment (defaults to 13337 — production
+ * Docker image binds there to dodge the dev-server crowd on 3000/8080)
+ * so the allowlist stays correct when the app is started on a
+ * non-default port (e.g., PORT=8080). Includes localhost/127.0.0.1/::1
+ * on the resolved port plus any comma-separated hosts from the
+ * RECON_DECK_TRUSTED_HOSTS environment variable. Users who expose
+ * recon-deck on a LAN or mDNS hostname opt in explicitly via this env var.
  */
 export function getAllowedHosts(): Set<string> {
-  const port = process.env.PORT ?? "3000";
+  const port = process.env.PORT ?? "13337";
   const defaults = new Set<string>([
     `localhost:${port}`,
     `127.0.0.1:${port}`,

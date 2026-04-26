@@ -57,7 +57,7 @@ RUN apk add --no-cache libstdc++
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=127.0.0.1
-ENV PORT=3000
+ENV PORT=13337
 
 # recon-deck runtime env vars (already honored by code — verified):
 ENV RECON_DB_PATH=/data/recon-deck.db
@@ -92,7 +92,7 @@ VOLUME /kb
 
 USER node
 
-EXPOSE 3000
+EXPOSE 13337
 
 # OCI label auto-links image to GitHub repo (package-to-repo visibility,
 # auto-inherits repo permissions) [CITED: GitHub Packages docs].
@@ -104,6 +104,6 @@ LABEL org.opencontainers.image.licenses=MIT
 # substitute for the CI smoke test (HEALTHCHECK runs inside the container;
 # CI smoke test runs from the host, proving the port mapping works).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:13337/api/health || exit 1
 
 CMD ["node", "server.js"]

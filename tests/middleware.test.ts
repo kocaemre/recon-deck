@@ -28,28 +28,28 @@ describe("Host-header validation (SEC-01)", () => {
     }
   });
 
-  it("allows localhost:3000 by default", () => {
+  it("allows localhost:13337 by default", () => {
     delete process.env.RECON_DECK_TRUSTED_HOSTS;
     const hosts = getAllowedHosts();
-    expect(hosts.has("localhost:3000")).toBe(true);
+    expect(hosts.has("localhost:13337")).toBe(true);
   });
 
-  it("allows 127.0.0.1:3000 by default", () => {
+  it("allows 127.0.0.1:13337 by default", () => {
     delete process.env.RECON_DECK_TRUSTED_HOSTS;
     const hosts = getAllowedHosts();
-    expect(hosts.has("127.0.0.1:3000")).toBe(true);
+    expect(hosts.has("127.0.0.1:13337")).toBe(true);
   });
 
-  it("allows [::1]:3000 by default", () => {
+  it("allows [::1]:13337 by default", () => {
     delete process.env.RECON_DECK_TRUSTED_HOSTS;
     const hosts = getAllowedHosts();
-    expect(hosts.has("[::1]:3000")).toBe(true);
+    expect(hosts.has("[::1]:13337")).toBe(true);
   });
 
-  it("rejects evil.com:3000 (DNS rebinding vector)", () => {
+  it("rejects evil.com:13337 (DNS rebinding vector)", () => {
     delete process.env.RECON_DECK_TRUSTED_HOSTS;
     const hosts = getAllowedHosts();
-    expect(hosts.has("evil.com:3000")).toBe(false);
+    expect(hosts.has("evil.com:13337")).toBe(false);
   });
 
   it("rejects empty host header", () => {
@@ -59,25 +59,25 @@ describe("Host-header validation (SEC-01)", () => {
   });
 
   it("extends allowlist from RECON_DECK_TRUSTED_HOSTS env var", () => {
-    process.env.RECON_DECK_TRUSTED_HOSTS = "mybox.local:3000,10.0.0.5:3000";
+    process.env.RECON_DECK_TRUSTED_HOSTS = "mybox.local:13337,10.0.0.5:13337";
     const hosts = getAllowedHosts();
-    expect(hosts.has("mybox.local:3000")).toBe(true);
-    expect(hosts.has("10.0.0.5:3000")).toBe(true);
+    expect(hosts.has("mybox.local:13337")).toBe(true);
+    expect(hosts.has("10.0.0.5:13337")).toBe(true);
     // defaults still present
-    expect(hosts.has("localhost:3000")).toBe(true);
+    expect(hosts.has("localhost:13337")).toBe(true);
   });
 
   it("trims whitespace in RECON_DECK_TRUSTED_HOSTS entries", () => {
-    process.env.RECON_DECK_TRUSTED_HOSTS = " mybox.local:3000 , 10.0.0.5:3000 ";
+    process.env.RECON_DECK_TRUSTED_HOSTS = " mybox.local:13337 , 10.0.0.5:13337 ";
     const hosts = getAllowedHosts();
-    expect(hosts.has("mybox.local:3000")).toBe(true);
-    expect(hosts.has("10.0.0.5:3000")).toBe(true);
+    expect(hosts.has("mybox.local:13337")).toBe(true);
+    expect(hosts.has("10.0.0.5:13337")).toBe(true);
   });
 
   it("ignores empty entries in RECON_DECK_TRUSTED_HOSTS", () => {
-    process.env.RECON_DECK_TRUSTED_HOSTS = "mybox.local:3000,,";
+    process.env.RECON_DECK_TRUSTED_HOSTS = "mybox.local:13337,,";
     const hosts = getAllowedHosts();
-    expect(hosts.has("mybox.local:3000")).toBe(true);
+    expect(hosts.has("mybox.local:13337")).toBe(true);
     expect(hosts.has("")).toBe(false);
   });
 
@@ -88,16 +88,16 @@ describe("Host-header validation (SEC-01)", () => {
     expect(hosts.has("localhost:8080")).toBe(true);
     expect(hosts.has("127.0.0.1:8080")).toBe(true);
     expect(hosts.has("[::1]:8080")).toBe(true);
-    // Old port 3000 entries should NOT be present
-    expect(hosts.has("localhost:3000")).toBe(false);
+    // Old port 13337 entries should NOT be present
+    expect(hosts.has("localhost:13337")).toBe(false);
   });
 
-  it("defaults to port 3000 when PORT env is not set", () => {
+  it("defaults to port 13337 when PORT env is not set", () => {
     delete process.env.RECON_DECK_TRUSTED_HOSTS;
     delete process.env.PORT;
     const hosts = getAllowedHosts();
-    expect(hosts.has("localhost:3000")).toBe(true);
-    expect(hosts.has("127.0.0.1:3000")).toBe(true);
-    expect(hosts.has("[::1]:3000")).toBe(true);
+    expect(hosts.has("localhost:13337")).toBe(true);
+    expect(hosts.has("127.0.0.1:13337")).toBe(true);
+    expect(hosts.has("[::1]:13337")).toBe(true);
   });
 });

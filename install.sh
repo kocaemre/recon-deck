@@ -9,8 +9,9 @@
 #   1. Verifies docker + docker daemon are reachable.
 #   2. Pulls the latest ghcr.io/kocaemre/recon-deck image.
 #   3. Creates persistent named volumes for the SQLite DB + user KB.
-#   4. Runs the container detached on 127.0.0.1:3000 (loopback only — solo
-#      pentest tool, never exposed to LAN by default).
+#   4. Runs the container detached on 127.0.0.1:13337 (loopback only — solo
+#      pentest tool, never exposed to LAN by default). Port 13337 was picked
+#      to dodge the dev-server crowd that lives on 3000/8080.
 #   5. Tries to open the browser (Linux: xdg-open, macOS: open).
 #
 # To uninstall: `docker rm -f recon-deck && docker volume rm recondeck-data recondeck-kb`.
@@ -19,7 +20,7 @@ set -euo pipefail
 
 IMAGE="ghcr.io/kocaemre/recon-deck:latest"
 CONTAINER_NAME="recon-deck"
-PORT="3000"
+PORT="13337"
 URL="http://localhost:${PORT}"
 
 # 1. Pre-flight — docker reachable?
@@ -47,7 +48,7 @@ fi
 docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
-  -p "127.0.0.1:${PORT}:3000" \
+  -p "127.0.0.1:${PORT}:13337" \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \

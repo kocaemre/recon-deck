@@ -41,7 +41,7 @@ Paste nmap text / XML / greppable output (or import an AutoRecon `results/` fold
 
 ## Quick Start
 
-Three ways to run, pick one. All bind to `127.0.0.1:3000` so nothing leaks to your LAN by default; see [Exposing to LAN](#exposing-to-lan) if you need otherwise.
+Three ways to run, pick one. All bind to `127.0.0.1:13337` (port picked to dodge the dev-server crowd on 3000/8080), so nothing leaks to your LAN by default; see [Exposing to LAN](#exposing-to-lan) if you need otherwise.
 
 **1. One-liner (auto-pulls + starts + opens browser):**
 
@@ -59,16 +59,16 @@ docker compose up -d
 **3. Manual `docker run`:**
 
 ```bash
-docker run -d --name recon-deck -p 127.0.0.1:3000:3000 \
+docker run -d --name recon-deck -p 127.0.0.1:13337:13337 \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
   ghcr.io/kocaemre/recon-deck
 ```
 
-Open <http://localhost:3000>, paste nmap output, see cards.
+Open <http://localhost:13337>, paste nmap output, see cards.
 
-**What `-e HOSTNAME=0.0.0.0` does:** the image binds to `127.0.0.1` inside the container by default. For Docker's `-p` port mapping to reach the app, the container must bind all interfaces internally. The `-p 127.0.0.1:3000:3000` form on the host side then restricts external visibility to the loopback interface — only your local machine can reach the app. See [Exposing to LAN](#exposing-to-lan) if you need LAN reachability.
+**What `-e HOSTNAME=0.0.0.0` does:** the image binds to `127.0.0.1` inside the container by default. For Docker's `-p` port mapping to reach the app, the container must bind all interfaces internally. The `-p 127.0.0.1:13337:13337` form on the host side then restricts external visibility to the loopback interface — only your local machine can reach the app. See [Exposing to LAN](#exposing-to-lan) if you need LAN reachability.
 
 ---
 
@@ -85,15 +85,15 @@ Open <http://localhost:3000>, paste nmap output, see cards.
 By default, the Quick Start binds to `127.0.0.1` on the host — only your local machine can reach the app. To make recon-deck reachable from another machine on your LAN:
 
 ```bash
-docker run -p 3000:3000 \
+docker run -p 13337:13337 \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
-  -e RECON_DECK_TRUSTED_HOSTS=192.168.1.10:3000 \
+  -e RECON_DECK_TRUSTED_HOSTS=192.168.1.10:13337 \
   ghcr.io/kocaemre/recon-deck
 ```
 
-Replace `192.168.1.10:3000` with the host:port your LAN clients will use. `RECON_DECK_TRUSTED_HOSTS` is comma-separated — expand it for every additional host you want to reach the app from.
+Replace `192.168.1.10:13337` with the host:port your LAN clients will use. `RECON_DECK_TRUSTED_HOSTS` is comma-separated — expand it for every additional host you want to reach the app from.
 
 This activates the host-header allowlist (mitigates DNS rebinding). Requests whose `Host:` header is not in the allowlist are rejected with HTTP 421 Misdirected Request. See [SECURITY.md](SECURITY.md) for the full threat model.
 
@@ -276,7 +276,7 @@ git clone https://github.com/kocaemre/recon-deck
 cd recon-deck
 npm install
 npm run dev
-# → http://localhost:3000
+# → http://localhost:13337
 ```
 
 Useful scripts:
@@ -295,7 +295,7 @@ npm run build         # production build (output: "standalone")
 | Env var                     | Default                 | Purpose                                                                        |
 | --------------------------- | ----------------------- | ------------------------------------------------------------------------------ |
 | `HOSTNAME`                  | `127.0.0.1`             | Bind address inside the container. Override to `0.0.0.0` for port-map reach.   |
-| `PORT`                      | `3000`                  | Port the app listens on.                                                       |
+| `PORT`                      | `13337`                 | Port the app listens on (also drives the host-header allowlist default).       |
 | `RECON_DB_PATH`             | `/data/recon-deck.db`   | SQLite file location. Keep on a mounted volume for persistence.                |
 | `RECON_KB_USER_DIR`         | `/kb`                   | Directory for user KB overrides. YAML files here are loaded at startup.        |
 | `RECON_DECK_TRUSTED_HOSTS`  | _(empty)_               | Comma-separated extra hosts allowed by the host-header middleware.             |

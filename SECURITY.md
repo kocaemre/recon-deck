@@ -19,9 +19,9 @@ This is a solo-maintainer project, not an enterprise offering. Expected response
 
 ### DNS rebinding
 
-**Threat.** An attacker controls a DNS name that resolves to `127.0.0.1`. A victim with recon-deck running locally visits the attacker's site; JavaScript on that site issues `fetch("http://attacker-controlled-name:3000/api/...")`. Because the browser's same-origin policy is keyed on hostname, the attacker's origin can exfiltrate or tamper with recon-deck's state.
+**Threat.** An attacker controls a DNS name that resolves to `127.0.0.1`. A victim with recon-deck running locally visits the attacker's site; JavaScript on that site issues `fetch("http://attacker-controlled-name:13337/api/...")`. Because the browser's same-origin policy is keyed on hostname, the attacker's origin can exfiltrate or tamper with recon-deck's state.
 
-**Mitigation.** Host-header allowlist middleware (`middleware.ts`, SEC-01) rejects any request whose `Host:` header is not in the allowlist. Default allowlist: `localhost:3000`, `127.0.0.1:3000`, `[::1]:3000` (with the port auto-derived from `PORT`). Mismatch returns HTTP 421 Misdirected Request with no response body (avoiding information leakage to the attacker).
+**Mitigation.** Host-header allowlist middleware (`middleware.ts`, SEC-01) rejects any request whose `Host:` header is not in the allowlist. Default allowlist: `localhost:13337`, `127.0.0.1:13337`, `[::1]:13337` (with the port auto-derived from `PORT`). Mismatch returns HTTP 421 Misdirected Request with no response body (avoiding information leakage to the attacker).
 
 Users who expose recon-deck on a LAN or mDNS hostname opt in explicitly via the `RECON_DECK_TRUSTED_HOSTS` environment variable (comma-separated host:port list). This keeps the attack surface tight by default.
 
@@ -93,7 +93,7 @@ This invariant is verified today by code review. A network-sniff CI guard (runni
 
 | Posture               | How it's enforced                                                                  | Requirement |
 | --------------------- | ---------------------------------------------------------------------------------- | ----------- |
-| Loopback bind         | Default Docker Quick Start uses `-p 127.0.0.1:3000:3000`; host port only reachable from the host's loopback interface | OPS-02      |
+| Loopback bind         | Default Docker Quick Start uses `-p 127.0.0.1:13337:13337`; host port only reachable from the host's loopback interface | OPS-02      |
 | Non-root container    | `USER node` (UID 1000) in Dockerfile; entire Node process runs as non-root         | SEC-06      |
 | CSP object + frames   | `object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`                   | SEC-02      |
 | External link safety  | All external `<a>` carry `rel="noopener noreferrer"`; scheme allowlist `http:`/`https:` only | SEC-04      |
@@ -140,11 +140,11 @@ docker run --rm ghcr.io/kocaemre/recon-deck:1.0.0 id -u
 # → 1000
 
 # Host-header middleware rejects a bad Host header with HTTP 421
-curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example.com" http://127.0.0.1:3000/
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example.com" http://127.0.0.1:13337/
 # → 421
 
 # The liveness endpoint responds only on allowed hosts
-curl -s http://127.0.0.1:3000/api/health
+curl -s http://127.0.0.1:13337/api/health
 # → {"ok":true,...}
 ```
 

@@ -7,9 +7,10 @@
 #   docker compose pull && \
 #     docker compose up -d       # update to latest image
 #
-# Loopback bind (127.0.0.1:3000) keeps the surface off your LAN. Override
-# in a docker-compose.override.yml if you really want to expose it (e.g.
-# behind a reverse proxy on a lab network).
+# Loopback bind (127.0.0.1:13337) keeps the surface off your LAN. Port
+# 13337 was picked to dodge the dev-server crowd that lives on 3000/8080;
+# override in a docker-compose.override.yml if you really want to expose
+# it (e.g. behind a reverse proxy on a lab network).
 
 services:
   recon-deck:
@@ -17,7 +18,7 @@ services:
     container_name: recon-deck
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:13337:13337"
     environment:
       HOSTNAME: 0.0.0.0
     volumes:

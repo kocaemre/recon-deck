@@ -37,8 +37,8 @@ export default function CommandsSettingsPage() {
           every port card. Use{" "}
           <code className="mono">{"{IP}"}</code>,{" "}
           <code className="mono">{"{PORT}"}</code> and{" "}
-          <code className="mono">{"{HOST}"}</code> placeholders — they'll be
-          interpolated with each engagement's target.
+          <code className="mono">{"{HOST}"}</code> placeholders — they&apos;ll
+          be interpolated with each engagement&apos;s target.
         </p>
       </header>
       <CommandsEditor initialCommands={commands} />

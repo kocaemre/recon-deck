@@ -187,7 +187,7 @@ one doesn't already exist.
 git clone https://github.com/kocaemre/recon-deck
 cd recon-deck
 npm install
-npm run dev          # → http://localhost:3000
+npm run dev          # → http://localhost:13337
 ```
 
 The dev server hot-reloads on file changes and auto-runs Drizzle migrations
