@@ -92,6 +92,8 @@ interface UIState {
    */
   engagementContext: {
     engagementId: number;
+    /** Human-readable label used by the destructive Delete dialog. */
+    engagementName: string;
     ports: Array<{
       id: number;
       port: number;

@@ -13,7 +13,7 @@
  * + toast on copy, export downloads, new-tab print report.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store";
@@ -25,6 +25,7 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import { DeleteEngagementDialog } from "@/components/DeleteEngagementDialog";
 
 type RiskLevel = "critical" | "high" | "medium" | "low" | "info";
 
@@ -114,31 +115,15 @@ export function CommandPalette() {
     }
   }
 
-  async function deleteEngagementAction() {
+  // Selecting "Delete engagement" from the palette stages the
+  // shadcn AlertDialog mounted below; the dialog itself owns the
+  // network round-trip and the post-delete navigation.
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  function deleteEngagementAction() {
     if (!engagementContext) return;
-    if (
-      !window.confirm(
-        "Delete this engagement? Wipes all ports, scripts, notes, evidence, and findings — cannot be undone.",
-      )
-    ) {
-      return;
-    }
     setOpen(false);
-    try {
-      const res = await fetch(
-        `/api/engagements/${engagementContext.engagementId}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error ?? "Delete failed.");
-        return;
-      }
-      toast.success("Engagement deleted");
-      router.push("/");
-    } catch {
-      toast.error("Delete failed.");
-    }
+    setDeleteOpen(true);
   }
 
   function openAddFinding() {
@@ -180,6 +165,7 @@ export function CommandPalette() {
   const actionCount = onEngagementPage ? 10 : 2;
 
   return (
+    <>
     <CommandDialog
       open={open}
       onOpenChange={setOpen}
@@ -429,6 +415,17 @@ export function CommandPalette() {
         </div>
       </div>
     </CommandDialog>
+
+    {engagementContext && (
+      <DeleteEngagementDialog
+        engagementId={engagementContext.engagementId}
+        engagementName={engagementContext.engagementName}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => router.push("/")}
+      />
+    )}
+    </>
   );
 }
 

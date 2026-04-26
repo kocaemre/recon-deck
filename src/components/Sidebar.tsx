@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
 import { useUIStore } from "@/lib/store";
+import { DeleteEngagementDialog } from "@/components/DeleteEngagementDialog";
 
 export type SidebarEngagement = EngagementSummary & {
   total: number;
@@ -321,6 +322,7 @@ function SidebarRow({
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [hover, setHover] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close the dropdown on outside click and on Escape. Re-attached only
@@ -394,34 +396,18 @@ function SidebarRow({
     }
   }
 
-  async function onDelete() {
+  function onDeleteClick() {
     setMenuOpen(false);
-    if (
-      !window.confirm(
-        `Delete "${name}"? This wipes all ports, scripts, notes, evidence, and findings — cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/engagements/${engagementId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error ?? "Delete failed.");
-        return;
-      }
-      toast.success("Engagement deleted");
-      // Active row gone — bounce to the dashboard so we're not stuck on a
-      // stale URL. Otherwise just refresh in place to drop the row.
-      if (active) {
-        router.push("/");
-      } else {
-        router.refresh();
-      }
-    } catch {
-      toast.error("Delete failed.");
+    setDeleteOpen(true);
+  }
+
+  function onDeleted() {
+    // Active row gone — bounce to the dashboard so we're not stuck on a
+    // stale URL. Otherwise just refresh in place to drop the row.
+    if (active) {
+      router.push("/");
+    } else {
+      router.refresh();
     }
   }
 
@@ -572,7 +558,7 @@ function SidebarRow({
             Duplicate
           </MenuItem>
           <MenuItem
-            onClick={onDelete}
+            onClick={onDeleteClick}
             icon={<Trash2 size={11} />}
             danger
           >
@@ -580,6 +566,14 @@ function SidebarRow({
           </MenuItem>
         </div>
       )}
+
+      <DeleteEngagementDialog
+        engagementId={engagementId}
+        engagementName={name}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={onDeleted}
+      />
     </div>
   );
 }

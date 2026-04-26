@@ -418,6 +418,7 @@ export default async function EngagementPage({
 
       <EngagementContextBridge
         engagementId={engagement.id}
+        engagementName={engagement.name}
         ports={paletteContextPorts}
         kbCommands={paletteContextCommands}
         hosts={engagement.hosts.map((h) => ({

@@ -22,6 +22,7 @@ import { useUIStore } from "@/lib/store";
 
 interface Props {
   engagementId: number;
+  engagementName: string;
   ports: Array<{
     id: number;
     port: number;
@@ -42,6 +43,7 @@ interface Props {
 
 export function EngagementContextBridge({
   engagementId,
+  engagementName,
   ports,
   kbCommands,
   hosts,
@@ -54,6 +56,7 @@ export function EngagementContextBridge({
     setPortIds(ports.map((p) => p.id));
     setEngagementContext({
       engagementId,
+      engagementName,
       ports,
       kbCommands,
       hosts,
@@ -65,6 +68,7 @@ export function EngagementContextBridge({
     };
   }, [
     engagementId,
+    engagementName,
     ports,
     kbCommands,
     hosts,
