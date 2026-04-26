@@ -81,12 +81,19 @@ interface EngagementHeatmapProps {
   ports: PortTileData[];
   /** v2/P0-D: render the "Add port" button in the heatmap toolbar. */
   showAddPort?: boolean;
+  /**
+   * Active host id (multi-host engagement). Forwarded to AddPortButton so
+   * the manually-inserted port lands on the right host. Single-host
+   * engagements pass null.
+   */
+  activeHostId?: number | null;
 }
 
 export function EngagementHeatmap({
   engagementId,
   ports,
   showAddPort = false,
+  activeHostId = null,
 }: EngagementHeatmapProps) {
   const activePortId = useUIStore((s) => s.activePortId);
   const setActivePortId = useUIStore((s) => s.setActivePortId);
@@ -193,7 +200,12 @@ export function EngagementHeatmap({
                 {RISK_LABEL[r]}
               </span>
             ))}
-            {showAddPort && <AddPortButton engagementId={engagementId} />}
+            {showAddPort && (
+            <AddPortButton
+              engagementId={engagementId}
+              activeHostId={activeHostId}
+            />
+          )}
           </div>
         </div>
 

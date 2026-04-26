@@ -474,6 +474,7 @@ export default async function EngagementPage({
         engagementId={engagement.id}
         ports={portData}
         showAddPort
+        activeHostId={activeHostId}
       />
 
       <FindingsPanel

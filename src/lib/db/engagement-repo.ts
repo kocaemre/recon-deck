@@ -154,7 +154,6 @@ export function createFromScan(
     // is keyed by port number only and is applied to the *primary* host's
     // ports — multi-host AutoRecon zips aren't a supported import shape yet.
     const portIdByKey = new Map<string, number>();
-    let primaryHostId = 0;
 
     for (let hostIdx = 0; hostIdx < scan.hosts.length; hostIdx++) {
       const ph = scan.hosts[hostIdx];
@@ -174,8 +173,6 @@ export function createFromScan(
         })
         .returning({ id: hosts.id })
         .get();
-
-      if (isPrimary) primaryHostId = insertedHost.id;
 
       // Per-port + per-host port_scripts.
       for (const p of ph.ports) {
@@ -277,10 +274,6 @@ export function createFromScan(
           .run();
       }
     }
-    // Defensive: void unused-var lint if primaryHostId never assigned
-    // (impossible — scan.hosts is required non-empty by parser contract).
-    void primaryHostId;
-
     // v2: AutoRecon engagement-level artifacts (loot, report, screenshots,
     // patterns log, errors log, commands log, exploit hints, service-nmap XML).
     // Stored on port_scripts with port_id=null and source='autorecon-{kind}'.

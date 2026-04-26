@@ -688,4 +688,4 @@ function ProgressLine({
   );
 }
 
-export { RISK_SHORT };
+// (RISK_SHORT is module-internal — was exported but never imported elsewhere.)

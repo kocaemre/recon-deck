@@ -26,6 +26,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     version?: string | null;
     extrainfo?: string | null;
     tunnel?: string | null;
+    /** Optional explicit host (multi-host engagement). Falls back to primary. */
+    hostId?: number;
   };
   try {
     body = await request.json();
@@ -49,6 +51,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const port = addManualPort(db, {
       engagementId,
+      hostId:
+        typeof body.hostId === "number" && Number.isInteger(body.hostId)
+          ? body.hostId
+          : undefined,
       port: body.port,
       protocol: body.protocol,
       state,

@@ -121,3 +121,66 @@ code, pre, .mono {
   outline-offset: 1px;
   border-radius: 2px;
 }
+
+/* ----------------------------------------------------------------------
+ * Print stylesheet
+ *
+ * Strips the dark IDE chrome (sidebar, body bg, scrollbars, kbd hint
+ * pills) so /engagements/[id]/report (and any other route the operator
+ * decides to print) lands a readable, ink-friendly page. Designed for
+ * a client deliverable PDF — A4, page numbers, header strip with the
+ * engagement name, light backgrounds.
+ *
+ * `aside` is the sidebar. `dialog`, `[role="dialog"]`, and `.no-print`
+ * cover transient UI (palettes, modals, command bar, toaster) that
+ * shouldn't bleed into the print stream.
+ * --------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 18mm 14mm 18mm 14mm;
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark,
+  html.dark body,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  aside,
+  dialog,
+  [role="dialog"],
+  [data-sonner-toaster],
+  .no-print {
+    display: none !important;
+  }
+
+  *::-webkit-scrollbar { display: none !important; }
+  * { scrollbar-width: none !important; }
+
+  main {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Avoid breaking inside per-port report cards. */
+  section,
+  article,
+  .print-keep-together {
+    break-inside: avoid-page;
+  }
+
+  /* Ensure links print their href so a paper deliverable still carries
+   * the underlying URLs (HackTricks, KB, CVE references, etc.). */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555;
+    word-break: break-all;
+  }
+}

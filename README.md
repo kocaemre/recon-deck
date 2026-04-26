@@ -190,6 +190,49 @@ Multi-host engagements export every host in `scope[]` (SysReptor / PwnDoc) and o
 
 ---
 
+## Backup & Restore
+
+Everything that survives a crash lives in two named volumes (or two host paths if you bind-mounted them):
+
+- `recondeck-data` → SQLite DB, scan history, evidence (base64-encoded inside the DB), findings, notes
+- `recondeck-kb` → your YAML overrides under `/kb`
+
+Always back both up together — restoring just one will leave you with KB matches that point at engagements that no longer exist (or vice versa).
+
+**Snapshot to a tarball (works while the container is running, but for a fully consistent point-in-time snapshot stop the container first):**
+
+```bash
+docker stop recon-deck
+docker run --rm \
+  -v recondeck-data:/data \
+  -v recondeck-kb:/kb \
+  -v "$(pwd)":/out \
+  alpine sh -c 'tar -C / -czf /out/recon-deck-$(date +%F).tar.gz data kb'
+docker start recon-deck
+```
+
+The tarball is your full restore point — copy it off-host (rsync, S3, anywhere) and you can rebuild a recon-deck install identical to the moment you snapshotted.
+
+**Restore from a tarball into fresh volumes:**
+
+```bash
+docker stop recon-deck && docker rm recon-deck
+docker volume rm recondeck-data recondeck-kb
+docker volume create recondeck-data
+docker volume create recondeck-kb
+docker run --rm \
+  -v recondeck-data:/data \
+  -v recondeck-kb:/kb \
+  -v "$(pwd)":/in \
+  alpine sh -c 'tar -C / -xzf /in/recon-deck-2026-04-26.tar.gz'
+# now restart the container — migrations apply on boot, KB reload is automatic
+docker start recon-deck   # or re-run the docker run command from Quick Start
+```
+
+**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0009`** (drop legacy `engagements.target_ip`/`target_hostname`). Backing up an `0009` DB and restoring it under a build that expects `≥ 0009` works — Drizzle migrations are forward-only, so restoring a `0009` snapshot under an older `0008` build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v1.0`) for production restores rather than rolling with `:latest`.
+
+---
+
 ## Tech Stack
 
 | Layer         | Technology                                 |

@@ -27,9 +27,16 @@ export type SidebarEngagement = EngagementSummary & {
 
 interface SidebarProps {
   engagements: SidebarEngagement[];
+  /**
+   * Latest applied Drizzle migration label (e.g. `0009`). Surfaced in the
+   * footer so operators backing up / restoring know which schema version
+   * their DB pins to. See README "Backup & Restore" for the compatibility
+   * matrix.
+   */
+  schemaVersion?: string;
 }
 
-export function Sidebar({ engagements }: SidebarProps) {
+export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
   const [filter, setFilter] = useState("");
   const pathname = usePathname();
   const setGlobalSearchOpen = useUIStore((s) => s.setGlobalSearchOpen);
@@ -231,6 +238,23 @@ export function Sidebar({ engagements }: SidebarProps) {
           }}
         />
         <span>offline · local db</span>
+        {schemaVersion && (
+          <span
+            className="mono"
+            title={`Drizzle migration ${schemaVersion} applied — see README › Backup & Restore`}
+            style={{
+              padding: "1px 5px",
+              borderRadius: 3,
+              border: "1px solid var(--border)",
+              background: "var(--bg-2)",
+              fontSize: 10,
+              color: "var(--fg-faint)",
+              lineHeight: 1.4,
+            }}
+          >
+            schema {schemaVersion}
+          </span>
+        )}
         <Link
           href="/settings"
           style={{

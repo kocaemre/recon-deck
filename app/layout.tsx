@@ -10,6 +10,7 @@ import { GlobalSearchModal } from "@/components/GlobalSearchModal";
 import { db, listSummaries } from "@/lib/db";
 import { ports as portsTable, check_states } from "@/lib/db/schema";
 import { loadKnowledgeBase, matchPort } from "@/lib/kb";
+import { SCHEMA_VERSION_LABEL } from "@/lib/db/migration-version";
 
 const sidebarKb = loadKnowledgeBase({
   shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
@@ -92,7 +93,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${fontUI.variable} ${fontMono.variable}`}>
       <body className="flex h-screen overflow-hidden bg-background text-foreground antialiased">
-        <Sidebar engagements={engagements} />
+        <Sidebar
+          engagements={engagements}
+          schemaVersion={SCHEMA_VERSION_LABEL}
+        />
         <main className="flex-1 overflow-y-auto">{children}</main>
         <CommandPalette />
         <CheatSheetModal />

@@ -15,9 +15,18 @@ import { toast } from "sonner";
 
 interface AddPortButtonProps {
   engagementId: number;
+  /**
+   * Active host (multi-host engagement). When set, the manual port is bound
+   * to this host. Single-host engagements can omit; the API falls back to
+   * the engagement's primary host.
+   */
+  activeHostId?: number | null;
 }
 
-export function AddPortButton({ engagementId }: AddPortButtonProps) {
+export function AddPortButton({
+  engagementId,
+  activeHostId,
+}: AddPortButtonProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -45,6 +54,7 @@ export function AddPortButton({ engagementId }: AddPortButtonProps) {
       {open && (
         <AddPortModal
           engagementId={engagementId}
+          activeHostId={activeHostId ?? null}
           onClose={() => setOpen(false)}
         />
       )}
@@ -54,9 +64,11 @@ export function AddPortButton({ engagementId }: AddPortButtonProps) {
 
 function AddPortModal({
   engagementId,
+  activeHostId,
   onClose,
 }: {
   engagementId: number;
+  activeHostId: number | null;
   onClose: () => void;
 }) {
   const [port, setPort] = useState("");
@@ -84,6 +96,7 @@ function AddPortModal({
           service: service.trim() || null,
           version: version.trim() || null,
           tunnel: tunnelSsl ? "ssl" : null,
+          ...(activeHostId !== null ? { hostId: activeHostId } : {}),
         }),
       });
       if (!res.ok) {
