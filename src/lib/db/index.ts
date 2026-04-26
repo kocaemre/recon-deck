@@ -53,6 +53,7 @@ export {
   getById,
   listSummaries,
   updateTarget,
+  renameEngagement,
   deleteEngagement,
   type Db,
 } from "./engagement-repo";

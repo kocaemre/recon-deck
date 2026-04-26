@@ -5,6 +5,7 @@ import {
   deleteEngagement,
   getById,
   listSummaries,
+  renameEngagement,
 } from "../engagement-repo.js";
 import { engagements, ports, port_scripts, hosts } from "../schema.js";
 import { eq, and } from "drizzle-orm";
@@ -393,5 +394,50 @@ describe("createFromScan (Plan 03)", () => {
 
     // Second delete is a no-op (already gone).
     expect(deleteEngagement(db, result.id)).toBe(false);
+  });
+
+  it("renameEngagement overrides label without touching host identity", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    const before = db
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, result.id))
+      .get();
+    const hostBefore = db
+      .select()
+      .from(hosts)
+      .where(
+        and(eq(hosts.engagement_id, result.id), eq(hosts.is_primary, true)),
+      )
+      .get();
+    expect(before).toBeDefined();
+    expect(hostBefore).toBeDefined();
+
+    const ok = renameEngagement(db, result.id, "lame.htb writeup");
+    expect(ok).toBe(true);
+
+    const after = db
+      .select()
+      .from(engagements)
+      .where(eq(engagements.id, result.id))
+      .get();
+    const hostAfter = db
+      .select()
+      .from(hosts)
+      .where(
+        and(eq(hosts.engagement_id, result.id), eq(hosts.is_primary, true)),
+      )
+      .get();
+
+    expect(after?.name).toBe("lame.htb writeup");
+    // updated_at bumped (>= since clock resolution can collapse to ms).
+    expect(after?.updated_at).not.toBe(before?.updated_at);
+    // Host identity (ip/hostname) untouched — rename is label-only.
+    expect(hostAfter?.ip).toBe(hostBefore?.ip);
+    expect(hostAfter?.hostname).toBe(hostBefore?.hostname);
+  });
+
+  it("renameEngagement returns false for unknown engagement id", () => {
+    expect(renameEngagement(db, 99999, "nope")).toBe(false);
   });
 });

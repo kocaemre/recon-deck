@@ -578,6 +578,37 @@ export function updateTarget(
 }
 
 // ---------------------------------------------------------------------------
+// renameEngagement
+// ---------------------------------------------------------------------------
+
+/**
+ * Rename an engagement — overrides the auto-generated `hostname (ip)` label
+ * with a free-form name chosen by the operator. Distinct from `updateTarget`,
+ * which regenerates the name from IP/hostname; rename touches only the
+ * display label and never mutates host identity.
+ *
+ * The caller is expected to validate that `name` is non-empty after trimming
+ * and within a reasonable length cap (route-layer concern). updated_at is
+ * bumped so the sidebar's recency ordering reflects the rename.
+ *
+ * Returns true when the row was found and updated, false when the engagement
+ * id matched no row (caller can map to 404).
+ */
+export function renameEngagement(
+  db: Db,
+  engagementId: number,
+  name: string,
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ name, updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
 // deleteEngagement
 // ---------------------------------------------------------------------------
 

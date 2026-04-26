@@ -13,10 +13,20 @@
  *   6. Footer status bar — offline/local DB indicator.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Plus, Search, Check as CheckIcon, Globe, Cog } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Plus,
+  Search,
+  Check as CheckIcon,
+  Globe,
+  Cog,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
 import { useUIStore } from "@/lib/store";
 
@@ -202,6 +212,7 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
               return (
                 <li key={e.id}>
                   <SidebarRow
+                    engagementId={e.id}
                     href={href}
                     active={active}
                     name={e.name}
@@ -281,6 +292,7 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
 /* ---------------- sub components ---------------- */
 
 function SidebarRow({
+  engagementId,
   href,
   active,
   name,
@@ -291,6 +303,7 @@ function SidebarRow({
   done,
   total,
 }: {
+  engagementId: number;
   href: string;
   active: boolean;
   name: string;
@@ -304,88 +317,292 @@ function SidebarRow({
   const when = formatRelative(createdAt);
   const complete = total > 0 && done === total;
   const pct = total === 0 ? 0 : (done / total) * 100;
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown on outside click and on Escape. Re-attached only
+  // when the menu is open so we don't churn handlers on every row.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handlePointer(ev: MouseEvent) {
+      if (!rootRef.current?.contains(ev.target as Node)) setMenuOpen(false);
+    }
+    function handleKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [menuOpen]);
+
+  async function onRename() {
+    setMenuOpen(false);
+    const next = window.prompt("Rename engagement", name);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (trimmed.length === 0) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+    if (trimmed === name) return;
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Rename failed.");
+        return;
+      }
+      toast.success("Engagement renamed");
+      router.refresh();
+    } catch {
+      toast.error("Rename failed.");
+    }
+  }
+
+  async function onDelete() {
+    setMenuOpen(false);
+    if (
+      !window.confirm(
+        `Delete "${name}"? This wipes all ports, scripts, notes, evidence, and findings — cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Delete failed.");
+        return;
+      }
+      toast.success("Engagement deleted");
+      // Active row gone — bounce to the dashboard so we're not stuck on a
+      // stale URL. Otherwise just refresh in place to drop the row.
+      if (active) {
+        router.push("/");
+      } else {
+        router.refresh();
+      }
+    } catch {
+      toast.error("Delete failed.");
+    }
+  }
+
   return (
-    <Link
-      href={href}
-      style={{
-        display: "block",
-        padding: "8px 10px",
-        borderRadius: 5,
-        background: active ? "var(--bg-3)" : "transparent",
-        border: active
-          ? "1px solid var(--border-strong)"
-          : "1px solid transparent",
-        marginBottom: 2,
-        textDecoration: "none",
-        color: "var(--fg)",
-      }}
+    <div
+      ref={rootRef}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ position: "relative" }}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="truncate"
-          style={{ fontSize: 12.5, fontWeight: 500, flex: 1, minWidth: 0 }}
-        >
-          {name}
-        </span>
-        {complete && (
-          <CheckIcon
-            size={11}
-            strokeWidth={3}
-            style={{ color: "var(--accent)" }}
-            aria-label="complete"
-          />
-        )}
-      </div>
-      <div
-        className="mono flex items-center gap-1.5"
-        style={{ marginTop: 3, fontSize: 11, color: "var(--fg-subtle)" }}
+      <Link
+        href={href}
+        style={{
+          display: "block",
+          padding: "8px 10px",
+          paddingRight: 30, // Reserve room for the kebab so long names don't slide under it.
+          borderRadius: 5,
+          background: active ? "var(--bg-3)" : "transparent",
+          border: active
+            ? "1px solid var(--border-strong)"
+            : "1px solid transparent",
+          marginBottom: 2,
+          textDecoration: "none",
+          color: "var(--fg)",
+        }}
       >
-        <span className="truncate" style={{ minWidth: 0 }}>
-          {ip}
-        </span>
-        {/* P1-F PR 4: multi-host engagements show "Nh" host count chip
-            (kept compact to fit the existing meta row width). Single-host
-            engagements omit the chip — visual layout unchanged. */}
-        {hostCount > 1 && (
-          <>
-            <span>·</span>
-            <span style={{ color: "var(--accent)" }}>{hostCount}h</span>
-          </>
-        )}
-        <span>·</span>
-        <span>{portCount}p</span>
-        <span>·</span>
-        <span>
-          {done}/{total}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{when}</span>
-      </div>
-      <div style={{ marginTop: 6 }}>
+        <div className="flex items-center gap-2">
+          <span
+            className="truncate"
+            style={{ fontSize: 12.5, fontWeight: 500, flex: 1, minWidth: 0 }}
+          >
+            {name}
+          </span>
+          {complete && (
+            <CheckIcon
+              size={11}
+              strokeWidth={3}
+              style={{ color: "var(--accent)" }}
+              aria-label="complete"
+            />
+          )}
+        </div>
         <div
-          style={{
-            position: "relative",
-            width: "100%",
-            height: 2,
-            background: "var(--bg-3)",
-            borderRadius: 2,
-            overflow: "hidden",
-          }}
-          role="progressbar"
-          aria-valuenow={Math.round(pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
+          className="mono flex items-center gap-1.5"
+          style={{ marginTop: 3, fontSize: 11, color: "var(--fg-subtle)" }}
         >
+          <span className="truncate" style={{ minWidth: 0 }}>
+            {ip}
+          </span>
+          {/* P1-F PR 4: multi-host engagements show "Nh" host count chip
+              (kept compact to fit the existing meta row width). Single-host
+              engagements omit the chip — visual layout unchanged. */}
+          {hostCount > 1 && (
+            <>
+              <span>·</span>
+              <span style={{ color: "var(--accent)" }}>{hostCount}h</span>
+            </>
+          )}
+          <span>·</span>
+          <span>{portCount}p</span>
+          <span>·</span>
+          <span>
+            {done}/{total}
+          </span>
+          <span style={{ marginLeft: "auto" }}>{when}</span>
+        </div>
+        <div style={{ marginTop: 6 }}>
           <div
             style={{
-              position: "absolute",
-              inset: 0,
-              width: `${pct}%`,
-              background: complete ? "var(--accent)" : "var(--accent-dim)",
+              position: "relative",
+              width: "100%",
+              height: 2,
+              background: "var(--bg-3)",
+              borderRadius: 2,
+              overflow: "hidden",
             }}
-          />
+            role="progressbar"
+            aria-valuenow={Math.round(pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: `${pct}%`,
+                background: complete ? "var(--accent)" : "var(--accent-dim)",
+              }}
+            />
+          </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+
+      {/* Hover-kebab — visible on hover or while the menu is pinned open.
+          The active row also keeps it visible so a single-mouseless
+          operator can still tab to the trigger. */}
+      {(hover || menuOpen || active) && (
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="Engagement actions"
+          onClick={(ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            width: 22,
+            height: 22,
+            display: "grid",
+            placeItems: "center",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            background: menuOpen ? "var(--bg-3)" : "var(--bg-2)",
+            color: "var(--fg-muted)",
+            cursor: "pointer",
+            zIndex: 1,
+          }}
+        >
+          <MoreHorizontal size={12} />
+        </button>
+      )}
+
+      {menuOpen && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            top: 30,
+            right: 6,
+            minWidth: 140,
+            background: "var(--bg-2)",
+            border: "1px solid var(--border-strong)",
+            borderRadius: 6,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
+            padding: 4,
+            zIndex: 10,
+          }}
+        >
+          <MenuItem onClick={onRename} icon={<Pencil size={11} />}>
+            Rename
+          </MenuItem>
+          <MenuItem
+            onClick={onDelete}
+            icon={<Trash2 size={11} />}
+            danger
+          >
+            Delete
+          </MenuItem>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuItem({
+  onClick,
+  icon,
+  danger,
+  children,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        width: "100%",
+        padding: "6px 10px",
+        background: "transparent",
+        border: 0,
+        borderRadius: 4,
+        color: danger ? "var(--risk-crit)" : "var(--fg)",
+        fontSize: 12,
+        cursor: "pointer",
+        textAlign: "left",
+      }}
+      onMouseEnter={(ev) =>
+        (ev.currentTarget.style.background = "var(--bg-3)")
+      }
+      onMouseLeave={(ev) =>
+        (ev.currentTarget.style.background = "transparent")
+      }
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          width: 14,
+          color: danger ? "var(--risk-crit)" : "var(--fg-muted)",
+        }}
+      >
+        {icon}
+      </span>
+      {children}
+    </button>
   );
 }
 
