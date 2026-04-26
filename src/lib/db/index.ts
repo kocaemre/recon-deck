@@ -55,6 +55,7 @@ export {
   updateTarget,
   renameEngagement,
   deleteEngagement,
+  cloneEngagement,
   type Db,
 } from "./engagement-repo";
 export { upsertCheck, getChecksByEngagement } from "./checklist-repo";

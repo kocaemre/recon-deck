@@ -636,3 +636,309 @@ export function deleteEngagement(db: Db, engagementId: number): boolean {
     .run();
   return (result.changes ?? 0) > 0;
 }
+
+// ---------------------------------------------------------------------------
+// cloneEngagement
+// ---------------------------------------------------------------------------
+
+/**
+ * Deep-copy an engagement and every child row to a brand-new id (P2).
+ *
+ * Use case: keep an engagement as a "template" snapshot before applying
+ * a re-import or destructive cleanup, or fork off a writeup variant for
+ * a teammate. The copy is independent — editing one never affects the
+ * other; CASCADE delete on the source no longer reaches the clone.
+ *
+ * Wraps the entire copy in a single transaction so a partial copy can't
+ * leave behind orphan rows. Each child table is read once into memory
+ * (engagement-scoped row counts are small enough that a single-pass copy
+ * is simpler and safer than a streamed approach), then re-inserted with
+ * fresh primary keys via the standard `INSERT ... RETURNING id` pattern.
+ *
+ * Foreign keys are remapped through six per-table id maps:
+ *   - scanIdMap     (scan_history.id → new scan_history.id)
+ *   - hostIdMap     (hosts.id → new hosts.id)
+ *   - portIdMap     (ports.id → new ports.id)
+ *   - evidenceIdMap (port_evidence.id → new port_evidence.id)
+ *
+ * `findings.evidence_refs` is a JSON array of port_evidence.id values;
+ * each element is rewritten through evidenceIdMap. Malformed JSON or
+ * missing ids fall through to an empty array — the source data was
+ * already invalid before clone touched it.
+ *
+ * @returns The new engagement id, or null when the source id was unknown.
+ */
+export function cloneEngagement(
+  db: Db,
+  sourceId: number,
+  newName?: string,
+): number | null {
+  const eng = db
+    .select()
+    .from(engagements)
+    .where(eq(engagements.id, sourceId))
+    .get();
+  if (!eng) return null;
+
+  const now = new Date().toISOString();
+  const cloneName = (newName ?? `${eng.name} (copy)`).trim() || `${eng.name} (copy)`;
+
+  return db.transaction((tx) => {
+    // 1. New engagement row. raw_input + warnings carry over so an
+    //    operator can re-parse the clone identically; created_at /
+    //    updated_at refresh so the sidebar's recency ordering treats
+    //    it as a freshly-made engagement.
+    const newEng = tx
+      .insert(engagements)
+      .values({
+        name: cloneName,
+        source: eng.source,
+        scanned_at: eng.scanned_at,
+        os_name: eng.os_name,
+        os_accuracy: eng.os_accuracy,
+        raw_input: eng.raw_input,
+        warnings_json: eng.warnings_json,
+        created_at: now,
+        updated_at: now,
+      })
+      .returning({ id: engagements.id })
+      .get();
+
+    // 2. scan_history → build the id map first so ports can remap their
+    //    first_seen_scan_id / last_seen_scan_id / closed_at_scan_id.
+    const scanIdMap = new Map<number, number>();
+    const scanRows = tx
+      .select()
+      .from(scan_history)
+      .where(eq(scan_history.engagement_id, sourceId))
+      .all();
+    for (const s of scanRows) {
+      const inserted = tx
+        .insert(scan_history)
+        .values({
+          engagement_id: newEng.id,
+          raw_input: s.raw_input,
+          source: s.source,
+          scanned_at: s.scanned_at,
+          created_at: s.created_at,
+        })
+        .returning({ id: scan_history.id })
+        .get();
+      scanIdMap.set(s.id, inserted.id);
+    }
+
+    // 3. hosts → host id map drives ports.host_id and port_scripts.host_id.
+    const hostIdMap = new Map<number, number>();
+    const hostRows = tx
+      .select()
+      .from(hosts)
+      .where(eq(hosts.engagement_id, sourceId))
+      .all();
+    for (const h of hostRows) {
+      const inserted = tx
+        .insert(hosts)
+        .values({
+          engagement_id: newEng.id,
+          ip: h.ip,
+          hostname: h.hostname,
+          state: h.state,
+          os_name: h.os_name,
+          os_accuracy: h.os_accuracy,
+          is_primary: h.is_primary,
+          scanned_at: h.scanned_at,
+        })
+        .returning({ id: hosts.id })
+        .get();
+      hostIdMap.set(h.id, inserted.id);
+    }
+
+    // 4. ports — remap host_id and the three scan_id lifecycle pointers.
+    const portIdMap = new Map<number, number>();
+    const portRows = tx
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, sourceId))
+      .all();
+    for (const p of portRows) {
+      const inserted = tx
+        .insert(ports)
+        .values({
+          engagement_id: newEng.id,
+          host_id: p.host_id != null ? hostIdMap.get(p.host_id) ?? null : null,
+          port: p.port,
+          protocol: p.protocol,
+          state: p.state,
+          service: p.service,
+          product: p.product,
+          version: p.version,
+          tunnel: p.tunnel,
+          extrainfo: p.extrainfo,
+          first_seen_scan_id:
+            p.first_seen_scan_id != null
+              ? scanIdMap.get(p.first_seen_scan_id) ?? null
+              : null,
+          last_seen_scan_id:
+            p.last_seen_scan_id != null
+              ? scanIdMap.get(p.last_seen_scan_id) ?? null
+              : null,
+          closed_at_scan_id:
+            p.closed_at_scan_id != null
+              ? scanIdMap.get(p.closed_at_scan_id) ?? null
+              : null,
+        })
+        .returning({ id: ports.id })
+        .get();
+      portIdMap.set(p.id, inserted.id);
+    }
+
+    // 5. port_scripts — engagement-level rows (port_id NULL,
+    //    is_host_script=0, autorecon-* source) keep host_id NULL.
+    const scriptRows = tx
+      .select()
+      .from(port_scripts)
+      .where(eq(port_scripts.engagement_id, sourceId))
+      .all();
+    for (const s of scriptRows) {
+      tx.insert(port_scripts)
+        .values({
+          engagement_id: newEng.id,
+          port_id: s.port_id != null ? portIdMap.get(s.port_id) ?? null : null,
+          host_id: s.host_id != null ? hostIdMap.get(s.host_id) ?? null : null,
+          script_id: s.script_id,
+          output: s.output,
+          is_host_script: s.is_host_script,
+          source: s.source,
+        })
+        .run();
+    }
+
+    // 6. check_states — composite primary key of (engagement_id, port_id,
+    //    check_key) means a missing portIdMap entry would silently drop the
+    //    check. Defensive skip rather than throw.
+    const checkRows = tx
+      .select()
+      .from(check_states)
+      .where(eq(check_states.engagement_id, sourceId))
+      .all();
+    for (const c of checkRows) {
+      const newPortId = portIdMap.get(c.port_id);
+      if (newPortId == null) continue;
+      tx.insert(check_states)
+        .values({
+          engagement_id: newEng.id,
+          port_id: newPortId,
+          check_key: c.check_key,
+          checked: c.checked,
+          updated_at: c.updated_at,
+        })
+        .run();
+    }
+
+    // 7. port_notes
+    const noteRows = tx
+      .select()
+      .from(port_notes)
+      .where(eq(port_notes.engagement_id, sourceId))
+      .all();
+    for (const n of noteRows) {
+      const newPortId = portIdMap.get(n.port_id);
+      if (newPortId == null) continue;
+      tx.insert(port_notes)
+        .values({
+          engagement_id: newEng.id,
+          port_id: newPortId,
+          body: n.body,
+          updated_at: n.updated_at,
+        })
+        .run();
+    }
+
+    // 8. port_commands — port_id is NOT NULL on this table, so a missing
+    //    portIdMap entry would be an integrity bug; skip rather than
+    //    insert with a stale id.
+    const commandRows = tx
+      .select()
+      .from(port_commands)
+      .where(eq(port_commands.engagement_id, sourceId))
+      .all();
+    for (const c of commandRows) {
+      const newPortId = portIdMap.get(c.port_id);
+      if (newPortId == null) continue;
+      tx.insert(port_commands)
+        .values({
+          engagement_id: newEng.id,
+          port_id: newPortId,
+          source: c.source,
+          label: c.label,
+          template: c.template,
+        })
+        .run();
+    }
+
+    // 9. port_evidence — build evidenceIdMap so step 10 can remap
+    //    findings.evidence_refs JSON.
+    const evidenceIdMap = new Map<number, number>();
+    const evidenceRows = tx
+      .select()
+      .from(port_evidence)
+      .where(eq(port_evidence.engagement_id, sourceId))
+      .all();
+    for (const e of evidenceRows) {
+      const inserted = tx
+        .insert(port_evidence)
+        .values({
+          engagement_id: newEng.id,
+          port_id:
+            e.port_id != null ? portIdMap.get(e.port_id) ?? null : null,
+          filename: e.filename,
+          mime: e.mime,
+          data_b64: e.data_b64,
+          caption: e.caption,
+          source: e.source,
+          created_at: e.created_at,
+        })
+        .returning({ id: port_evidence.id })
+        .get();
+      evidenceIdMap.set(e.id, inserted.id);
+    }
+
+    // 10. findings — remap evidence_refs (JSON array of evidence ids).
+    const findingRows = tx
+      .select()
+      .from(findingsTable)
+      .where(eq(findingsTable.engagement_id, sourceId))
+      .all();
+    for (const f of findingRows) {
+      let remappedRefs = "[]";
+      try {
+        const parsed = JSON.parse(f.evidence_refs);
+        if (Array.isArray(parsed)) {
+          const remapped = parsed
+            .filter((id): id is number => typeof id === "number")
+            .map((id) => evidenceIdMap.get(id))
+            .filter((id): id is number => typeof id === "number");
+          remappedRefs = JSON.stringify(remapped);
+        }
+      } catch {
+        // Malformed source data — best-effort fall through to []
+        remappedRefs = "[]";
+      }
+      tx.insert(findingsTable)
+        .values({
+          engagement_id: newEng.id,
+          port_id:
+            f.port_id != null ? portIdMap.get(f.port_id) ?? null : null,
+          severity: f.severity,
+          title: f.title,
+          description: f.description,
+          cve: f.cve,
+          evidence_refs: remappedRefs,
+          created_at: f.created_at,
+          updated_at: f.updated_at,
+        })
+        .run();
+    }
+
+    return newEng.id;
+  });
+}

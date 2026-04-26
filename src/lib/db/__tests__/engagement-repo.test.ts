@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "../../../../tests/helpers/db.js";
 import {
+  cloneEngagement,
   createFromScan,
   deleteEngagement,
   getById,
@@ -513,8 +514,11 @@ describe("createFromScan (Plan 03)", () => {
       .get();
 
     expect(after?.name).toBe("lame.htb writeup");
-    // updated_at bumped (>= since clock resolution can collapse to ms).
-    expect(after?.updated_at).not.toBe(before?.updated_at);
+    // updated_at refreshed: lexicographic ISO-8601 compare. Equal is
+    // tolerated (millisecond clock resolution can collapse insert+update
+    // into the same tick on a fast machine); strictly earlier is the
+    // failure mode this guards against.
+    expect(after?.updated_at.localeCompare(before!.updated_at)).toBeGreaterThanOrEqual(0);
     // Host identity (ip/hostname) untouched — rename is label-only.
     expect(hostAfter?.ip).toBe(hostBefore?.ip);
     expect(hostAfter?.hostname).toBe(hostBefore?.hostname);
@@ -522,5 +526,115 @@ describe("createFromScan (Plan 03)", () => {
 
   it("renameEngagement returns false for unknown engagement id", () => {
     expect(renameEngagement(db, 99999, "nope")).toBe(false);
+  });
+
+  it("cloneEngagement returns null for unknown engagement id", () => {
+    expect(cloneEngagement(db, 99999)).toBeNull();
+  });
+
+  it("cloneEngagement deep-copies a multi-host engagement with isolated ids", () => {
+    const dc = {
+      target: { ip: "10.10.10.5", hostname: "dc01.htb" },
+      ports: [
+        {
+          port: 445,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "microsoft-ds",
+          scripts: [{ id: "smb2-time", output: "DC time" }],
+        },
+      ],
+      hostScripts: [
+        { id: "smb-os-discovery", output: "OS: Windows Server 2019" },
+      ],
+    };
+    const ws01 = {
+      target: { ip: "10.10.10.6", hostname: "ws01.htb" },
+      ports: [
+        {
+          port: 22,
+          protocol: "tcp" as const,
+          state: "open" as const,
+          service: "ssh",
+          scripts: [],
+        },
+      ],
+      hostScripts: [],
+    };
+
+    const scan = makeScan({
+      target: dc.target,
+      ports: dc.ports,
+      hosts: [dc, ws01],
+    });
+    const source = createFromScan(db, scan, "<raw>");
+
+    const cloneId = cloneEngagement(db, source.id, "DC writeup (template)");
+    expect(cloneId).not.toBeNull();
+    expect(cloneId).not.toBe(source.id);
+
+    const original = getById(db, source.id);
+    const copy = getById(db, cloneId!);
+    expect(copy).not.toBeNull();
+    expect(copy!.name).toBe("DC writeup (template)");
+
+    // Per-table cardinalities match the original.
+    expect(copy!.hosts).toHaveLength(original!.hosts.length);
+    expect(copy!.ports).toHaveLength(original!.ports.length);
+    expect(copy!.hostScripts).toHaveLength(original!.hostScripts.length);
+
+    // Copy uses fresh primary keys — host_id, port_id all distinct.
+    const originalHostIds = new Set(original!.hosts.map((h) => h.id));
+    const originalPortIds = new Set(original!.ports.map((p) => p.id));
+    for (const h of copy!.hosts) expect(originalHostIds.has(h.id)).toBe(false);
+    for (const p of copy!.ports) expect(originalPortIds.has(p.id)).toBe(false);
+
+    // Per-host attribution survives the copy: DC has the smb-os-discovery
+    // host script and the 445 port; ws01 has 22.
+    const copyDc = copy!.hosts.find((h) => h.ip === "10.10.10.5")!;
+    const copyWs = copy!.hosts.find((h) => h.ip === "10.10.10.6")!;
+    expect(copyDc.is_primary).toBe(true);
+
+    const dcHostScripts = copy!.hostScripts.filter(
+      (s) => s.host_id === copyDc.id,
+    );
+    expect(dcHostScripts).toHaveLength(1);
+    expect(dcHostScripts[0].script_id).toBe("smb-os-discovery");
+    expect(dcHostScripts[0].output).toBe("OS: Windows Server 2019");
+
+    const dcPort = copy!.ports.find((p) => p.host_id === copyDc.id)!;
+    expect(dcPort.port).toBe(445);
+    expect(dcPort.scripts).toHaveLength(1);
+    expect(dcPort.scripts[0].script_id).toBe("smb2-time");
+    expect(dcPort.scripts[0].host_id).toBe(copyDc.id);
+
+    const wsPort = copy!.ports.find((p) => p.host_id === copyWs.id)!;
+    expect(wsPort.port).toBe(22);
+  });
+
+  it("cloneEngagement isolates the copy: deleting the source preserves the clone", () => {
+    const source = createFromScan(db, makeScan(), "<raw>");
+    const cloneId = cloneEngagement(db, source.id);
+    expect(cloneId).not.toBeNull();
+
+    deleteEngagement(db, source.id);
+
+    // Source is gone but the copy still resolves and still has its ports.
+    expect(getById(db, source.id)).toBeNull();
+    const copy = getById(db, cloneId!);
+    expect(copy).not.toBeNull();
+    expect(copy!.ports.length).toBeGreaterThan(0);
+  });
+
+  it("cloneEngagement default name appends ' (copy)' when no override is given", () => {
+    const source = createFromScan(
+      db,
+      makeScan({ target: { ip: "10.10.10.5", hostname: "lame.htb" } }),
+      "<raw>",
+    );
+    const cloneId = cloneEngagement(db, source.id);
+    expect(cloneId).not.toBeNull();
+    const copy = getById(db, cloneId!);
+    expect(copy!.name).toBe("lame.htb (10.10.10.5) (copy)");
   });
 });

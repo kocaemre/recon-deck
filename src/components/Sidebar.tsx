@@ -25,6 +25,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
@@ -368,6 +369,31 @@ function SidebarRow({
     }
   }
 
+  async function onDuplicate() {
+    setMenuOpen(false);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}/clone`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Duplicate failed.");
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      toast.success("Engagement duplicated");
+      // Jump straight to the clone so the operator can rename / edit
+      // immediately instead of hunting it down in the sidebar.
+      if (typeof body.id === "number") {
+        router.push(`/engagements/${body.id}`);
+      } else {
+        router.refresh();
+      }
+    } catch {
+      toast.error("Duplicate failed.");
+    }
+  }
+
   async function onDelete() {
     setMenuOpen(false);
     if (
@@ -541,6 +567,9 @@ function SidebarRow({
         >
           <MenuItem onClick={onRename} icon={<Pencil size={11} />}>
             Rename
+          </MenuItem>
+          <MenuItem onClick={onDuplicate} icon={<Copy size={11} />}>
+            Duplicate
           </MenuItem>
           <MenuItem
             onClick={onDelete}
