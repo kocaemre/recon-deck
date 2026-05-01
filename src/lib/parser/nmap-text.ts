@@ -78,8 +78,8 @@ function parseHostLine(
 const PORT_LINE_RE =
   /^(\d+)\/(tcp|udp|sctp|ip)\s+(open(?:\|filtered)?|filtered|closed(?:\|filtered)?|unfiltered)\s+(\S+)(?:\s+(.+?))?\s*$/;
 
-const NSE_CONT_RE = /^\|\s+(.+)$/;
-const NSE_TERM_RE = /^\|_\s*(.+)$/;
+const NSE_CONT_RE = /^\|(\s+)(.+)$/;
+const NSE_TERM_RE = /^\|_(\s*)(.+)$/;
 const HOST_SCRIPT_HEADER_RE = /^Host script results:\s*$/;
 const NSE_ID_HEADER_RE = /^([A-Za-z0-9][\w-]*):\s*(.*)$/;
 
@@ -193,6 +193,12 @@ export function parseNmapText(input: string): ParsedScan {
   let phase: Phase = "preamble";
   let currentPort: ParsedPort | undefined;
   let nseBuffer: string[] = [];
+  // Indent (in spaces) of the FIRST line of nseBuffer. Used to
+  // decide whether a subsequent `name:` line is a sibling top-level
+  // script or just a child key inside the current script body. A
+  // child key (e.g. `|   3:1:1:` indented by 3) should NEVER trigger
+  // a flush — it belongs to the parent's body.
+  let nseBufferIndent = 0;
   let tracerouteCollecting = false;
 
   const flushNseBufferTo = (dest: ScriptOutput[]) => {
@@ -200,6 +206,7 @@ export function parseNmapText(input: string): ParsedScan {
     const s = finalizeScript(nseBuffer);
     if (s) dest.push(s);
     nseBuffer = [];
+    nseBufferIndent = 0;
   };
 
   const flushPendingNseToCurrentScope = () => {
@@ -402,10 +409,16 @@ export function parseNmapText(input: string): ParsedScan {
     const nseTermMatch = NSE_TERM_RE.exec(line);
 
     if (nseContMatch || nseTermMatch) {
-      const body = (nseContMatch ?? nseTermMatch)![1];
+      const m = (nseContMatch ?? nseTermMatch)!;
+      const indent = m[1].length;
+      const body = m[2];
 
       const idHdr = NSE_ID_HEADER_RE.exec(body);
-      if (idHdr && nseBuffer.length > 0) {
+      // Only flush as a NEW sibling script when the line is at the same
+      // (or shallower) indent than the buffer's first line. Deeper-indent
+      // `name:` lines like `|   3:1:1:` are child keys inside smb2-
+      // security-mode and must stay attached to the parent's body.
+      if (idHdr && nseBuffer.length > 0 && indent <= nseBufferIndent) {
         const dest =
           phase === "hostscript"
             ? builder.hostScripts
@@ -413,6 +426,7 @@ export function parseNmapText(input: string): ParsedScan {
         flushNseBufferTo(dest);
       }
 
+      if (nseBuffer.length === 0) nseBufferIndent = indent;
       nseBuffer.push(body);
 
       if (nseTermMatch) {

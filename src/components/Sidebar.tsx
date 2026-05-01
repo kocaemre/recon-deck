@@ -829,7 +829,12 @@ function SidebarRow({
           {hostCount > 1 && (
             <>
               <span>·</span>
-              <span style={{ color: "var(--accent)" }}>{hostCount}h</span>
+              <span
+                style={{ color: "var(--accent)" }}
+                title={`${hostCount} hosts in this engagement`}
+              >
+                {hostCount}h
+              </span>
             </>
           )}
           <span>·</span>

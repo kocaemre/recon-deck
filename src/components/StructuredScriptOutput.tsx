@@ -73,6 +73,12 @@ function renderRows(
 
 export function StructuredScriptOutput({ script }: Props) {
   const hasStructured = script.structured && script.structured.length > 0;
+  // v2.1.1 defensive — skip the empty <pre> fallback when neither
+  // structured data nor a non-empty output string is present. Caused
+  // ~40px of dead vertical space on host-level findings before the
+  // text-parser indent fix landed (and stays as a guard if any new
+  // parser path produces an empty-body script).
+  const hasOutput = script.output.trim().length > 0;
 
   return (
     <div>
@@ -83,12 +89,12 @@ export function StructuredScriptOutput({ script }: Props) {
         <table className="mt-1 w-full border-collapse rounded bg-[var(--code-surface)] text-xs">
           <tbody>{renderRows(script.structured!)}</tbody>
         </table>
-      ) : (
+      ) : hasOutput ? (
         <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-[var(--code-surface)] p-2 font-mono text-xs text-muted-foreground">
           {/* React text node — XSS safe (SEC-03, D-20, TEST-05) */}
           {script.output}
         </pre>
-      )}
+      ) : null}
     </div>
   );
 }
