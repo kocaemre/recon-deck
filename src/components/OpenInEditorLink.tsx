@@ -24,9 +24,15 @@ const STORAGE_KEY = "recon-deck.openInEditor.enabled";
 
 interface Props {
   engagementSlug: string;
+  /**
+   * v1.9.0: localExportDir resolved server-side via effectiveAppState.
+   * Wins over the legacy NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR env var so
+   * operators can change the path in /settings without a rebuild.
+   */
+  localExportDir?: string | null;
 }
 
-export function OpenInEditorLink({ engagementSlug }: Props) {
+export function OpenInEditorLink({ engagementSlug, localExportDir }: Props) {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
@@ -37,7 +43,7 @@ export function OpenInEditorLink({ engagementSlug }: Props) {
     }
   }, []);
 
-  const base = process.env.NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR;
+  const base = localExportDir ?? process.env.NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR;
   if (!enabled || !base) return null;
 
   // Strip a single trailing slash so the join produces exactly one

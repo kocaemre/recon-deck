@@ -15,6 +15,7 @@ import {
   matchUserCommands,
   getWordlistOverridesMap,
   listScanHistory,
+  effectiveAppState,
 } from "@/lib/db";
 import { getKb, matchPort } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
@@ -66,6 +67,7 @@ export default async function EngagementPage({
   if (isNaN(id)) notFound();
 
   const engagement = getById(db, id);
+  const appCfg = effectiveAppState(db);
   if (!engagement) notFound();
 
   // v1.4.0 #15: stamp the visit so the landing-page banner can resume
@@ -529,6 +531,7 @@ export default async function EngagementPage({
         activeHostId={activeHostId}
         scanCount={scanHistory.length}
         isSample={engagement.is_sample}
+        localExportDir={appCfg.localExportDir}
         scanner={reparsed?.scanner}
         extraPorts={reparsed?.extraPorts}
         finishedAt={reparsed?.runstats?.finishedAt}

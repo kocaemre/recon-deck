@@ -27,6 +27,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { loadKnowledgeBase, type KnowledgeBase } from "./loader";
+import { db, effectiveAppState } from "@/lib/db";
 
 interface KbDirs {
   shippedPortsDir: string;
@@ -40,10 +41,19 @@ let dirty = false;
 let dirsForReload: KbDirs | null = null;
 
 function defaultDirs(): KbDirs {
+  // v1.9.0: app_state.kb_user_dir wins over the legacy env var.
+  // effectiveAppState falls back to RECON_KB_USER_DIR when the DB column
+  // is null, so existing deployments keep working unchanged.
+  let kbUserDir: string | null = null;
+  try {
+    kbUserDir = effectiveAppState(db).kbUserDir;
+  } catch {
+    kbUserDir = process.env.RECON_KB_USER_DIR ?? null;
+  }
   return {
     shippedPortsDir: path.join(process.cwd(), "knowledge", "ports"),
     shippedDefaultFile: path.join(process.cwd(), "knowledge", "default.yaml"),
-    userDir: process.env.RECON_KB_USER_DIR ?? undefined,
+    userDir: kbUserDir ?? undefined,
   };
 }
 

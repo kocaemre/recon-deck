@@ -96,6 +96,8 @@ interface EngagementHeaderProps {
   scanCount?: number;
   /** v1.9.0: sample-engagement marker — drives the `sample` chip + Discard button. */
   isSample?: boolean;
+  /** v1.9.0: app_state.local_export_dir → forwarded to OpenInEditorLink. */
+  localExportDir?: string | null;
 }
 
 export function EngagementHeader({
@@ -118,6 +120,7 @@ export function EngagementHeader({
   activeHostId,
   scanCount,
   isSample,
+  localExportDir,
 }: EngagementHeaderProps) {
   const [ip, setIp] = useState(targetIp);
   const [hostname, setHostname] = useState(targetHostname ?? "");
@@ -403,7 +406,10 @@ export function EngagementHeader({
           {/* v1.4.0 #12: opt-in vscode://file/… link. Renders nothing
               when the user hasn't enabled the toggle in /settings or
               when NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR is unset. */}
-          <OpenInEditorLink engagementSlug={name} />
+          <OpenInEditorLink
+            engagementSlug={name}
+            localExportDir={localExportDir}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
