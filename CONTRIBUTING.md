@@ -142,7 +142,7 @@ format can evolve without silently breaking the loader.
 
 **Current contract.**
 
-- Version `1` is the only accepted value in v1.0.
+- Version `1` is the only accepted value today.
 - Any YAML with `schema_version: 2` (or missing the field, or a non-integer
   value) will be rejected by the Zod schema at load time. For the shipped KB
   this is a CI failure; for user overrides it's a per-file skip with a warning
@@ -200,7 +200,7 @@ Run all four locally before opening a PR — CI fails on any of them:
 ```bash
 npm run lint:kb      # KB schema + denylist + URL scheme + placeholder allowlist
 npm run typecheck    # tsc --noEmit (0 errors expected)
-npm test             # vitest (400+ tests across parsers, repo, export, search, KB)
+npm test             # vitest (470+ tests across parsers, repo, export, search, KB)
 npm run build        # Next.js production build (output: standalone)
 ```
 
@@ -312,8 +312,8 @@ worked yesterday" bug.
 
 ### Testing in a real browser
 
-For UI changes, `npx next dev -p 3030` and then exercise the feature
-manually. There is no Playwright / e2e suite — golden-path manual checks
+For UI changes, `npm run dev` (binds to `127.0.0.1:13337`) and then
+exercise the feature manually. There is no Playwright / e2e suite — golden-path manual checks
 plus the unit tests are the contract. When the change touches:
 
 - the engagement page → re-import flow, multi-host host switch, evidence

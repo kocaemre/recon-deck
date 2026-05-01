@@ -1,15 +1,15 @@
 # recon-deck Roadmap
 
-This is the public roadmap for recon-deck: what's planned for v1.1 and beyond,
-what's explicitly **not** on the path, and the short answers to the feature
-requests this project receives most often. Read this before opening an issue
-asking for something.
+This is the public roadmap for recon-deck: what's planned for upcoming
+releases, what's explicitly **not** on the path, and the short answers to the
+feature requests this project receives most often. Read this before opening an
+issue asking for something.
 
 The project's scope is narrow by design. The narrowness is the product. If a
 feature doesn't appear here, it is almost certainly in the [Out of Scope](#out-of-scope)
 section below — check there first.
 
-For the v1.0 feature set and current status, see [`README.md`](README.md).
+For the current feature set and status, see [`README.md`](README.md).
 
 ---
 
@@ -24,7 +24,7 @@ For the v1.0 feature set and current status, see [`README.md`](README.md).
 - **v2.0.1** (2026-05-01) — Patch. Per-IP rate limiter on `/api/*` (defense-in-depth, LAN-exposure case). `listSummaries` refactored to a single JOIN query (O(1) instead of O(N) subqueries per row).
 - **v2.1.0** (2026-05-01) — Minor. First-run onboarding at `/welcome` (4 steps · `app_state` singleton, Migration 0017). Sample engagement with `SAMPLE` chip + Discard button (Migration 0018). `/settings` Replay onboarding + GitHub release-check toggle. `UpdateAvailableToast` (notify-only, opt-in). Desktop-only viewport guard at `< 1280px`. KB user dir + local export dir now DB-driven (env vars are legacy fallback).
 
-## v1.3+ Candidates
+## v2.2+ Candidates
 
 These are ideas on the short list for upcoming releases. Everything in this
 section is a **candidate**, not a commitment — priorities will shift based on
@@ -71,18 +71,17 @@ stays shippable.
 | Running scans (nmap, gobuster, etc.)     | **Won't add.**          | recon-deck is post-scan workflow only. It competes with nothing, complements AutoRecon/HackTricks. Running scans would duplicate AutoRecon's job, expand the threat model, and force long-running background processes into a tool designed around synchronous render. |
 | Multi-user / team collaboration          | **Won't add.**          | Single-user self-hosted tool by design. Multi-user requires auth, RBAC, per-user state scoping, share links, conflict resolution — every one of those items expands the maintenance surface 10x and violates the "runs locally in a container" core posture. |
 | Authentication / login / users           | **Won't add.**          | Local tool. Auth adds friction and threat surface for no benefit. If you need multi-user, run multiple containers behind a reverse proxy you control. |
-| AI / LLM / exploit suggestions           | **Not in v1.x.** Direction noted for v2.x — see [v2.x Future Considerations](#v2x-future-considerations). | The v1.0 product is deterministic and offline on purpose. A v2 path may exist via a user-supplied local model (Ollama / self-hosted endpoint), opt-in, with AI-derived output clearly labelled — but this is a v2 design problem, not a v1.x backlog item. |
+| AI / LLM / exploit suggestions           | **Not in v2.x today.** Direction noted — see [v2.x Future Considerations](#v2x-future-considerations). | The product is deterministic and offline on purpose. A future path may exist via a user-supplied local model (Ollama / self-hosted endpoint), opt-in, with AI-derived output clearly labelled — but this is a design problem, not a backlog item. |
 | Mobile app / mobile-first UI             | **Won't add.**          | Pentesting happens on laptops. Mobile recon is rare, the UI wouldn't fit, and the browsers-in-scope targeting (Chromium + Firefox last 2 majors) excludes mobile Safari anyway. |
 | Cloud-hosted / SaaS version              | **Won't add.**          | Self-hosted is the entire distribution model. A hosted offering would require auth, billing, multi-tenant isolation, and a separate threat model — an entirely different project. |
 | PostgreSQL or non-SQLite DB              | **Won't add.**          | Would kill self-host simplicity. SQLite is the whole reason the Docker image is one file, one process, one volume. |
 | Split frontend/backend services          | **Won't add.**          | Next.js App Router handles both in one process. Splitting would double the deploy surface for zero user benefit. |
 | Obsidian plugin                          | **Won't add.**          | Niche audience, doesn't replace a browser-based workflow. The Markdown export (Obsidian-compatible frontmatter) covers the interop need. |
-| In-UI knowledge-base editor              | **Won't add in v1.0.**  | File-based only — drop YAML into `/kb`. See [`CONTRIBUTING.md`](CONTRIBUTING.md). A UI editor would duplicate a text editor poorly and encourage config drift from the canonical on-disk YAML. Possible post-v1.0 if user demand is clear. |
+| Plugin / scripting API                   | **Not planned.**        | The extensibility surface is the KB YAML. A programmatic plugin API would open a sandboxing and security-review burden that a solo-maintainer project cannot sustain responsibly. _Note: this row replaced the old "in-UI KB editor — won't add" entry; that one shipped in v1.x as `/settings/kb`._ |
 | Reporting platform (PDF styling, client branding, issue tracker) | **Won't add.**          | recon-deck is a recon-workflow tool, not a reporting platform. The existing Markdown / JSON / HTML / print-to-PDF exports exist to feed _your_ reporting tool of choice. |
 | Live collaboration / real-time sync      | **Won't add.**          | Requires multi-user (already declined) and a server-push architecture that doesn't fit the single-process, offline-by-default posture. |
-| Plugin / scripting API                   | **Not planned for v1.x.** | The extensibility surface is the KB YAML. A programmatic plugin API would open a sandboxing and security-review burden that a solo-maintainer project cannot sustain responsibly. |
 | Telemetry / usage analytics              | **Won't add.**          | Violates OPS-03 (zero outbound HTTP from the app). The offline guarantee is a feature, not an oversight. |
-| Auto-update / "new version" notifications | **Won't add.**          | Same as telemetry — would require outbound HTTP. Updates are user-initiated via `docker pull`. |
+| Auto-update install path                  | **Won't add.**          | Updates stay user-initiated via `docker pull` / `git pull` so you decide when the binary on disk changes. v2.1.0 added an _opt-in, off-by-default_ GitHub release-check toast (notify-only — surfaces a new tag, never installs anything). The toggle lives in `/settings → First-run`. |
 
 ---
 
@@ -165,7 +164,7 @@ Everything here is a best-effort plan subject to reality.
 
 ## Contributing to the Roadmap
 
-To propose moving an item off the Out-of-Scope list or onto the v1.1 Candidates
+To propose moving an item off the Out-of-Scope list or onto the Candidates
 list, open a discussion issue — **not a PR**. Describe:
 
 1. **The user problem** in one sentence. (If the problem is "I want feature X,"

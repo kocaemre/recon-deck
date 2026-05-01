@@ -36,6 +36,10 @@ Paste nmap text / XML / greppable output (or import an AutoRecon `results/` fold
 - **KB hot-reload** — `fs.watch` on the shipped + user KB directories flips a "dirty" flag that the next request rebuilds; edit a YAML in your editor and the next page render picks it up
 - **Settings index** — `/settings` central page lists every engagement with a destructive **Delete** action (cascades through ports, scripts, evidence, findings, scan history) plus jump-off links to the **wordlist / custom command / KB editor** libraries
 - **Migration safety** — boot snapshots the live DB to `data/recon-deck.db.backup-pre-NNNN` via `VACUUM INTO` before applying anything new, wraps `migrate()` in try/catch with a copy-pasteable rollback message, and runs `PRAGMA integrity_check` + `PRAGMA foreign_key_check` after every migration
+- **First-run onboarding** — `/welcome` 4-step flow (scope · tour · local paths · updates) seeds an `app_state` singleton with your `local_export_dir`, `kb_user_dir`, `wordlist_base`, and the GitHub release-check toggle. Layout guards bounce un-onboarded operators to `/welcome` automatically; replay anytime from `/settings → First-run`
+- **Sample engagement** — "Try sample" on the paste panel inserts a canned 10-port HTB-easy box marked `is_sample = true`. The header surfaces a `SAMPLE` chip + a single-click `Discard sample` hard-delete button so it stays clearly signposted
+- **Notify-only update check** — opt-in toggle pings `api.github.com/repos/kocaemre/recon-deck/releases/latest` once per browser session; new tags surface a non-blocking toast with a "Release notes" link. Installs stay manual (`docker pull` / `git pull`) — no auto-update path
+- **Desktop-only viewport guard** — the heatmap layout assumes ≥ 1280px width. Narrower viewports get a clean "needs a wider screen" explainer instead of a cramped, unusable UI
 
 ---
 
@@ -236,18 +240,18 @@ docker run --rm \
 docker start recon-deck   # or re-run the docker run command from Quick Start
 ```
 
-**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0010`** (`port_scripts.host_id` for multi-host attribution). Backing up an `0010` DB and restoring it under a build that expects `≥ 0010` works — Drizzle migrations are forward-only, so restoring a snapshot under an older build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v1.1`) for production restores rather than rolling with `:latest`.
+**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0018`** (the v2.1.0 `app_state` singleton + `engagements.is_sample` pair). Backing up an `0018` DB and restoring it under a build that expects `≥ 0018` works — Drizzle migrations are forward-only, so restoring a snapshot under an older build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v2.1`) for production restores rather than rolling with `:latest`.
 
-**Pre-migration snapshots (boot-time safety net).** When the journal lists more entries than `__drizzle_migrations` has applied, the boot sequence runs `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` *before* invoking `migrate()`. `NNNN` is the applied count when the snapshot was written, so `backup-pre-0009` means "captured at schema 0009, restoring puts you back there". On any migration failure the log surfaces the snapshot path with a copy-pasteable rollback command:
+**Pre-migration snapshots (boot-time safety net).** When the journal lists more entries than `__drizzle_migrations` has applied, the boot sequence runs `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` *before* invoking `migrate()`. `NNNN` is the applied count when the snapshot was written, so `backup-pre-0017` means "captured at schema 0017, restoring puts you back there". On any migration failure the log surfaces the snapshot path with a copy-pasteable rollback command:
 
 ```bash
 # Inside the container (or directly on the host if you bind-mounted /data):
-cp data/recon-deck.db.backup-pre-0009 data/recon-deck.db
+cp data/recon-deck.db.backup-pre-0017 data/recon-deck.db
 rm -f data/recon-deck.db-wal data/recon-deck.db-shm
 # restart — boot retries from the restored state
 ```
 
-After every successful migration, `PRAGMA integrity_check` + `PRAGMA foreign_key_check` run; either failing aborts boot. Snapshots accumulate on disk one per migration tier (`backup-pre-0007`, `…-0008`, `…-0009`, `…-0010`) — recycle them manually when you trust the new schema. See [CONTRIBUTING.md](CONTRIBUTING.md) › "Migration safety and recovery" for the full procedure.
+After every successful migration, `PRAGMA integrity_check` + `PRAGMA foreign_key_check` run; either failing aborts boot. Snapshots accumulate on disk one per migration tier (`…-0016`, `…-0017`, `…-0018`) — recycle them manually when you trust the new schema. See [CONTRIBUTING.md](CONTRIBUTING.md) › "Migration safety and recovery" for the full procedure.
 
 ---
 
@@ -321,7 +325,8 @@ npm run build         # production build (output: "standalone")
 | `HOSTNAME`                  | `127.0.0.1`             | Bind address inside the container. Override to `0.0.0.0` for port-map reach.   |
 | `PORT`                      | `13337`                 | Port the app listens on (also drives the host-header allowlist default).       |
 | `RECON_DB_PATH`             | `/data/recon-deck.db`   | SQLite file location. Keep on a mounted volume for persistence.                |
-| `RECON_KB_USER_DIR`         | `/kb`                   | Directory for user KB overrides. YAML files here are loaded at startup.        |
+| `RECON_KB_USER_DIR`         | `/kb`                   | **Legacy fallback** for the user KB directory. v2.1.0 onwards `app_state.kb_user_dir` (set during onboarding or `/settings`) wins; the env var is only consulted when the DB column is null. |
+| `RECON_LOCAL_EXPORT_DIR`    | _(empty)_               | **Legacy fallback** for the engagement header's `vscode://file/…` link. v2.1.0 onwards `app_state.local_export_dir` wins. The older `NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR` build-time env still works as the last fallback. |
 | `RECON_DECK_TRUSTED_HOSTS`  | _(empty)_               | Comma-separated extra hosts allowed by the host-header middleware.             |
 | `NEXT_TELEMETRY_DISABLED`   | `1`                     | Disables Next.js telemetry. Preserves the offline guarantee.                   |
 
@@ -341,7 +346,7 @@ See [CREDITS.md](CREDITS.md) for upstream attribution — HackTricks, AutoRecon,
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for v1.1 candidates and hard out-of-scope items.
+See [ROADMAP.md](ROADMAP.md) for upcoming candidates, the v2.x future direction, and hard out-of-scope items.
 
 ## License
 
