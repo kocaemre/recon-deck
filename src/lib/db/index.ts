@@ -56,6 +56,8 @@ export {
   renameEngagement,
   deleteEngagement,
   cloneEngagement,
+  setEngagementTags,
+  archiveEngagement,
   type Db,
 } from "./engagement-repo";
 export { upsertCheck, getChecksByEngagement } from "./checklist-repo";

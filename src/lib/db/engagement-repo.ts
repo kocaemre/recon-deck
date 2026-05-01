@@ -511,12 +511,14 @@ export function listSummaries(db: Db): EngagementSummary[] {
   // pull every row from `check_states` and group in JS. KB-driven `total`
   // can't be SQL-derived (it requires KB matching per port at read time);
   // see app/layout.tsx for the in-memory totals loop.
-  return db
+  const rows = db
     .select({
       id: engagements.id,
       name: engagements.name,
       source: engagements.source,
       created_at: engagements.created_at,
+      tags_raw: engagements.tags,
+      is_archived: engagements.is_archived,
       port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
       // P1-F PR 4: host_count surfaces in the sidebar as a "N hosts" chip
       // when > 1. Single-host engagements still render the legacy compact
@@ -529,6 +531,66 @@ export function listSummaries(db: Db): EngagementSummary[] {
     .from(engagements)
     .orderBy(desc(engagements.created_at))
     .all();
+
+  // Migration 0011: parse the tags JSON column into a real array. Bad
+  // payloads fall through to []; the repo is the contract surface, so
+  // consumers (Sidebar, palette filter logic) only ever see string[].
+  return rows.map((r) => {
+    const { tags_raw, ...rest } = r;
+    let tags: string[] = [];
+    try {
+      const parsed = JSON.parse(tags_raw);
+      if (Array.isArray(parsed)) {
+        tags = parsed.filter((t): t is string => typeof t === "string");
+      }
+    } catch {
+      // ignore — empty array
+    }
+    return { ...rest, tags };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// setEngagementTags / archiveEngagement (v1.2.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the engagement's tag set. Caller normalizes (trim, dedup,
+ * lowercase) before passing — the repo trusts the array shape and
+ * just JSON-encodes it. Returns true when the row was updated.
+ */
+export function setEngagementTags(
+  db: Db,
+  engagementId: number,
+  tags: string[],
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ tags: JSON.stringify(tags), updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * Flip the engagement's archive state. Archive is UI-scoped — DELETE
+ * still cascades, FTS index still includes the row. Sidebar's default
+ * Active view filters by `is_archived = false`. Returns true when the
+ * row was updated.
+ */
+export function archiveEngagement(
+  db: Db,
+  engagementId: number,
+  archived: boolean,
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ is_archived: archived, updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDb } from "../../../../tests/helpers/db.js";
 import {
+  archiveEngagement,
   cloneEngagement,
   createFromScan,
   deleteEngagement,
   getById,
   listSummaries,
   renameEngagement,
+  setEngagementTags,
 } from "../engagement-repo.js";
 import { engagements, ports, port_scripts, hosts } from "../schema.js";
 import { eq, and } from "drizzle-orm";
@@ -636,5 +638,67 @@ describe("createFromScan (Plan 03)", () => {
     expect(cloneId).not.toBeNull();
     const copy = getById(db, cloneId!);
     expect(copy!.name).toBe("lame.htb (10.10.10.5) (copy)");
+  });
+
+  it("listSummaries defaults tags=[] and is_archived=false on legacy rows", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    const summary = listSummaries(db).find((s) => s.id === result.id);
+    expect(summary).toBeDefined();
+    expect(summary!.tags).toEqual([]);
+    expect(summary!.is_archived).toBe(false);
+  });
+
+  it("setEngagementTags roundtrips through listSummaries with parsed array", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    expect(setEngagementTags(db, result.id, ["htb", "oscp"])).toBe(true);
+    const summary = listSummaries(db).find((s) => s.id === result.id);
+    expect(summary!.tags).toEqual(["htb", "oscp"]);
+
+    // Replace, not append.
+    expect(setEngagementTags(db, result.id, ["client-acme"])).toBe(true);
+    const summary2 = listSummaries(db).find((s) => s.id === result.id);
+    expect(summary2!.tags).toEqual(["client-acme"]);
+
+    // Empty array clears the chip set.
+    expect(setEngagementTags(db, result.id, [])).toBe(true);
+    const summary3 = listSummaries(db).find((s) => s.id === result.id);
+    expect(summary3!.tags).toEqual([]);
+  });
+
+  it("setEngagementTags returns false for unknown engagement", () => {
+    expect(setEngagementTags(db, 99999, ["nope"])).toBe(false);
+  });
+
+  it("listSummaries falls through to [] when tags column holds malformed JSON", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    // Bypass the helper to plant invalid JSON and prove the parser is defensive.
+    db.update(engagements)
+      .set({ tags: "not-json" })
+      .where(eq(engagements.id, result.id))
+      .run();
+    const summary = listSummaries(db).find((s) => s.id === result.id);
+    expect(summary!.tags).toEqual([]);
+  });
+
+  it("archiveEngagement flips the is_archived flag", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    expect(archiveEngagement(db, result.id, true)).toBe(true);
+    const archived = listSummaries(db).find((s) => s.id === result.id);
+    expect(archived!.is_archived).toBe(true);
+
+    expect(archiveEngagement(db, result.id, false)).toBe(true);
+    const restored = listSummaries(db).find((s) => s.id === result.id);
+    expect(restored!.is_archived).toBe(false);
+  });
+
+  it("archiveEngagement returns false for unknown engagement", () => {
+    expect(archiveEngagement(db, 99999, true)).toBe(false);
+  });
+
+  it("archived engagements still cascade-delete via deleteEngagement", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    archiveEngagement(db, result.id, true);
+    expect(deleteEngagement(db, result.id)).toBe(true);
+    expect(getById(db, result.id)).toBeNull();
   });
 });

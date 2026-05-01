@@ -26,6 +26,9 @@ import {
   Pencil,
   Trash2,
   Copy,
+  Tag as TagIcon,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
@@ -50,6 +53,11 @@ interface SidebarProps {
 
 export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
   const [filter, setFilter] = useState("");
+  // v1.2: view mode (active vs archived) and a multi-select tag filter.
+  // Both flow through the same `filtered` memo below so tag chips and the
+  // sekme toggle stack with the text-search query (AND across all).
+  const [viewMode, setViewMode] = useState<"active" | "archived">("active");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const pathname = usePathname();
   const router = useRouter();
   const setGlobalSearchOpen = useUIStore((s) => s.setGlobalSearchOpen);
@@ -96,16 +104,53 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [router]);
 
+  // v1.2: pre-compute counts and the union of all tags before filtering so
+  // the sekme toggle + tag chip strip render predictable totals (the chip
+  // count never depends on what the operator has typed).
+  const activeCount = useMemo(
+    () => engagements.filter((e) => !e.is_archived).length,
+    [engagements],
+  );
+  const archivedCount = useMemo(
+    () => engagements.filter((e) => e.is_archived).length,
+    [engagements],
+  );
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of engagements) for (const t of e.tags) set.add(t);
+    return Array.from(set).sort();
+  }, [engagements]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return engagements;
-    return engagements.filter(
-      (e) =>
+    return engagements.filter((e) => {
+      // Sekme: archived view shows only archived rows; active view hides them.
+      if (viewMode === "active" && e.is_archived) return false;
+      if (viewMode === "archived" && !e.is_archived) return false;
+      // Tag chip filter: AND across selected tags (every selected tag must
+      // be present on the engagement).
+      if (selectedTags.size > 0) {
+        for (const t of selectedTags) if (!e.tags.includes(t)) return false;
+      }
+      // Text query last (cheapest miss path stays first).
+      if (!q) return true;
+      return (
         e.name.toLowerCase().includes(q) ||
         e.primary_ip.toLowerCase().includes(q) ||
-        (e.primary_hostname?.toLowerCase().includes(q) ?? false),
-    );
-  }, [filter, engagements]);
+        (e.primary_hostname?.toLowerCase().includes(q) ?? false) ||
+        e.tags.some((t) => t.includes(q))
+      );
+    });
+  }, [filter, engagements, viewMode, selectedTags]);
+
+  function toggleTagFilter(tag: string) {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+  }
 
   return (
     <aside
@@ -215,15 +260,72 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
         </button>
       </div>
 
-      {/* Count label */}
-      <div className="px-[10px] pt-2 pb-[6px]">
-        <div
-          className="uppercase tracking-[0.08em] font-medium"
-          style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
-        >
-          Engagements · {engagements.length}
-        </div>
+      {/* v1.2: Active / Archived sekme toggle */}
+      <div className="px-[10px] pt-2 pb-[4px] flex items-center gap-1">
+        <SekmeButton
+          active={viewMode === "active"}
+          onClick={() => setViewMode("active")}
+          label="Active"
+          count={activeCount}
+        />
+        <SekmeButton
+          active={viewMode === "archived"}
+          onClick={() => setViewMode("archived")}
+          label="Archived"
+          count={archivedCount}
+        />
       </div>
+
+      {/* v1.2: Tag chip filter strip — only when at least one engagement carries a tag */}
+      {allTags.length > 0 && (
+        <div
+          className="px-[10px] pt-1 pb-[6px] flex flex-wrap gap-1"
+          style={{ borderBottom: "1px solid var(--border-subtle)" }}
+        >
+          {allTags.map((tag) => {
+            const active = selectedTags.has(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTagFilter(tag)}
+                className="mono"
+                style={{
+                  padding: "1px 7px",
+                  borderRadius: 3,
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  background: active ? "var(--accent-bg, var(--bg-3))" : "var(--bg-2)",
+                  color: active ? "var(--accent)" : "var(--fg-muted)",
+                  fontSize: 10.5,
+                  cursor: "pointer",
+                  lineHeight: 1.5,
+                }}
+                title={active ? `Stop filtering by ${tag}` : `Filter by ${tag}`}
+              >
+                #{tag}
+              </button>
+            );
+          })}
+          {selectedTags.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedTags(new Set())}
+              style={{
+                padding: "1px 6px",
+                borderRadius: 3,
+                background: "transparent",
+                border: 0,
+                color: "var(--fg-subtle)",
+                fontSize: 10.5,
+                cursor: "pointer",
+              }}
+              title="Clear tag filters"
+            >
+              clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Engagement list */}
       <nav className="flex-1 overflow-y-auto px-[6px] pb-[10px]">
@@ -267,6 +369,8 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
                     createdAt={e.created_at}
                     done={e.done}
                     total={e.total}
+                    tags={e.tags}
+                    isArchived={e.is_archived}
                   />
                 </li>
               );
@@ -336,6 +440,39 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
 
 /* ---------------- sub components ---------------- */
 
+function SekmeButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="uppercase tracking-[0.08em] font-medium"
+      style={{
+        flex: 1,
+        padding: "5px 8px",
+        borderRadius: 4,
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        background: active ? "var(--bg-3)" : "transparent",
+        color: active ? "var(--accent)" : "var(--fg-subtle)",
+        fontSize: 10.5,
+        cursor: "pointer",
+        textAlign: "center",
+      }}
+    >
+      {label} <span className="mono" style={{ marginLeft: 4 }}>{count}</span>
+    </button>
+  );
+}
+
 function SidebarRow({
   engagementId,
   href,
@@ -347,6 +484,8 @@ function SidebarRow({
   createdAt,
   done,
   total,
+  tags,
+  isArchived,
 }: {
   engagementId: number;
   href: string;
@@ -358,6 +497,8 @@ function SidebarRow({
   createdAt: string;
   done: number;
   total: number;
+  tags: string[];
+  isArchived: boolean;
 }) {
   const when = formatRelative(createdAt);
   const complete = total > 0 && done === total;
@@ -439,6 +580,56 @@ function SidebarRow({
     }
   }
 
+  async function onToggleArchive() {
+    setMenuOpen(false);
+    const next = !isArchived;
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_archived: next }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Archive failed.");
+        return;
+      }
+      toast.success(next ? "Engagement archived" : "Engagement restored");
+      router.refresh();
+    } catch {
+      toast.error("Archive failed.");
+    }
+  }
+
+  async function onEditTags() {
+    setMenuOpen(false);
+    const next = window.prompt(
+      "Tags (comma-separated, lowercase, max 32 chars each)",
+      tags.join(", "),
+    );
+    if (next === null) return;
+    const cleaned = next
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 0);
+    try {
+      const res = await fetch(`/api/engagements/${engagementId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: cleaned }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Tags update failed.");
+        return;
+      }
+      toast.success("Tags updated");
+      router.refresh();
+    } catch {
+      toast.error("Tags update failed.");
+    }
+  }
+
   function onDeleteClick() {
     setMenuOpen(false);
     setDeleteOpen(true);
@@ -480,9 +671,22 @@ function SidebarRow({
         }}
       >
         <div className="flex items-center gap-2">
+          {isArchived && (
+            <Archive
+              size={11}
+              style={{ color: "var(--fg-faint)", flexShrink: 0 }}
+              aria-label="archived"
+            />
+          )}
           <span
             className="truncate"
-            style={{ fontSize: 12.5, fontWeight: 500, flex: 1, minWidth: 0 }}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 500,
+              flex: 1,
+              minWidth: 0,
+              opacity: isArchived ? 0.7 : 1,
+            }}
           >
             {name}
           </span>
@@ -495,6 +699,30 @@ function SidebarRow({
             />
           )}
         </div>
+        {tags.length > 0 && (
+          <div
+            className="flex flex-wrap gap-1"
+            style={{ marginTop: 4 }}
+          >
+            {tags.map((t) => (
+              <span
+                key={t}
+                className="mono"
+                style={{
+                  padding: "0 5px",
+                  borderRadius: 3,
+                  background: "var(--bg-3)",
+                  border: "1px solid var(--border-subtle)",
+                  fontSize: 9.5,
+                  color: "var(--fg-muted)",
+                  lineHeight: 1.55,
+                }}
+              >
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
         <div
           className="mono flex items-center gap-1.5"
           style={{ marginTop: 3, fontSize: 11, color: "var(--fg-subtle)" }}
@@ -599,8 +827,19 @@ function SidebarRow({
           <MenuItem onClick={onRename} icon={<Pencil size={11} />}>
             Rename
           </MenuItem>
+          <MenuItem onClick={onEditTags} icon={<TagIcon size={11} />}>
+            Edit tags…
+          </MenuItem>
           <MenuItem onClick={onDuplicate} icon={<Copy size={11} />}>
             Duplicate
+          </MenuItem>
+          <MenuItem
+            onClick={onToggleArchive}
+            icon={
+              isArchived ? <ArchiveRestore size={11} /> : <Archive size={11} />
+            }
+          >
+            {isArchived ? "Restore from archive" : "Archive"}
           </MenuItem>
           <MenuItem
             onClick={onDeleteClick}

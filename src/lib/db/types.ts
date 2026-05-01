@@ -91,4 +91,15 @@ export type EngagementSummary = Pick<
    * from check_states on every layout render.
    */
   done_check_count: number;
+  /**
+   * Migration 0011: parsed tag array (JSON-decoded from
+   * `engagements.tags`). Empty when the column holds the default `[]`.
+   * Repo guarantees the array shape — bad JSON falls through to `[]`.
+   */
+  tags: string[];
+  /**
+   * Migration 0011: archive flag. Sidebar's default Active view filters
+   * these out; toggling the Archived sekme surfaces them.
+   */
+  is_archived: boolean;
 };

@@ -86,8 +86,30 @@ export const engagements = sqliteTable(
 
     /** ISO-8601 timestamp updated on any mutation (rename, check toggle, notes save). */
     updated_at: text("updated_at").notNull(),
+
+    /**
+     * Migration 0011: free-form tags as a JSON array of strings
+     * ("htb", "oscp", "client-acme", "internal", …). Sidebar renders
+     * one chip per tag; the tag-filter strip toggles AND-filtering
+     * across the engagement list. Defaults to "[]" so legacy rows
+     * carry an empty array.
+     */
+    tags: text("tags").notNull().default("[]"),
+
+    /**
+     * Migration 0011: archived engagements drop out of the sidebar's
+     * default Active view but remain searchable via the global FTS5
+     * modal and reachable from the "Archived" toggle. Archive is a
+     * UX-only state — cascade delete works on archived rows too.
+     */
+    is_archived: integer("is_archived", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
-  (t) => [index("engagements_created_at_idx").on(t.created_at)],
+  (t) => [
+    index("engagements_created_at_idx").on(t.created_at),
+    index("engagements_is_archived_idx").on(t.is_archived),
+  ],
 );
 
 // ---------------------------------------------------------------------------

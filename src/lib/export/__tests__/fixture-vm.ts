@@ -310,6 +310,9 @@ const engagement: Engagement = {
   warnings_json: '["skipped sctp port 9999"]',
   created_at: CREATED_AT,
   updated_at: UPDATED_AT,
+  // Migration 0011: empty tag set + active by default.
+  tags: "[]",
+  is_archived: false,
 };
 
 // P1-F PR 1: primary host row mirroring the legacy target columns. Once the

@@ -77,6 +77,9 @@ function buildEngagement(): FullEngagement {
     warnings_json: JSON.stringify(["sample warning"]),
     created_at: now,
     updated_at: now,
+    // Migration 0011: empty tags + active.
+    tags: "[]",
+    is_archived: false,
     // P1-F PR 1: every port carries host_id — fixture's primary host id is 1.
     hosts: [
       {

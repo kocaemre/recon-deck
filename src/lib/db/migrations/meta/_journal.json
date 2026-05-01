@@ -78,6 +78,13 @@
       "when": 1778000000000,
       "tag": "0010_add-port-scripts-host-id",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1778100000000,
+      "tag": "0011_add-engagement-tags-and-archive",
+      "breakpoints": true
     }
   ]
 }

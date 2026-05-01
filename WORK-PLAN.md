@@ -26,7 +26,7 @@ schema migration + filter logic land together.
 
 ### Tasks
 
-- [ ] **#1 + #2 — Engagement tags + archive (combined)** _(2–3 sa)_
+- [x] **#1 + #2 — Engagement tags + archive (combined)** _(2–3 sa)_ — DONE
   - Migration `0011_add-engagement-tags-and-archive.sql`:
     - `engagements.tags TEXT NOT NULL DEFAULT '[]'` (JSON array of strings)
     - `engagements.is_archived INTEGER NOT NULL DEFAULT 0`
