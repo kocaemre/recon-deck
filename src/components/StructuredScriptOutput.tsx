@@ -90,7 +90,7 @@ export function StructuredScriptOutput({ script }: Props) {
           <tbody>{renderRows(script.structured!)}</tbody>
         </table>
       ) : hasOutput ? (
-        <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-[var(--code-surface)] p-2 font-mono text-xs text-muted-foreground">
+        <pre className="mt-0.5 whitespace-pre-wrap break-words rounded bg-[var(--code-surface)] px-2 py-1 font-mono text-xs leading-snug text-muted-foreground">
           {/* React text node — XSS safe (SEC-03, D-20, TEST-05) */}
           {script.output}
         </pre>
