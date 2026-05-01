@@ -25,6 +25,7 @@ import { WarningBanner } from "@/components/WarningBanner";
 import { EngagementHeatmap } from "@/components/EngagementHeatmap";
 import { EngagementExtras } from "@/components/EngagementExtras";
 import { FindingsPanel } from "@/components/FindingsPanel";
+import { WriteupPanel } from "@/components/WriteupPanel";
 import { HostScriptCard } from "@/components/HostScriptCard";
 import { parseNmapXml } from "@/lib/parser/nmap-xml";
 import { parseNmapText } from "@/lib/parser/nmap-text";
@@ -489,6 +490,11 @@ export default async function EngagementPage({
         ports={portData}
         showAddPort
         activeHostId={activeHostId}
+      />
+
+      <WriteupPanel
+        engagementId={engagement.id}
+        initialWriteup={engagement.writeup}
       />
 
       <FindingsPanel

@@ -297,6 +297,37 @@ describe("generateMarkdown — Body (EXPORT-01)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// v1.3.0 #9 — writeup section
+// ---------------------------------------------------------------------------
+
+describe("generateMarkdown — writeup", () => {
+  it("emits ## Writeup section after the H1 when non-empty", () => {
+    const vm = buildFixtureViewModel();
+    vm.engagement = {
+      ...vm.engagement,
+      writeup: "Found a critical RCE on port 80.\nPivoted to DC.",
+    };
+    const md = generateMarkdown(vm, { exportedAt: FIXTURE_EXPORTED_AT });
+    const h1 = md.indexOf("# box.htb (10.10.10.5)");
+    const writeup = md.indexOf("## Writeup");
+    expect(h1).toBeGreaterThanOrEqual(0);
+    expect(writeup).toBeGreaterThan(h1);
+    expect(md).toContain("Found a critical RCE on port 80.");
+    expect(md).toContain("Pivoted to DC.");
+    // Trailing separator before the rest of the report.
+    expect(md).toMatch(/## Writeup[\s\S]*?\n---/);
+    // ## Writeup must precede the ports table / first per-host block.
+    const ports = md.indexOf("## Ports");
+    if (ports >= 0) expect(writeup).toBeLessThan(ports);
+  });
+
+  it("omits the ## Writeup section when the field is empty / whitespace", () => {
+    const md = renderFixture();
+    expect(md).not.toContain("## Writeup");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Golden Fixture (EXPORT-02 byte-diff)
 // ---------------------------------------------------------------------------
 

@@ -92,6 +92,20 @@
       "when": 1778200000000,
       "tag": "0012_add-port-starred",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1778300000000,
+      "tag": "0013_add-engagement-soft-delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1778400000000,
+      "tag": "0014_add-engagement-writeup",
+      "breakpoints": true
     }
   ]
 }

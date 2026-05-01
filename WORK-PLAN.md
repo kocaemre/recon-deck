@@ -80,7 +80,7 @@ schema migration + filter logic land together.
 
 ### Tasks
 
-- [ ] **#6 — Recycle bin / soft delete** _(2–3 sa)_
+- [x] **#6 — Recycle bin / soft delete** _(2–3 sa)_ — DONE
   - Migration `0013_add-engagement-soft-delete.sql`: `engagements.deleted_at TEXT NULL`
   - DELETE route flips `deleted_at = now()` instead of cascading; soft-deleted rows excluded from `listSummaries` by default
   - Settings adds "Recently deleted" tab listing soft-deleted engagements with **Restore** + **Delete forever** buttons
@@ -89,7 +89,7 @@ schema migration + filter logic land together.
   - FTS5 index hides soft-deleted rows (trigger update)
   - Tests: soft delete keeps row, restore brings it back, hard delete cascades
 
-- [ ] **#9 — Engagement writeup field** _(1–2 sa)_
+- [x] **#9 — Engagement writeup field** _(1–2 sa)_ — DONE
   - Migration `0014_add-engagement-writeup.sql`: `engagements.writeup TEXT NOT NULL DEFAULT ''`
   - Engagement page: collapsible "Writeup" section above Findings (or in EngagementExtras)
   - Plain `<textarea>` first pass (markdown preview deferred; if user complains, add `react-markdown` later)
@@ -100,7 +100,7 @@ schema migration + filter logic land together.
 
 ### Closeout
 
-- Bump → `1.3.0`, CHANGELOG entry, tag, ROADMAP update
+- [x] Bump → `1.3.0`, CHANGELOG entry, tag, ROADMAP update
 
 ---
 

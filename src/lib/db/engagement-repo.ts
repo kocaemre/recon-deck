@@ -382,6 +382,11 @@ export function getById(db: Db, id: number): FullEngagement | null {
     .where(eq(engagements.id, id))
     .get();
   if (!eng) return null;
+  // Migration 0013: soft-deleted engagements behave like missing rows so
+  // navigating to a stale URL hits the same 404 branch every other
+  // "engagement not found" code path uses. Restore from /settings to
+  // surface them again.
+  if (eng.deleted_at != null) return null;
 
   const portRows = db
     .select()
@@ -535,6 +540,9 @@ export function listSummaries(db: Db): EngagementSummary[] {
       high_findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id AND findings.severity IN ('high', 'critical'))`,
     })
     .from(engagements)
+    // Migration 0013: hide soft-deleted rows. Recycle bin lives in
+    // /settings via listDeletedSummaries.
+    .where(sql`${engagements.deleted_at} IS NULL`)
     .orderBy(desc(engagements.created_at))
     .all();
 
@@ -574,6 +582,25 @@ export function setEngagementTags(
   const result = db
     .update(engagements)
     .set({ tags: JSON.stringify(tags), updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * Replace the engagement's writeup body (v1.3.0 #9). Empty string is a
+ * valid value (clears the section). Returns true when the row was
+ * updated.
+ */
+export function setEngagementWriteup(
+  db: Db,
+  engagementId: number,
+  writeup: string,
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ writeup, updated_at: now })
     .where(eq(engagements.id, engagementId))
     .run();
   return (result.changes ?? 0) > 0;
@@ -703,6 +730,91 @@ export function deleteEngagement(db: Db, engagementId: number): boolean {
     .where(eq(engagements.id, engagementId))
     .run();
   return (result.changes ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// softDeleteEngagement / restoreEngagement / listDeletedSummaries (v1.3.0 #6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Send an engagement to the recycle bin. Sets `deleted_at = now()` so
+ * the row drops out of the sidebar and FTS surface but every child row
+ * stays intact — Restore brings the engagement back without loss.
+ *
+ * Idempotent: calling on an already-deleted row is a no-op (returns
+ * true so the caller can swallow double-clicks safely).
+ */
+export function softDeleteEngagement(
+  db: Db,
+  engagementId: number,
+): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ deleted_at: now, updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * Restore a soft-deleted engagement. Clears `deleted_at` so the row
+ * resurfaces in the sidebar and FTS. Returns false when no row matched
+ * (deleted-from-recycle-bin race or unknown id).
+ */
+export function restoreEngagement(db: Db, engagementId: number): boolean {
+  const now = new Date().toISOString();
+  const result = db
+    .update(engagements)
+    .set({ deleted_at: null, updated_at: now })
+    .where(eq(engagements.id, engagementId))
+    .run();
+  return (result.changes ?? 0) > 0;
+}
+
+/**
+ * Soft-deleted engagements for the /settings "Recently deleted" tab.
+ * Mirrors `listSummaries` shape minus the live filter so the tab can
+ * render the same row component, but ordered by `deleted_at DESC`
+ * so the most-recent send-to-bin shows first.
+ */
+export function listDeletedSummaries(db: Db): EngagementSummary[] {
+  const rows = db
+    .select({
+      id: engagements.id,
+      name: engagements.name,
+      source: engagements.source,
+      created_at: engagements.created_at,
+      tags_raw: engagements.tags,
+      is_archived: engagements.is_archived,
+      port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
+      host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
+      primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
+      primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
+      done_check_count: sql<number>`(SELECT COUNT(*) FROM check_states WHERE check_states.engagement_id = engagements.id AND check_states.checked = 1)`,
+      findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id)`,
+      high_findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id AND findings.severity IN ('high', 'critical'))`,
+      deleted_at_raw: engagements.deleted_at,
+    })
+    .from(engagements)
+    .where(sql`${engagements.deleted_at} IS NOT NULL`)
+    .orderBy(desc(engagements.deleted_at))
+    .all();
+
+  return rows.map((r) => {
+    const { tags_raw, deleted_at_raw, ...rest } = r;
+    void deleted_at_raw;
+    let tags: string[] = [];
+    try {
+      const parsed = JSON.parse(tags_raw);
+      if (Array.isArray(parsed)) {
+        tags = parsed.filter((t): t is string => typeof t === "string");
+      }
+    } catch {
+      // ignore — empty array
+    }
+    return { ...rest, tags };
+  });
 }
 
 // ---------------------------------------------------------------------------

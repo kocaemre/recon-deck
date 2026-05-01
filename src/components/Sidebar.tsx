@@ -210,7 +210,7 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
           >
             recon-deck
           </span>
-          <Chip variant="solid">v1.2</Chip>
+          <Chip variant="solid">v1.3</Chip>
         </div>
 
         <Link

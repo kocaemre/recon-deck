@@ -2,6 +2,29 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-05-01
+
+Data safety + writeup release. Engagement deletion is no longer a one-shot cascade — it goes to a recycle bin in `/settings` and only the explicit "Delete forever" affordance there hits the destructive path. Engagements gain a free-form writeup body that lands in every export.
+
+### Added
+
+- **Recycle bin / soft delete (Migration 0013).** `engagements.deleted_at TEXT NULL`. Sidebar / palette **Delete** now sets `deleted_at = now()` instead of cascading; the row drops out of `listSummaries`, `getById`, and the global FTS5 search modal but every child row stays intact. New `/settings → Recently deleted` section lists soft-deleted engagements with **Restore** (reversible) and **Delete forever** (cascade). New routes: `POST /api/engagements/:id/restore`, `DELETE /api/engagements/:id?force=true`. Default DELETE behaviour changed from hard cascade to soft delete.
+- **Engagement writeup field (Migration 0014).** `engagements.writeup TEXT NOT NULL DEFAULT ''`. Collapsible "Writeup" section above Findings on the engagement page; plain `<textarea>` with debounced auto-save (~600ms after typing stops) plus a manual **Save now** button. PATCH route extends to accept `writeup` (max 100 KB). Markdown export prepends `## Writeup\n\n${writeup}\n\n---` between the H1 and the per-host blocks. SysReptor adds `data.notes`; PwnDoc adds `executive_summary` (block scalar so newlines survive). All export embeds are gated on the writeup being non-empty so legacy round-trips stay byte-identical.
+
+### Changed
+
+- **Sidebar / palette delete copy** updated to reflect the new behaviour ("Move to recycle bin" instead of "Delete permanently"; description points operators at /settings → Recently deleted).
+- **Sidebar version chip** flipped from `v1.2` → `v1.3`.
+
+### Migrations
+
+- **0013** `engagements.deleted_at TEXT NULL`. Additive — no backfill, no index.
+- **0014** `engagements.writeup TEXT NOT NULL DEFAULT ''`. Additive — no backfill.
+
+### Tests
+
+- 456 / 456 passing. New: soft-delete + restore + listDeletedSummaries contracts; getById hides soft-deleted rows; hard delete still cascades; writeup roundtrip; markdown emits `## Writeup` only when non-empty; markdown omits the section on empty writeup.
+
 ## [1.2.0] — 2026-05-01
 
 Portfolio management release. The sidebar gains tags, archive, bulk-filter chips, and a friendly clone dialog. The heatmap learns to pin operator-flagged ports.

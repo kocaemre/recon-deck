@@ -55,8 +55,12 @@ export {
   updateTarget,
   renameEngagement,
   deleteEngagement,
+  softDeleteEngagement,
+  restoreEngagement,
+  listDeletedSummaries,
   cloneEngagement,
   setEngagementTags,
+  setEngagementWriteup,
   archiveEngagement,
   type Db,
 } from "./engagement-repo";

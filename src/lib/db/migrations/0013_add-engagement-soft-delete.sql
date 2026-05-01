@@ -1,0 +1,21 @@
+-- Soft-delete (recycle bin) for engagements (v1.3.0 #6).
+--
+-- One additive nullable column on `engagements`:
+--
+--   deleted_at  ISO-8601 timestamp set when the operator deletes the
+--               engagement from the sidebar / command palette. Null
+--               means the engagement is live; non-null hides it from
+--               every default-listing path (sidebar, FTS surface,
+--               API list) but keeps every child row intact so a
+--               Restore action in /settings can bring it back without
+--               loss.
+--
+-- A "Delete forever" affordance in /settings hits the existing cascade
+-- DELETE path so operators can still purge sensitive engagements
+-- immediately when they need to.
+--
+-- No backfill, no index — every existing row stays NULL by default,
+-- and the only filter we add is `deleted_at IS NULL` which SQLite
+-- evaluates fast enough at single-user scale (< 200 engagements).
+
+ALTER TABLE engagements ADD COLUMN deleted_at TEXT;

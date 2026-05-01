@@ -1,21 +1,18 @@
 "use client";
 
 /**
- * EngagementSettingsList — destructive-action surface for engagements.
+ * RecycleBinList — /settings tab for soft-deleted engagements (v1.3.0 #6).
  *
- * Renders the full engagement list with an inline "Open" link to the detail
- * page and a "Delete" button that prompts a confirm modal. Deletion goes
- * through `DELETE /api/engagements/[id]` which CASCADE-wipes every owned
- * row and its FTS5 index entries.
- *
- * Keeps state minimal — server is source of truth, we just `router.refresh()`
- * on success so the parent server component re-renders the list.
+ * Mirrors EngagementSettingsList layout but swaps the row actions for
+ * **Restore** (POST /api/engagements/:id/restore) and **Delete forever**
+ * (DELETE /api/engagements/:id?force=true). The hard-delete affordance
+ * lives only here so a stray click in the sidebar never triggers an
+ * unrecoverable cascade.
  */
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { ArchiveRestore, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db";
 
@@ -23,31 +20,50 @@ interface Props {
   engagements: EngagementSummary[];
 }
 
-export function EngagementSettingsList({ engagements }: Props) {
+export function RecycleBinList({ engagements }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [purgeId, setPurgeId] = useState<number | null>(null);
 
   if (engagements.length === 0) return null;
 
-  function handleDelete(id: number) {
+  function handleRestore(id: number) {
     startTransition(async () => {
-      const res = await fetch(`/api/engagements/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/engagements/${id}/restore`, {
+        method: "POST",
+      });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
         };
-        toast.error(body.error ?? "Delete failed.");
-        setConfirmId(null);
+        toast.error(body.error ?? "Restore failed.");
         return;
       }
-      toast.success("Engagement deleted.");
-      setConfirmId(null);
+      toast.success("Engagement restored.");
       router.refresh();
     });
   }
 
-  const target = engagements.find((e) => e.id === confirmId) ?? null;
+  function handlePurge(id: number) {
+    startTransition(async () => {
+      const res = await fetch(`/api/engagements/${id}?force=true`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        toast.error(body.error ?? "Purge failed.");
+        setPurgeId(null);
+        return;
+      }
+      toast.success("Engagement purged.");
+      setPurgeId(null);
+      router.refresh();
+    });
+  }
+
+  const target = engagements.find((e) => e.id === purgeId) ?? null;
 
   return (
     <>
@@ -68,10 +84,14 @@ export function EngagementSettingsList({ engagements }: Props) {
               padding: "10px 12px",
               borderTop: i === 0 ? "none" : "1px solid var(--border)",
               background: "var(--bg-2)",
+              opacity: 0.85,
             }}
           >
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }} className="truncate">
+              <div
+                style={{ fontSize: 13, fontWeight: 500 }}
+                className="truncate"
+              >
                 {e.name}
               </div>
               <div
@@ -92,27 +112,30 @@ export function EngagementSettingsList({ engagements }: Props) {
                 <span>{e.port_count}p</span>
                 <span>·</span>
                 <span>{e.source}</span>
-                <span>·</span>
-                <span>{e.created_at.slice(0, 10)}</span>
               </div>
             </div>
-            <Link
-              href={`/engagements/${e.id}`}
+            <button
+              type="button"
+              onClick={() => handleRestore(e.id)}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5"
               style={{
                 fontSize: 12,
                 padding: "5px 10px",
                 borderRadius: 5,
                 border: "1px solid var(--border)",
                 background: "transparent",
-                color: "var(--fg-muted)",
-                textDecoration: "none",
+                color: "var(--accent)",
+                cursor: pending ? "wait" : "pointer",
               }}
+              title="Restore this engagement"
             >
-              Open
-            </Link>
+              <ArchiveRestore size={12} />
+              Restore
+            </button>
             <button
               type="button"
-              onClick={() => setConfirmId(e.id)}
+              onClick={() => setPurgeId(e.id)}
               disabled={pending}
               className="inline-flex items-center gap-1.5"
               style={{
@@ -124,10 +147,10 @@ export function EngagementSettingsList({ engagements }: Props) {
                 color: "var(--risk-crit)",
                 cursor: "pointer",
               }}
-              title="Delete this engagement permanently"
+              title="Permanently delete (no recovery)"
             >
               <Trash2 size={12} />
-              Delete
+              Delete forever
             </button>
           </li>
         ))}
@@ -137,7 +160,7 @@ export function EngagementSettingsList({ engagements }: Props) {
         <div
           role="dialog"
           aria-modal="true"
-          aria-labelledby="delete-confirm-title"
+          aria-labelledby="purge-confirm-title"
           style={{
             position: "fixed",
             inset: 0,
@@ -146,7 +169,7 @@ export function EngagementSettingsList({ engagements }: Props) {
             placeItems: "center",
             zIndex: 50,
           }}
-          onClick={() => !pending && setConfirmId(null)}
+          onClick={() => !pending && setPurgeId(null)}
         >
           <div
             onClick={(ev) => ev.stopPropagation()}
@@ -160,14 +183,11 @@ export function EngagementSettingsList({ engagements }: Props) {
             }}
           >
             <h2
-              id="delete-confirm-title"
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                margin: 0,
-              }}
+              id="purge-confirm-title"
+              style={{ fontSize: 15, fontWeight: 600, margin: 0 }}
             >
-              Delete <span className="mono">{target.name}</span>?
+              Permanently delete{" "}
+              <span className="mono">{target.name}</span>?
             </h2>
             <p
               style={{
@@ -177,11 +197,11 @@ export function EngagementSettingsList({ engagements }: Props) {
                 lineHeight: 1.5,
               }}
             >
-              Sends this engagement to the recycle bin ({target.host_count}h
-              · {target.port_count}p preserved). It will disappear from the
-              sidebar and global search. <strong>Reversible</strong> from
-              <em> Settings → Recently deleted</em>; permanent purge lives
-              there too.
+              Cascades through every host ({target.host_count}), port (
+              {target.port_count}), NSE script, finding, evidence
+              attachment, note and check state owned by this engagement. The
+              raw input and the FTS5 index entries are also dropped.{" "}
+              <strong>Cannot be undone.</strong>
             </p>
             <div
               style={{
@@ -193,7 +213,7 @@ export function EngagementSettingsList({ engagements }: Props) {
             >
               <button
                 type="button"
-                onClick={() => setConfirmId(null)}
+                onClick={() => setPurgeId(null)}
                 disabled={pending}
                 style={{
                   fontSize: 12,
@@ -209,7 +229,7 @@ export function EngagementSettingsList({ engagements }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => handleDelete(target.id)}
+                onClick={() => handlePurge(target.id)}
                 disabled={pending}
                 style={{
                   fontSize: 12,
@@ -222,7 +242,7 @@ export function EngagementSettingsList({ engagements }: Props) {
                   cursor: pending ? "wait" : "pointer",
                 }}
               >
-                {pending ? "Deleting…" : "Move to recycle bin"}
+                {pending ? "Purging…" : "Delete forever"}
               </button>
             </div>
           </div>

@@ -9,6 +9,10 @@ import {
   listSummaries,
   renameEngagement,
   setEngagementTags,
+  setEngagementWriteup,
+  softDeleteEngagement,
+  restoreEngagement,
+  listDeletedSummaries,
 } from "../engagement-repo.js";
 import { createFinding } from "../findings-repo.js";
 import { togglePortStar, setPortStar } from "../ports-repo.js";
@@ -781,5 +785,73 @@ describe("createFromScan (Plan 03)", () => {
       .where(eq(ports.engagement_id, otherResult.id))
       .get()!;
     expect(togglePortStar(db, result.id, portRow.id)).toBeNull();
+  });
+
+  // v1.3.0 #6: recycle bin contract.
+  it("softDeleteEngagement hides the row from listSummaries / getById", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    expect(listSummaries(db).some((s) => s.id === result.id)).toBe(true);
+    expect(getById(db, result.id)).not.toBeNull();
+
+    expect(softDeleteEngagement(db, result.id)).toBe(true);
+
+    expect(listSummaries(db).some((s) => s.id === result.id)).toBe(false);
+    expect(getById(db, result.id)).toBeNull();
+    // Child rows must still exist — soft delete is reversible.
+    const portsLeft = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, result.id))
+      .all();
+    expect(portsLeft.length).toBeGreaterThan(0);
+  });
+
+  it("restoreEngagement brings a soft-deleted row back", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    softDeleteEngagement(db, result.id);
+    expect(getById(db, result.id)).toBeNull();
+
+    expect(restoreEngagement(db, result.id)).toBe(true);
+    expect(getById(db, result.id)).not.toBeNull();
+    expect(listSummaries(db).some((s) => s.id === result.id)).toBe(true);
+  });
+
+  it("listDeletedSummaries returns only soft-deleted rows", () => {
+    const live = createFromScan(db, makeScan(), "<raw>");
+    const deleted = createFromScan(db, makeScan(), "<raw>");
+    softDeleteEngagement(db, deleted.id);
+
+    const bin = listDeletedSummaries(db);
+    expect(bin.map((s) => s.id)).toEqual([deleted.id]);
+    expect(bin.some((s) => s.id === live.id)).toBe(false);
+  });
+
+  // v1.3.0 #9: writeup field roundtrip.
+  it("setEngagementWriteup roundtrips through getById", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    const blank = getById(db, result.id);
+    expect(blank?.writeup).toBe("");
+
+    expect(
+      setEngagementWriteup(db, result.id, "Executive summary draft."),
+    ).toBe(true);
+    expect(getById(db, result.id)?.writeup).toBe(
+      "Executive summary draft.",
+    );
+
+    // Empty string clears.
+    expect(setEngagementWriteup(db, result.id, "")).toBe(true);
+    expect(getById(db, result.id)?.writeup).toBe("");
+  });
+
+  it("hard deleteEngagement still cascades on soft-deleted rows", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    softDeleteEngagement(db, result.id);
+    expect(deleteEngagement(db, result.id)).toBe(true);
+    // Hard purge — row is gone from every listing.
+    expect(listSummaries(db).some((s) => s.id === result.id)).toBe(false);
+    expect(listDeletedSummaries(db).some((s) => s.id === result.id)).toBe(
+      false,
+    );
   });
 });

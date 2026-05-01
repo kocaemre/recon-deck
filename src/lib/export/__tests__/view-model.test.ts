@@ -80,6 +80,8 @@ function buildEngagement(): FullEngagement {
     // Migration 0011: empty tags + active.
     tags: "[]",
     is_archived: false,
+    deleted_at: null,
+    writeup: "",
     // P1-F PR 1: every port carries host_id — fixture's primary host id is 1.
     hosts: [
       {

@@ -97,6 +97,15 @@ export function generatePwndoc(vm: EngagementViewModel): string {
   lines.push(`name: ${yqs(vm.engagement.name)}`);
   lines.push(`date: ${yqs(vm.engagement.created_at)}`);
   lines.push(`coverage_percent: ${vm.coverage}`);
+
+  // v1.3.0 #9: writeup → executive_summary. Multi-line literal block so
+  // line breaks in the operator's draft survive YAML parsing. Omitted
+  // when empty so legacy round-trips stay byte-identical.
+  const writeup = vm.engagement.writeup?.trim();
+  if (writeup) {
+    lines.push(`executive_summary: ${multilineBlock("", writeup)}`);
+  }
+
   lines.push("scope:");
   for (const s of scope) lines.push(bullet("  ", yqs(s)));
 

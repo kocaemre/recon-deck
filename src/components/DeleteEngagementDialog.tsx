@@ -88,7 +88,7 @@ export function DeleteEngagementDialog({
               size={16}
               style={{ color: "var(--risk-crit)", flexShrink: 0 }}
             />
-            Delete engagement?
+            Move to recycle bin?
           </AlertDialogTitle>
           <AlertDialogDescription
             style={{ color: "var(--fg-muted)", lineHeight: 1.55 }}
@@ -99,9 +99,9 @@ export function DeleteEngagementDialog({
             >
               {engagementName}
             </span>
-            {" "}will be permanently removed along with every port,
-            script, note, evidence, and finding scoped to it. This
-            cannot be undone.
+            {" "}will disappear from the sidebar and global search.
+            Restore (or permanently purge) from{" "}
+            <em>Settings → Recently deleted</em>.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -121,7 +121,7 @@ export function DeleteEngagementDialog({
               borderColor: "var(--risk-crit)",
             }}
           >
-            {pending ? "Deleting…" : "Delete"}
+            {pending ? "Moving…" : "Move to recycle bin"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

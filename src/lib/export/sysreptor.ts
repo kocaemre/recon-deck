@@ -47,6 +47,13 @@ interface SysReptorExport {
     scope: string[];
     target_count: number;
     coverage_percent: number;
+    /**
+     * v1.3.0 #9: engagement writeup. Maps to SysReptor's `notes` field
+     * by convention — template authors can lift it into an executive
+     * summary section if their design template wants. Omitted when the
+     * source writeup is empty so legacy round-trips stay byte-identical.
+     */
+    notes?: string;
   };
   findings: SysReptorFinding[];
 }
@@ -125,6 +132,9 @@ export function generateSysReptor(vm: EngagementViewModel): string {
     },
     findings,
   };
+
+  const writeup = vm.engagement.writeup?.trim();
+  if (writeup) out.data.notes = writeup;
 
   return JSON.stringify(out, null, 2);
 }

@@ -105,6 +105,21 @@ export const engagements = sqliteTable(
     is_archived: integer("is_archived", { mode: "boolean" })
       .notNull()
       .default(false),
+    /**
+     * Migration 0013: soft-delete timestamp. Null when the engagement
+     * is live; ISO-8601 string when the operator has sent it to the
+     * recycle bin. Sidebar / FTS / list APIs filter `deleted_at IS NULL`
+     * by default; /settings gains a "Recently deleted" tab to Restore
+     * or permanently purge.
+     */
+    deleted_at: text("deleted_at"),
+    /**
+     * Migration 0014: free-form writeup body. Plain text by default —
+     * markdown preview deferred until operators ask for it. Engagement
+     * page renders a collapsible section above Findings; markdown
+     * export prepends a `## Writeup` block when non-empty.
+     */
+    writeup: text("writeup").notNull().default(""),
   },
   (t) => [
     index("engagements_created_at_idx").on(t.created_at),

@@ -175,6 +175,15 @@ function buildBody(vm: EngagementViewModel): string {
   //    in this project, so no extra suffix is added).
   parts.push(`# ${vm.engagement.name}`);
 
+  // v1.3.0 #9: writeup body, when non-empty. Slots between the title and
+  // the per-host sections so report readers see the executive summary
+  // before the technical detail. Trailing `---` separates it from the
+  // ports table for readability in plain Markdown viewers.
+  const writeup = vm.engagement.writeup?.trim();
+  if (writeup) {
+    parts.push(`## Writeup\n\n${writeup}\n\n---`);
+  }
+
   // 2. P1-F PR 3: multi-host engagements emit one block per host. Single-host
   //    engagements keep the legacy layout byte-for-byte (golden fixtures stay
   //    stable). The choice between the two paths uses `vm.hosts.length` —

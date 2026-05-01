@@ -114,6 +114,11 @@ export function searchEngagements(
       FROM search_index si
       JOIN engagements e ON e.id = si.engagement_id
       WHERE search_index MATCH ${fts}
+        -- Migration 0013: soft-deleted engagements stay in the FTS
+        -- index (we don't rewrite triggers) but the global search
+        -- modal should not surface them. /settings → Recently deleted
+        -- is the only path back to a soft-deleted engagement.
+        AND e.deleted_at IS NULL
       ORDER BY rank ASC
       LIMIT ${limit}
     `,

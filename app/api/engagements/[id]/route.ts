@@ -30,8 +30,10 @@ import { revalidatePath } from "next/cache";
 import {
   db,
   deleteEngagement,
+  softDeleteEngagement,
   renameEngagement,
   setEngagementTags,
+  setEngagementWriteup,
   archiveEngagement,
 } from "@/lib/db";
 import { readJsonBody } from "@/lib/api/body";
@@ -48,7 +50,10 @@ interface PatchBody {
   name?: unknown;
   tags?: unknown;
   is_archived?: unknown;
+  writeup?: unknown;
 }
+
+const MAX_WRITEUP_LEN = 100_000; // ~100 KB plain text — enough for executive summaries, not a novel.
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
@@ -67,9 +72,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const hasName = typeof body.name === "string";
   const hasTags = Array.isArray(body.tags);
   const hasArchive = typeof body.is_archived === "boolean";
-  if (!hasName && !hasTags && !hasArchive) {
+  const hasWriteup = typeof body.writeup === "string";
+  if (!hasName && !hasTags && !hasArchive && !hasWriteup) {
     return NextResponse.json(
-      { error: "Body must include name, tags, or is_archived." },
+      {
+        error: "Body must include name, tags, is_archived, or writeup.",
+      },
       { status: 400 },
     );
   }
@@ -129,6 +137,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const nextArchived = hasArchive ? (body.is_archived as boolean) : null;
 
+  let nextWriteup: string | null = null;
+  if (hasWriteup) {
+    const w = body.writeup as string;
+    if (w.length > MAX_WRITEUP_LEN) {
+      return NextResponse.json(
+        { error: `Writeup too long (max ${MAX_WRITEUP_LEN} chars).` },
+        { status: 400 },
+      );
+    }
+    nextWriteup = w;
+  }
+
   try {
     let touched = false;
     if (nextName !== null) {
@@ -161,6 +181,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       }
       touched = true;
     }
+    if (nextWriteup !== null) {
+      const ok = setEngagementWriteup(db, engagementId, nextWriteup);
+      if (!ok && !touched) {
+        return NextResponse.json(
+          { error: "Engagement not found." },
+          { status: 404 },
+        );
+      }
+      touched = true;
+    }
     revalidatePath("/", "layout");
     return NextResponse.json({ ok: true });
   } catch (err) {
@@ -172,7 +202,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
+/**
+ * DELETE behavior (Migration 0013):
+ *
+ *   default            → soft delete (sets `deleted_at = now()`). Row
+ *                        drops out of the sidebar / FTS but every child
+ *                        row stays, so /settings → "Recently deleted"
+ *                        can Restore it.
+ *   ?force=true        → hard cascade delete. Used by the
+ *                        "Delete forever" affordance in /settings.
+ */
+export async function DELETE(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const engagementId = parseInt(id, 10);
   if (!Number.isInteger(engagementId) || engagementId <= 0) {
@@ -181,17 +221,21 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       { status: 400 },
     );
   }
+  const url = new URL(request.url);
+  const force = url.searchParams.get("force") === "true";
 
   try {
-    const removed = deleteEngagement(db, engagementId);
-    if (!removed) {
+    const ok = force
+      ? deleteEngagement(db, engagementId)
+      : softDeleteEngagement(db, engagementId);
+    if (!ok) {
       return NextResponse.json(
         { error: "Engagement not found." },
         { status: 404 },
       );
     }
     revalidatePath("/", "layout");
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, mode: force ? "hard" : "soft" });
   } catch (err) {
     console.error("Delete engagement failed:", err);
     return NextResponse.json(

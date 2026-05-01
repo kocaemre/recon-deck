@@ -316,6 +316,8 @@ const engagement: Engagement = {
   // Migration 0011: empty tag set + active by default.
   tags: "[]",
   is_archived: false,
+  deleted_at: null,
+  writeup: "",
 };
 
 // P1-F PR 1: primary host row mirroring the legacy target columns. Once the

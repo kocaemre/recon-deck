@@ -11,13 +11,15 @@
  */
 
 import Link from "next/link";
-import { db, listSummaries } from "@/lib/db";
+import { db, listSummaries, listDeletedSummaries } from "@/lib/db";
 import { EngagementSettingsList } from "@/components/EngagementSettingsList";
+import { RecycleBinList } from "@/components/RecycleBinList";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsIndexPage() {
   const engagements = listSummaries(db);
+  const deleted = listDeletedSummaries(db);
   const totalHosts = engagements.reduce((acc, e) => acc + e.host_count, 0);
   const totalPorts = engagements.reduce((acc, e) => acc + e.port_count, 0);
 
@@ -85,6 +87,29 @@ export default function SettingsIndexPage() {
         </p>
         <EngagementSettingsList engagements={engagements} />
       </section>
+
+      {/* v1.3.0 #6: recycle bin. Only renders the section header when
+          there's something to show — keeps the page clean for fresh
+          installs while still giving operators a path back when they
+          accidentally delete an engagement. */}
+      {deleted.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <SectionLabel>Recently deleted</SectionLabel>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--fg-muted)",
+              margin: "6px 0 12px",
+            }}
+          >
+            {deleted.length} engagement{deleted.length === 1 ? "" : "s"} in
+            the recycle bin. Restore brings everything back; Delete forever
+            cascades through every host, port, evidence, and finding row —
+            unrecoverable.
+          </p>
+          <RecycleBinList engagements={deleted} />
+        </section>
+      )}
     </div>
   );
 }
