@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CheatSheetModal } from "@/components/CheatSheetModal";
 import { GlobalSearchModal } from "@/components/GlobalSearchModal";
+import { UpdateAvailableToast } from "@/components/UpdateAvailableToast";
 import { db, listSummaries, effectiveAppState } from "@/lib/db";
 import { ports as portsTable } from "@/lib/db/schema";
 import { getKb, matchPort } from "@/lib/kb";
@@ -75,6 +76,7 @@ export default function AppLayout({
       <CommandPalette />
       <CheatSheetModal />
       <GlobalSearchModal />
+      <UpdateAvailableToast />
     </>
   );
 }

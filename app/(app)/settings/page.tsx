@@ -11,16 +11,23 @@
  */
 
 import Link from "next/link";
-import { db, listSummaries, listDeletedSummaries } from "@/lib/db";
+import {
+  db,
+  listSummaries,
+  listDeletedSummaries,
+  effectiveAppState,
+} from "@/lib/db";
 import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
 import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
+import { OnboardingSettingsSection } from "@/components/OnboardingSettingsSection";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsIndexPage() {
   const engagements = listSummaries(db);
   const deleted = listDeletedSummaries(db);
+  const cfg = effectiveAppState(db);
   const totalHosts = engagements.reduce((acc, e) => acc + e.host_count, 0);
   const totalPorts = engagements.reduce((acc, e) => acc + e.port_count, 0);
 
@@ -103,6 +110,22 @@ export default function SettingsIndexPage() {
           Off by default — opt in here per browser.
         </p>
         <EditorIntegrationToggle />
+      </section>
+
+      {/* v1.9.0: first-run / onboarding controls. */}
+      <section style={{ marginBottom: 32 }}>
+        <SectionLabel>First-run</SectionLabel>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-muted)",
+            margin: "6px 0 12px",
+          }}
+        >
+          Replay the welcome flow or toggle the GitHub release check. Both
+          live in the local <code className="mono">app_state</code> singleton.
+        </p>
+        <OnboardingSettingsSection initialUpdateCheck={cfg.updateCheck} />
       </section>
 
       {/* v1.3.0 #6: recycle bin. Only renders the section header when
