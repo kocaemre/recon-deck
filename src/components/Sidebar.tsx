@@ -302,47 +302,12 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
         />
       </div>
 
-      {/* v1.2: Bulk filter chips — coverage / risk / findings.
-          Always rendered (no engagement-state precondition) so the
-          shortcuts stay in muscle memory regardless of the current list. */}
-      <div className="px-[10px] pt-1 pb-1 flex flex-wrap gap-1">
-        <BulkChip
-          active={bulkFilters.has("zero-coverage")}
-          onClick={() => toggleBulk("zero-coverage")}
-          label="Coverage 0%"
-          title="Engagements with no checks marked done"
-        />
-        <BulkChip
-          active={bulkFilters.has("risk-high")}
-          onClick={() => toggleBulk("risk-high")}
-          label="Risk ≥ high"
-          title="Engagements with at least one high or critical finding"
-        />
-        <BulkChip
-          active={bulkFilters.has("has-findings")}
-          onClick={() => toggleBulk("has-findings")}
-          label="Has findings"
-          title="Engagements with at least one finding logged"
-        />
-        {bulkFilters.size > 0 && (
-          <button
-            type="button"
-            onClick={() => setBulkFilters(new Set())}
-            style={{
-              padding: "1px 6px",
-              borderRadius: 3,
-              background: "transparent",
-              border: 0,
-              color: "var(--fg-subtle)",
-              fontSize: 10.5,
-              cursor: "pointer",
-            }}
-            title="Clear bulk filters"
-          >
-            clear
-          </button>
-        )}
-      </div>
+      {/* v2.1.1: bulk filter chips (Coverage 0% / Risk ≥ high / Has
+          findings) removed — solo-tool's small N didn't justify the
+          sidebar real estate. The filtering logic (bulkFilters Set) is
+          kept inert in case a future "Filters ▾" disclosure brings them
+          back behind a click. Tag chips below stay — they earn their
+          space with low setup cost. */}
 
       {/* v1.2: Tag chip filter strip — only when at least one engagement carries a tag */}
       {allTags.length > 0 && (

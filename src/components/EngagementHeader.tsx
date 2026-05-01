@@ -377,6 +377,7 @@ export function EngagementHeader({
               fontWeight: 500,
               border: "1px solid var(--border)",
               cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
             title="Re-import nmap output and reconcile ports"
           >
