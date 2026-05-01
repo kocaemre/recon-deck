@@ -246,12 +246,11 @@ don't leak away:
   `npm run kb:check-links` CI guard so we don't re-discover this from
   scratch the next time HackTricks moves.
 
-- **API rate limit middleware** — single-user is fine, but LAN exposure
-  warrants a token-bucket. Maybe v1.4 if there's room.
-- **`npm audit fix` for `fast-xml-parser`** — direct dep bump 5.5 → 5.7,
-  30-second job; queue for the next minor patch (v1.2.x).
-- **`listSummaries` N+1** — 4 correlated subqueries; convert to one
-  JOIN if benchmarks ever flag it. Unlikely to matter < 200 engagements.
+- ~~**API rate limit middleware**~~ — DONE in v2.0.1 (token bucket,
+  per-IP, localhost-bypass-by-default, `RECON_RATE_LIMIT` env knobs).
+- ~~**`npm audit fix` for `fast-xml-parser`**~~ — DONE in v1.4.1.
+- ~~**`listSummaries` N+1**~~ — DONE in v2.0.1 (single SELECT with 6
+  pre-aggregated derived tables; O(1) queries instead of O(N)).
 - **Tag color from hash function** — use the same hash → HSL pattern
   the heatmap uses for risk colors so chips stay readable in dark mode.
 

@@ -2,6 +2,22 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] — 2026-05-01
+
+Patch.
+
+### Added
+
+- **Per-IP rate limiter** on `/api/*` (defense-in-depth). Token bucket: default 60-burst + 600/min steady-state. Localhost bypassed by default; LAN clients get a bucket. Toggles: `RECON_RATE_LIMIT=off|on|force`, `RECON_RATE_LIMIT_BURST`, `RECON_RATE_LIMIT_PER_MIN`. Rejected requests get HTTP 429 + `Retry-After`. The host-allowlist (SEC-01) still runs first; this layers underneath for the `0.0.0.0:13337` LAN-exposure case.
+
+### Changed
+
+- **`listSummaries` / `listDeletedSummaries`** refactored from "engagement row + 7 correlated subqueries" to a single SELECT with six pre-aggregated derived tables. O(1) queries instead of O(N) subqueries per row. Wire shape unchanged. Measurable on 200+ engagements; harmless at single-user scale.
+
+### Tests
+
+- 464 / 464 passing. New: 6 rate-limit cases (per-IP scope, env toggles, localhost bypass, x-forwarded-for parsing).
+
 ## [2.0.0] — 2026-05-01
 
 Major version bump because the UI surface expands meaningfully (full-screen annotation modal, new schema column, new evidence flow). Underlying data model is fully backwards-compatible.

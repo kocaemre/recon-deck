@@ -21,6 +21,7 @@ For the v1.0 feature set and current status, see [`README.md`](README.md).
 - **v1.4.0** (2026-05-01) — Polish bundle. Findings → Markdown copy (per-row + ⇧⌘C), default credentials helper with hydra command generator, opt-in vscode:// link, search severity chip, grouped cheat-sheet, resume-here banner (Migration 0015) with 7-day window, OS chip on the heatmap toolbar.
 - **v1.4.1** (2026-05-01) — Patch. `npm run kb:check-links` script, HackTricks 2026 site rebuild relink (`hacktricks.wiki/en/...html`), tag color FNV→HSL, `fast-xml-parser` 5.7.2 advisory bump.
 - **v2.0.0** (2026-05-01) — Major. Screenshot annotation (#7, Migration 0016). Native HTML5 Canvas modal with Box / Arrow / Pencil / Text tools, 5-color palette, undo stack. Save chains a NEW evidence row via `parent_evidence_id` so the original always survives. Zero new dependencies.
+- **v2.0.1** (2026-05-01) — Patch. Per-IP rate limiter on `/api/*` (defense-in-depth, LAN-exposure case). `listSummaries` refactored to a single JOIN query (O(1) instead of O(N) subqueries per row).
 
 ## v1.3+ Candidates
 

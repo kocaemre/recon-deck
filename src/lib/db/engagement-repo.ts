@@ -509,59 +509,109 @@ export function getById(db: Db, id: number): FullEngagement | null {
  * @returns Array of EngagementSummary (may be empty)
  */
 export function listSummaries(db: Db): EngagementSummary[] {
-  // Migration 0009: target_ip / target_hostname were dropped. We surface the
-  // primary host's IP / hostname via correlated subqueries — same shape the
-  // sidebar consumed before, just sourced from `hosts.is_primary = 1`.
-  //
-  // Also pre-aggregates `done_check_count` so the layout doesn't have to
-  // pull every row from `check_states` and group in JS. KB-driven `total`
-  // can't be SQL-derived (it requires KB matching per port at read time);
-  // see app/layout.tsx for the in-memory totals loop.
-  const rows = db
-    .select({
-      id: engagements.id,
-      name: engagements.name,
-      source: engagements.source,
-      created_at: engagements.created_at,
-      tags_raw: engagements.tags,
-      is_archived: engagements.is_archived,
-      port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
-      // P1-F PR 4: host_count surfaces in the sidebar as a "N hosts" chip
-      // when > 1. Single-host engagements still render the legacy compact
-      // row (no chip) — the Sidebar component branches on host_count > 1.
-      host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
-      primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
-      primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
-      done_check_count: sql<number>`(SELECT COUNT(*) FROM check_states WHERE check_states.engagement_id = engagements.id AND check_states.checked = 1)`,
-      // v1.2.0: aggregate findings counts so the sidebar bulk-filter chip
-      // strip ("Has findings", "Risk ≥ high") can render without a JOIN
-      // at the React layer. Two correlated subqueries — same N+1 shape as
-      // the rest; under 200 engagements this is well within budget.
-      findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id)`,
-      high_findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id AND findings.severity IN ('high', 'critical'))`,
-    })
-    .from(engagements)
-    // Migration 0013: hide soft-deleted rows. Recycle bin lives in
-    // /settings via listDeletedSummaries.
-    .where(sql`${engagements.deleted_at} IS NULL`)
-    .orderBy(desc(engagements.created_at))
-    .all();
+  return querySummaries(db, /* deletedOnly */ false);
+}
+
+interface SummaryRow {
+  id: number;
+  name: string;
+  source: "nmap-text" | "nmap-xml" | "autorecon";
+  created_at: string;
+  tags_raw: string;
+  is_archived: number;
+  port_count: number;
+  host_count: number;
+  primary_ip: string | null;
+  primary_hostname: string | null;
+  done_check_count: number;
+  findings_count: number;
+  high_findings_count: number;
+}
+
+/**
+ * Single-query summary fetch (v1.4.x perf refactor). Replaces the
+ * earlier "engagement row + 7 correlated subqueries" pattern with one
+ * SELECT joining six pre-aggregated derived tables. SQLite still
+ * inlines most of these, but the wire shape is now O(1) queries
+ * instead of O(N) subqueries per row — measurable on 200+ engagements,
+ * harmless at single-user scale.
+ */
+function querySummaries(db: Db, deletedOnly: boolean): EngagementSummary[] {
+  const filterClause = deletedOnly
+    ? sql`e.deleted_at IS NOT NULL`
+    : sql`e.deleted_at IS NULL`;
+  const orderClause = deletedOnly
+    ? sql`ORDER BY e.deleted_at DESC`
+    : sql`ORDER BY e.created_at DESC`;
+
+  const rows = db.all<SummaryRow>(sql`
+    SELECT
+      e.id              AS id,
+      e.name            AS name,
+      e.source          AS source,
+      e.created_at      AS created_at,
+      e.tags            AS tags_raw,
+      e.is_archived     AS is_archived,
+      COALESCE(pc.cnt, 0)    AS port_count,
+      COALESCE(hc.cnt, 0)    AS host_count,
+      ph.ip                  AS primary_ip,
+      ph.hostname            AS primary_hostname,
+      COALESCE(cc.cnt, 0)    AS done_check_count,
+      COALESCE(fc.cnt, 0)    AS findings_count,
+      COALESCE(fh.cnt, 0)    AS high_findings_count
+    FROM engagements e
+    LEFT JOIN (
+      SELECT engagement_id, COUNT(*) AS cnt FROM ports GROUP BY engagement_id
+    ) pc ON pc.engagement_id = e.id
+    LEFT JOIN (
+      SELECT engagement_id, COUNT(*) AS cnt FROM hosts GROUP BY engagement_id
+    ) hc ON hc.engagement_id = e.id
+    LEFT JOIN (
+      SELECT engagement_id, ip, hostname FROM hosts WHERE is_primary = 1
+    ) ph ON ph.engagement_id = e.id
+    LEFT JOIN (
+      SELECT engagement_id, COUNT(*) AS cnt FROM check_states WHERE checked = 1 GROUP BY engagement_id
+    ) cc ON cc.engagement_id = e.id
+    LEFT JOIN (
+      SELECT engagement_id, COUNT(*) AS cnt FROM findings GROUP BY engagement_id
+    ) fc ON fc.engagement_id = e.id
+    LEFT JOIN (
+      SELECT engagement_id, COUNT(*) AS cnt
+      FROM findings WHERE severity IN ('high', 'critical')
+      GROUP BY engagement_id
+    ) fh ON fh.engagement_id = e.id
+    WHERE ${filterClause}
+    ${orderClause}
+  `);
 
   // Migration 0011: parse the tags JSON column into a real array. Bad
   // payloads fall through to []; the repo is the contract surface, so
   // consumers (Sidebar, palette filter logic) only ever see string[].
   return rows.map((r) => {
-    const { tags_raw, ...rest } = r;
     let tags: string[] = [];
     try {
-      const parsed = JSON.parse(tags_raw);
+      const parsed = JSON.parse(r.tags_raw);
       if (Array.isArray(parsed)) {
         tags = parsed.filter((t): t is string => typeof t === "string");
       }
     } catch {
-      // ignore — empty array
+      /* ignore — empty array */
     }
-    return { ...rest, tags };
+    return {
+      id: Number(r.id),
+      name: r.name,
+      source: r.source,
+      created_at: r.created_at,
+      port_count: Number(r.port_count),
+      host_count: Number(r.host_count),
+      primary_ip: r.primary_ip ?? "",
+      primary_hostname: r.primary_hostname,
+      done_check_count: Number(r.done_check_count),
+      findings_count: Number(r.findings_count),
+      high_findings_count: Number(r.high_findings_count),
+      tags,
+      is_archived: Boolean(r.is_archived),
+    };
   });
 }
 
@@ -878,42 +928,7 @@ export function restoreEngagement(db: Db, engagementId: number): boolean {
  * so the most-recent send-to-bin shows first.
  */
 export function listDeletedSummaries(db: Db): EngagementSummary[] {
-  const rows = db
-    .select({
-      id: engagements.id,
-      name: engagements.name,
-      source: engagements.source,
-      created_at: engagements.created_at,
-      tags_raw: engagements.tags,
-      is_archived: engagements.is_archived,
-      port_count: sql<number>`(SELECT COUNT(*) FROM ports WHERE ports.engagement_id = engagements.id)`,
-      host_count: sql<number>`(SELECT COUNT(*) FROM hosts WHERE hosts.engagement_id = engagements.id)`,
-      primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
-      primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
-      done_check_count: sql<number>`(SELECT COUNT(*) FROM check_states WHERE check_states.engagement_id = engagements.id AND check_states.checked = 1)`,
-      findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id)`,
-      high_findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id AND findings.severity IN ('high', 'critical'))`,
-      deleted_at_raw: engagements.deleted_at,
-    })
-    .from(engagements)
-    .where(sql`${engagements.deleted_at} IS NOT NULL`)
-    .orderBy(desc(engagements.deleted_at))
-    .all();
-
-  return rows.map((r) => {
-    const { tags_raw, deleted_at_raw, ...rest } = r;
-    void deleted_at_raw;
-    let tags: string[] = [];
-    try {
-      const parsed = JSON.parse(tags_raw);
-      if (Array.isArray(parsed)) {
-        tags = parsed.filter((t): t is string => typeof t === "string");
-      }
-    } catch {
-      // ignore — empty array
-    }
-    return { ...rest, tags };
-  });
+  return querySummaries(db, /* deletedOnly */ true);
 }
 
 // ---------------------------------------------------------------------------
