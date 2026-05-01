@@ -29,7 +29,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUIStore } from "@/lib/store";
-import { updateEngagementTarget } from "../../app/(app)/engagements/[id]/actions";
+import {
+  updateEngagementTarget,
+  discardSample,
+} from "../../app/(app)/engagements/[id]/actions";
 
 type RiskKey = "critical" | "high" | "medium" | "low" | "info";
 
@@ -91,6 +94,8 @@ interface EngagementHeaderProps {
    * heatmap are meaningful.
    */
   scanCount?: number;
+  /** v1.9.0: sample-engagement marker — drives the `sample` chip + Discard button. */
+  isSample?: boolean;
 }
 
 export function EngagementHeader({
@@ -112,6 +117,7 @@ export function EngagementHeader({
   hosts,
   activeHostId,
   scanCount,
+  isSample,
 }: EngagementHeaderProps) {
   const [ip, setIp] = useState(targetIp);
   const [hostname, setHostname] = useState(targetHostname ?? "");
@@ -243,6 +249,26 @@ export function EngagementHeader({
         <Chip variant="solid" mono>
           created {createdLabel}
         </Chip>
+        {isSample && (
+          <span
+            className="mono inline-flex items-center"
+            title="This engagement was loaded from the bundled sample. Discard when done exploring."
+            style={{
+              padding: "2px 7px",
+              borderRadius: 3,
+              background: "var(--accent-bg)",
+              border: "1px solid var(--accent-border)",
+              color: "var(--accent)",
+              fontSize: 11,
+              lineHeight: 1.4,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            sample
+          </span>
+        )}
         {scanner?.version && (
           <Chip variant="solid" mono title={scanner.args ?? `nmap ${scanner.version}`}>
             nmap {scanner.version}
@@ -306,6 +332,33 @@ export function EngagementHeader({
             <Chip mono title={`${scanCount} nmap re-imports recorded`}>
               scans: {scanCount}
             </Chip>
+          )}
+          {isSample && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await discardSample(engagementId);
+                } catch {
+                  toast.error("Could not discard sample.");
+                }
+              }}
+              className="inline-flex items-center gap-1.5"
+              style={{
+                height: 24,
+                padding: "0 10px",
+                borderRadius: 5,
+                background: "var(--bg-2)",
+                color: "var(--fg-muted)",
+                fontSize: 11.5,
+                fontWeight: 500,
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+              }}
+              title="Hard-delete this sample engagement"
+            >
+              Discard sample
+            </button>
           )}
           <button
             type="button"

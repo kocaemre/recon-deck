@@ -108,6 +108,7 @@ export function createFromScan(
       encoding: "utf8" | "base64";
     }>;
   },
+  opts?: { isSample?: boolean },
 ): { id: number; name: string } {
   // better-sqlite3 transactions are synchronous — Drizzle wraps them cleanly
   return db.transaction((tx) => {
@@ -125,6 +126,7 @@ export function createFromScan(
         os_accuracy: scan.os?.accuracy ?? null,
         raw_input: rawInput,
         warnings_json: JSON.stringify(scan.warnings),
+        is_sample: opts?.isSample ?? false,
         created_at: now,
         updated_at: now,
       })

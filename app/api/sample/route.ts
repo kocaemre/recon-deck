@@ -36,7 +36,9 @@ export async function POST() {
 
   let result;
   try {
-    result = createFromScan(db, sample, SAMPLE_MARKER);
+    result = createFromScan(db, sample, SAMPLE_MARKER, undefined, {
+      isSample: true,
+    });
   } catch (err) {
     console.error("createFromScan failed for sample:", err);
     return NextResponse.json(

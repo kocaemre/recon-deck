@@ -528,6 +528,7 @@ export default async function EngagementPage({
         }))}
         activeHostId={activeHostId}
         scanCount={scanHistory.length}
+        isSample={engagement.is_sample}
         scanner={reparsed?.scanner}
         extraPorts={reparsed?.extraPorts}
         finishedAt={reparsed?.runstats?.finishedAt}

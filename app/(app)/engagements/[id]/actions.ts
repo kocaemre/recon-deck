@@ -18,7 +18,16 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { db, upsertCheck, upsertNote, updateTarget } from "@/lib/db";
+import { redirect } from "next/navigation";
+import {
+  db,
+  upsertCheck,
+  upsertNote,
+  updateTarget,
+  deleteEngagement,
+  engagements,
+} from "@/lib/db";
+import { eq } from "drizzle-orm";
 
 /**
  * Validate that a value is a positive integer suitable for use as a DB primary key.
@@ -120,4 +129,27 @@ export async function updateEngagementTarget(
   updateTarget(db, eid, trimmedIp, trimmedHost ? trimmedHost : null);
   revalidatePath(`/engagements/${eid}`);
   revalidatePath("/", "layout");
+}
+
+/**
+ * v1.9.0: discard a sample engagement (single-click hard delete).
+ *
+ * The "Try sample" button stamps `engagements.is_sample = true`, which
+ * surfaces a `sample` chip + a "Discard sample" button on the header.
+ * That button calls this action — guarded so non-sample rows can't be
+ * deleted by accident if a stale UI ever fired it.
+ */
+export async function discardSample(engagementId: number): Promise<void> {
+  const eid = validateId(engagementId, "engagementId");
+  const row = db
+    .select({ is_sample: engagements.is_sample })
+    .from(engagements)
+    .where(eq(engagements.id, eid))
+    .get();
+  if (!row || !row.is_sample) {
+    throw new Error("Not a sample engagement.");
+  }
+  deleteEngagement(db, eid);
+  revalidatePath("/", "layout");
+  redirect("/");
 }
