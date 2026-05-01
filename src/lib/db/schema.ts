@@ -190,6 +190,15 @@ export const ports = sqliteTable(
     closed_at_scan_id: integer("closed_at_scan_id").references(
       () => scan_history.id,
     ),
+
+    /**
+     * Migration 0012: starred flag. Surfaces a ★ on the heatmap tile and
+     * lifts the port to the top of its host group. UI-scope only — does
+     * not affect imports, exports, or finding aggregation.
+     */
+    starred: integer("starred", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [
     index("ports_engagement_id_idx").on(t.engagement_id),

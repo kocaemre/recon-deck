@@ -2,6 +2,30 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-05-01
+
+Portfolio management release. The sidebar gains tags, archive, bulk-filter chips, and a friendly clone dialog. The heatmap learns to pin operator-flagged ports.
+
+### Added
+
+- **Engagement tags + archive (Migration 0011).** Free-form lowercase tags (max 16 per engagement, ≤32 chars each, dedup) render as monospace chips in the sidebar and feed a stackable filter strip. The Active/Archived sekme toggle hides archived engagements by default; archived rows still cascade-delete and stay in FTS. Kebab gains **Edit tags…** and **Archive/Restore from archive**. `PATCH /api/engagements/:id` accepts `tags`, `is_archived`, and `name` with per-field validation.
+- **Bulk-filter chips.** A new chip strip above the engagement list — **Coverage 0%**, **Risk ≥ high**, **Has findings** — stacks (AND) with the sekme toggle, tag chips, and text query. `listSummaries` now pre-aggregates `findings_count` and `high_findings_count` so the chips render without a per-row JOIN.
+- **Clone name override (`CloneEngagementDialog`).** Sidebar **Duplicate** opens a shadcn AlertDialog with the input pre-filled `${name} (copy)` so the operator picks the new name up-front instead of a follow-up rename. Submitting clears to fall back to the API default; Enter submits.
+- **Port starring (Migration 0012).** Every heatmap tile gains a ★ toggle. Starred ports lift to the top of their host group, sort stable thereafter; idle ★ stays subtle (faint outline) until hover. `PATCH /api/engagements/:id/ports/:portId` accepts `{ starred: boolean }`. UI state is optimistic; failure reverts and toasts.
+
+### Changed
+
+- **Sidebar version chip** flipped from `v1.0` → `v1.2`.
+
+### Migrations
+
+- **0011** `engagements.tags TEXT NOT NULL DEFAULT '[]'` + `engagements.is_archived INTEGER NOT NULL DEFAULT 0` + index `engagements_is_archived_idx`. Additive — no backfill required.
+- **0012** `ports.starred INTEGER NOT NULL DEFAULT 0`. Additive — no backfill, no index (sort already runs over all open ports).
+
+### Tests
+
+- 449 / 449 passing. New: `togglePortStar` / `setPortStar` engagement-scope guard; `listSummaries` aggregates `findings_count` + `high_findings_count`.
+
 ## [1.1.0] — 2026-04-26
 
 ### Added

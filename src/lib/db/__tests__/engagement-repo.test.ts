@@ -10,6 +10,8 @@ import {
   renameEngagement,
   setEngagementTags,
 } from "../engagement-repo.js";
+import { createFinding } from "../findings-repo.js";
+import { togglePortStar, setPortStar } from "../ports-repo.js";
 import { engagements, ports, port_scripts, hosts } from "../schema.js";
 import { eq, and } from "drizzle-orm";
 import type { ParsedScan } from "../../parser/types.js";
@@ -700,5 +702,84 @@ describe("createFromScan (Plan 03)", () => {
     archiveEngagement(db, result.id, true);
     expect(deleteEngagement(db, result.id)).toBe(true);
     expect(getById(db, result.id)).toBeNull();
+  });
+
+  // v1.2.0 #4: bulk-filter chip support relies on listSummaries returning
+  // pre-aggregated findings counts so the sidebar doesn't have to JOIN
+  // findings on every render. These tests pin the contract.
+  it("listSummaries returns findings_count and high_findings_count aggregates", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+
+    const baseline = listSummaries(db).find((s) => s.id === result.id)!;
+    expect(baseline.findings_count).toBe(0);
+    expect(baseline.high_findings_count).toBe(0);
+
+    createFinding(db, {
+      engagementId: result.id,
+      portId: null,
+      severity: "low",
+      title: "info disclosure",
+    });
+    createFinding(db, {
+      engagementId: result.id,
+      portId: null,
+      severity: "high",
+      title: "rce candidate",
+    });
+    createFinding(db, {
+      engagementId: result.id,
+      portId: null,
+      severity: "critical",
+      title: "auth bypass",
+    });
+
+    const after = listSummaries(db).find((s) => s.id === result.id)!;
+    expect(after.findings_count).toBe(3);
+    // high + critical only (low excluded).
+    expect(after.high_findings_count).toBe(2);
+  });
+
+  // v1.2.0 #11: port starring contract.
+  it("togglePortStar / setPortStar roundtrip", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    const portRow = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, result.id))
+      .get();
+    expect(portRow).toBeDefined();
+    const portId = portRow!.id;
+
+    // Default state: not starred.
+    expect(portRow!.starred).toBe(false);
+
+    // Toggle once → true.
+    expect(togglePortStar(db, result.id, portId)).toBe(true);
+    expect(
+      db.select().from(ports).where(eq(ports.id, portId)).get()!.starred,
+    ).toBe(true);
+
+    // Toggle back → false.
+    expect(togglePortStar(db, result.id, portId)).toBe(false);
+    expect(
+      db.select().from(ports).where(eq(ports.id, portId)).get()!.starred,
+    ).toBe(false);
+
+    // setPortStar(true) is idempotent regardless of current state.
+    expect(setPortStar(db, result.id, portId, true)).toBe(true);
+    expect(setPortStar(db, result.id, portId, true)).toBe(true);
+  });
+
+  it("togglePortStar returns null for unknown port / mismatched engagement", () => {
+    const result = createFromScan(db, makeScan(), "<raw>");
+    expect(togglePortStar(db, result.id, 999999)).toBeNull();
+    // Wrong engagement scope must not flip a foreign port.
+    const otherResult = createFromScan(db, makeScan(), "<raw>");
+    const portRow = db
+      .select()
+      .from(ports)
+      .where(eq(ports.engagement_id, otherResult.id))
+      .get()!;
+    expect(togglePortStar(db, result.id, portRow.id)).toBeNull();
   });
 });

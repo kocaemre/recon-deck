@@ -527,6 +527,12 @@ export function listSummaries(db: Db): EngagementSummary[] {
       primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
       primary_hostname: sql<string | null>`(SELECT hostname FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
       done_check_count: sql<number>`(SELECT COUNT(*) FROM check_states WHERE check_states.engagement_id = engagements.id AND check_states.checked = 1)`,
+      // v1.2.0: aggregate findings counts so the sidebar bulk-filter chip
+      // strip ("Has findings", "Risk ≥ high") can render without a JOIN
+      // at the React layer. Two correlated subqueries — same N+1 shape as
+      // the rest; under 200 engagements this is well within budget.
+      findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id)`,
+      high_findings_count: sql<number>`(SELECT COUNT(*) FROM findings WHERE findings.engagement_id = engagements.id AND findings.severity IN ('high', 'critical'))`,
     })
     .from(engagements)
     .orderBy(desc(engagements.created_at))

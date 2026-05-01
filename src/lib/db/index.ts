@@ -91,6 +91,8 @@ export {
 export {
   addManualPort,
   deletePort,
+  togglePortStar,
+  setPortStar,
   type ManualPortInput,
 } from "./ports-repo";
 export {

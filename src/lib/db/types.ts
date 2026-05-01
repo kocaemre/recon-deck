@@ -102,4 +102,15 @@ export type EngagementSummary = Pick<
    * these out; toggling the Archived sekme surfaces them.
    */
   is_archived: boolean;
+  /**
+   * v1.2.0: total findings count for this engagement. Drives the sidebar
+   * "Has findings" bulk-filter chip. Pre-aggregated so the chip strip
+   * doesn't need a per-row JOIN at render time.
+   */
+  findings_count: number;
+  /**
+   * v1.2.0: count of findings with severity in {high, critical}. Drives
+   * the sidebar "Risk ≥ high" chip. Same rationale as `findings_count`.
+   */
+  high_findings_count: number;
 };

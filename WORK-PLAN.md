@@ -45,18 +45,18 @@ schema migration + filter logic land together.
     - View-model: `listSummaries` exposes new fields
     - Cascade unaffected (delete still works on archived rows)
 
-- [ ] **#4 — Bulk filter chips** _(30 dk)_
+- [x] **#4 — Bulk filter chips** _(30 dk)_ — DONE
   - Sidebar above engagement list: chip group `[ All ] [ Coverage 0% ] [ Risk ≥ high ] [ Has findings ]`
   - Chips are toggles; multiple can stack (AND logic)
   - State client-side only (Zustand or local state)
   - Plays nicely with the Active/Archived toggle from #1+#2
 
-- [ ] **#3 — Clone name override UX** _(15–30 dk)_
+- [x] **#3 — Clone name override UX** _(15–30 dk)_ — DONE
   - Sidebar Duplicate menu → opens shadcn AlertDialog (similar pattern to delete) with input pre-filled `${name} (copy)`
   - Submit calls existing `POST /api/engagements/:id/clone` with `{ name }` body
   - Drop the unconditional "(copy)" suffix; if user clears the field, fallback to existing default
 
-- [ ] **#11 — Port starring** _(30 dk)_
+- [x] **#11 — Port starring** _(30 dk)_ — DONE
   - Migration `0012_add-port-starred.sql`: `ports.starred INTEGER NOT NULL DEFAULT 0`
   - Schema.ts + repo: `togglePortStar(db, portId)` (returns new state)
   - API: `PATCH /api/engagements/:id/ports/:portId` accepts `{ starred: boolean }`
@@ -66,9 +66,9 @@ schema migration + filter logic land together.
 
 ### Closeout
 
-- [ ] Bump `package.json` → `1.2.0`, add CHANGELOG entry
-- [ ] Tag `v1.2.0`, push, watch release.yml
-- [ ] Update ROADMAP.md: drop "v1.1 candidates" entries that are now done; add a brief "v1.2.0 — portfolio management" line
+- [x] Bump `package.json` → `1.2.0`, add CHANGELOG entry
+- [x] Tag `v1.2.0`, push, watch release.yml
+- [x] Update ROADMAP.md: drop "v1.1 candidates" entries that are now done; add a brief "v1.2.0 — portfolio management" line
 
 ---
 

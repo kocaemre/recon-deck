@@ -158,3 +158,54 @@ export function deletePort(
       .run().changes > 0
   );
 }
+
+/**
+ * Toggle the starred flag on a port (v1.2.0 #11).
+ *
+ * Scoped by engagement so a stray portId from another engagement
+ * cannot flip the wrong row — the heatmap surfaces the affordance
+ * per-engagement and the route checks ownership before calling.
+ *
+ * Returns the new starred state, or `null` when the (engagement, port)
+ * pair doesn't exist.
+ */
+export function togglePortStar(
+  db: Db,
+  engagementId: number,
+  portId: number,
+): boolean | null {
+  const row = db
+    .select({ starred: ports.starred })
+    .from(ports)
+    .where(and(eq(ports.id, portId), eq(ports.engagement_id, engagementId)))
+    .get();
+  if (!row) return null;
+  const next = !row.starred;
+  const result = db
+    .update(ports)
+    .set({ starred: next })
+    .where(and(eq(ports.id, portId), eq(ports.engagement_id, engagementId)))
+    .run();
+  return result.changes > 0 ? next : null;
+}
+
+/**
+ * Set the starred flag explicitly. Used by the PATCH route when the
+ * client supplies `{ starred: boolean }`. Returns true on update.
+ */
+export function setPortStar(
+  db: Db,
+  engagementId: number,
+  portId: number,
+  starred: boolean,
+): boolean {
+  return (
+    db
+      .update(ports)
+      .set({ starred })
+      .where(
+        and(eq(ports.id, portId), eq(ports.engagement_id, engagementId)),
+      )
+      .run().changes > 0
+  );
+}

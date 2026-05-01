@@ -13,12 +13,17 @@ For the v1.0 feature set and current status, see [`README.md`](README.md).
 
 ---
 
-## v1.1 Candidates
+## Shipped
 
-These are ideas on the short list for the release after v1.0. Everything in this
+- **v1.1.0** (2026-04-26) — KB hot-reload, command-palette parity, sidebar hover-kebab (Rename / Duplicate / Delete), engagement clone, migration safety net, port `13337` as default.
+- **v1.2.0** (2026-05-01) — Portfolio management. Engagement tags + archive (Migration 0011), bulk-filter chips (Coverage 0% / Risk ≥ high / Has findings), inline clone-name AlertDialog, port starring with heatmap ★ + sort (Migration 0012).
+
+## v1.3+ Candidates
+
+These are ideas on the short list for upcoming releases. Everything in this
 section is a **candidate**, not a commitment — priorities will shift based on
-user feedback after v1.0 ships. PRs against these items are welcome; please open
-a discussion issue first so scope is aligned before code is written.
+user feedback. PRs against these items are welcome; please open a discussion
+issue first so scope is aligned before code is written.
 
 | Candidate                          | Why                                                                                           | Status        |
 | ---------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |

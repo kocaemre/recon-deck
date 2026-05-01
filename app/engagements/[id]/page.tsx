@@ -354,6 +354,9 @@ export default async function EngagementPage({
         hasMultipleScans &&
         latestScanId !== null &&
         p.first_seen_scan_id === latestScanId,
+      // v1.2.0 #11: surface the starred flag so the heatmap renders the
+      // ★ glyph and lifts the tile to the top of its host group.
+      starred: p.starred ?? false,
       // P2: searchsploit query. Prefer `<product> <version>` (most
       // specific), fall back to `<product>` alone, then `<service>`,
       // then nothing — empty/undefined suppresses the section.

@@ -10,6 +10,9 @@
  */
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
+import { toast } from "sonner";
 import { useUIStore } from "@/lib/store";
 import { PortDetailPane } from "@/components/PortDetailPane";
 import { AddPortButton } from "@/components/AddPortButton";
@@ -53,6 +56,8 @@ interface PortTileData {
   /** P1-G PR 2: port lifecycle vs latest scan. */
   isClosed?: boolean;
   isNew?: boolean;
+  /** v1.2.0 #11: operator-flagged port. Lifts to top of host group + ★ icon. */
+  starred?: boolean;
   /** P2: searchsploit query (`product version` or fallback). */
   exploitQuery?: string;
   /** Detail pane data */
@@ -103,7 +108,19 @@ export function EngagementHeatmap({
   // "Show N closed" button when applicable.
   const closedCount = ports.filter((p) => p.isClosed).length;
   const [showClosed, setShowClosed] = useState(false);
-  const visiblePorts = showClosed ? ports : ports.filter((p) => !p.isClosed);
+  const filtered = showClosed ? ports : ports.filter((p) => !p.isClosed);
+  // v1.2.0 #11: starred ports float to the top inside the visible set.
+  // Stable secondary sort preserves the original order (importers already
+  // hand us ports sorted by host then port number).
+  const visiblePorts = filtered
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      const sa = a.p.starred ? 1 : 0;
+      const sb = b.p.starred ? 1 : 0;
+      if (sa !== sb) return sb - sa;
+      return a.i - b.i;
+    })
+    .map((x) => x.p);
 
   // Ensure we always have a selection as long as there are ports.
   // Choose the first port by default; use layout effect so the selected-port
@@ -219,6 +236,7 @@ export function EngagementHeatmap({
           {visiblePorts.map((p) => (
             <PortTile
               key={p.id}
+              engagementId={engagementId}
               data={p}
               active={p.id === selected.id}
               onClick={() => {
@@ -331,18 +349,57 @@ export function EngagementHeatmap({
 }
 
 function PortTile({
+  engagementId,
   data,
   active,
   onClick,
 }: {
+  engagementId: number;
   data: PortTileData;
   active: boolean;
   onClick: () => void;
 }) {
   const pct = data.total === 0 ? 0 : (data.done / data.total) * 100;
-  // P1-G PR 2: closed tile dims the entire content; new chip surfaces in
-  // the top-right corner. Both render only when scan history has > 1 row.
   const dim = data.isClosed === true;
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  // Optimistic ★ state — flip locally, RSC refresh syncs the truth.
+  const [starred, setStarred] = useState<boolean>(data.starred ?? false);
+  useEffect(() => {
+    setStarred(data.starred ?? false);
+  }, [data.starred]);
+
+  async function toggleStar(ev: React.MouseEvent) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (pending) return;
+    const next = !starred;
+    setStarred(next);
+    setPending(true);
+    try {
+      const res = await fetch(
+        `/api/engagements/${engagementId}/ports/${data.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ starred: next }),
+        },
+      );
+      if (!res.ok) {
+        setStarred(!next);
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Star toggle failed.");
+        return;
+      }
+      // Refresh so the heatmap sort + dedicated SSR fields catch up.
+      router.refresh();
+    } catch {
+      setStarred(!next);
+      toast.error("Star toggle failed.");
+    } finally {
+      setPending(false);
+    }
+  }
   return (
     <button
       type="button"
@@ -379,7 +436,7 @@ function PortTile({
           style={{
             position: "absolute",
             top: 6,
-            right: 6,
+            right: 28, // shift left so the ★ sits in the corner
             fontSize: 9,
             letterSpacing: "0.08em",
             padding: "1px 5px",
@@ -394,6 +451,47 @@ function PortTile({
           {data.isClosed ? "closed" : "new"}
         </span>
       )}
+      {/* v1.2.0 #11: star toggle. Always rendered so a starred tile is
+          discoverable; idle state stays subtle (faint outline) until hover. */}
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label={starred ? "Unstar port" : "Star port"}
+        aria-pressed={starred}
+        onClick={toggleStar}
+        onKeyDown={(ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleStar(ev as unknown as React.MouseEvent);
+          }
+        }}
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 6,
+          width: 18,
+          height: 18,
+          display: "grid",
+          placeItems: "center",
+          borderRadius: 3,
+          cursor: pending ? "wait" : "pointer",
+          color: starred ? "var(--accent)" : "var(--fg-faint)",
+          opacity: starred ? 1 : 0.55,
+          transition: "opacity 0.15s",
+          zIndex: 1,
+        }}
+        onMouseEnter={(ev) => (ev.currentTarget.style.opacity = "1")}
+        onMouseLeave={(ev) =>
+          (ev.currentTarget.style.opacity = starred ? "1" : "0.55")
+        }
+      >
+        <Star
+          size={12}
+          strokeWidth={starred ? 2.5 : 1.75}
+          fill={starred ? "var(--accent)" : "transparent"}
+        />
+      </span>
       <div className="flex items-center gap-2">
         <span className="mono font-semibold" style={{ fontSize: 14 }}>
           {data.port}

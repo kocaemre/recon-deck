@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
 import { useUIStore } from "@/lib/store";
 import { DeleteEngagementDialog } from "@/components/DeleteEngagementDialog";
+import { CloneEngagementDialog } from "@/components/CloneEngagementDialog";
 
 export type SidebarEngagement = EngagementSummary & {
   total: number;
@@ -58,6 +59,14 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
   // sekme toggle stack with the text-search query (AND across all).
   const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  // v1.2: bulk filter chips. Each entry is independent (AND logic across
+  // all active chips, on top of viewMode + selectedTags + text query).
+  //   zero-coverage  → done === 0  (untouched engagements)
+  //   risk-high      → high_findings_count > 0  (high or critical sev)
+  //   has-findings   → findings_count > 0
+  const [bulkFilters, setBulkFilters] = useState<
+    Set<"zero-coverage" | "risk-high" | "has-findings">
+  >(new Set());
   const pathname = usePathname();
   const router = useRouter();
   const setGlobalSearchOpen = useUIStore((s) => s.setGlobalSearchOpen);
@@ -132,6 +141,14 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
       if (selectedTags.size > 0) {
         for (const t of selectedTags) if (!e.tags.includes(t)) return false;
       }
+      // v1.2: bulk-filter chips. AND across all active chips so the
+      // operator can stack "untouched + has-findings" to surface
+      // partly-imported engagements they haven't started checking yet.
+      if (bulkFilters.has("zero-coverage") && e.done > 0) return false;
+      if (bulkFilters.has("risk-high") && e.high_findings_count === 0)
+        return false;
+      if (bulkFilters.has("has-findings") && e.findings_count === 0)
+        return false;
       // Text query last (cheapest miss path stays first).
       if (!q) return true;
       return (
@@ -141,7 +158,16 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
         e.tags.some((t) => t.includes(q))
       );
     });
-  }, [filter, engagements, viewMode, selectedTags]);
+  }, [filter, engagements, viewMode, selectedTags, bulkFilters]);
+
+  function toggleBulk(key: "zero-coverage" | "risk-high" | "has-findings") {
+    setBulkFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function toggleTagFilter(tag: string) {
     setSelectedTags((prev) => {
@@ -184,7 +210,7 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
           >
             recon-deck
           </span>
-          <Chip variant="solid">v1.0</Chip>
+          <Chip variant="solid">v1.2</Chip>
         </div>
 
         <Link
@@ -274,6 +300,48 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
           label="Archived"
           count={archivedCount}
         />
+      </div>
+
+      {/* v1.2: Bulk filter chips — coverage / risk / findings.
+          Always rendered (no engagement-state precondition) so the
+          shortcuts stay in muscle memory regardless of the current list. */}
+      <div className="px-[10px] pt-1 pb-1 flex flex-wrap gap-1">
+        <BulkChip
+          active={bulkFilters.has("zero-coverage")}
+          onClick={() => toggleBulk("zero-coverage")}
+          label="Coverage 0%"
+          title="Engagements with no checks marked done"
+        />
+        <BulkChip
+          active={bulkFilters.has("risk-high")}
+          onClick={() => toggleBulk("risk-high")}
+          label="Risk ≥ high"
+          title="Engagements with at least one high or critical finding"
+        />
+        <BulkChip
+          active={bulkFilters.has("has-findings")}
+          onClick={() => toggleBulk("has-findings")}
+          label="Has findings"
+          title="Engagements with at least one finding logged"
+        />
+        {bulkFilters.size > 0 && (
+          <button
+            type="button"
+            onClick={() => setBulkFilters(new Set())}
+            style={{
+              padding: "1px 6px",
+              borderRadius: 3,
+              background: "transparent",
+              border: 0,
+              color: "var(--fg-subtle)",
+              fontSize: 10.5,
+              cursor: "pointer",
+            }}
+            title="Clear bulk filters"
+          >
+            clear
+          </button>
+        )}
       </div>
 
       {/* v1.2: Tag chip filter strip — only when at least one engagement carries a tag */}
@@ -473,6 +541,39 @@ function SekmeButton({
   );
 }
 
+function BulkChip({
+  active,
+  onClick,
+  label,
+  title,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        padding: "2px 8px",
+        borderRadius: 3,
+        border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+        background: active ? "var(--bg-3)" : "var(--bg-2)",
+        color: active ? "var(--accent)" : "var(--fg-muted)",
+        fontSize: 10.5,
+        cursor: "pointer",
+        lineHeight: 1.55,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function SidebarRow({
   engagementId,
   href,
@@ -507,6 +608,7 @@ function SidebarRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Close the dropdown on outside click and on Escape. Re-attached only
@@ -555,29 +657,16 @@ function SidebarRow({
     }
   }
 
-  async function onDuplicate() {
+  function onDuplicate() {
     setMenuOpen(false);
-    try {
-      const res = await fetch(`/api/engagements/${engagementId}/clone`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error ?? "Duplicate failed.");
-        return;
-      }
-      const body = await res.json().catch(() => ({}));
-      toast.success("Engagement duplicated");
-      // Jump straight to the clone so the operator can rename / edit
-      // immediately instead of hunting it down in the sidebar.
-      if (typeof body.id === "number") {
-        router.push(`/engagements/${body.id}`);
-      } else {
-        router.refresh();
-      }
-    } catch {
-      toast.error("Duplicate failed.");
-    }
+    setCloneOpen(true);
+  }
+
+  function onCloned(newId: number) {
+    // Jump straight to the clone so the operator can dive in immediately;
+    // refresh keeps the sidebar's RSC tree honest while we navigate.
+    router.push(`/engagements/${newId}`);
+    router.refresh();
   }
 
   async function onToggleArchive() {
@@ -857,6 +946,14 @@ function SidebarRow({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={onDeleted}
+      />
+
+      <CloneEngagementDialog
+        engagementId={engagementId}
+        sourceName={name}
+        open={cloneOpen}
+        onOpenChange={setCloneOpen}
+        onCloned={onCloned}
       />
     </div>
   );
