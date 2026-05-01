@@ -152,6 +152,60 @@ schema migration + filter logic land together.
 
 ---
 
+## Milestone v1.9.0 — First-run onboarding
+
+**Goal:** new operators land in recon-deck and have a self-explanatory
+first 60 seconds. No more "where do I paste nmap?" → "what's a KB?" →
+"why is `/settings/wordlists` empty?" friction.
+
+**Estimated effort:** TBD — depends on Claude Design's flow. Pencil in
+3-5 hours; revisit once the design lands.
+
+**Status:** parked. Awaiting Claude Design output. Operator (you) will
+hand back a flow / wireframe / layout spec; this section gets fleshed
+into concrete tasks at that point.
+
+### Scope (proposed — confirm after design)
+
+- **First-run detection.** Boot path checks an `app_state.onboarded_at`
+  row (new `app_state` k/v table) — null → show onboarding overlay,
+  non-null → skip. Migration ~0017 (or whatever the next slot is at
+  ship time).
+- **Tour content.** Walk the operator through the four primary surfaces:
+  1. Paste panel + `/api/import/autorecon` zip drop
+  2. Engagement detail (heatmap, port detail, findings, writeup)
+  3. Settings (KB editor, recycle bin, editor integration toggle)
+  4. Command palette (⌘K) + `?` cheat sheet
+- **Configurable paths.** Onboarding offers to set:
+  - `RECON_LOCAL_EXPORT_DIR` (#12 vscode link) — surfaced as a friendly
+    field instead of a build-time env. Persisted to `app_state` so it
+    survives container restarts.
+  - Wordlist override base path (existing `/settings/wordlists` flow,
+    but introduced inline).
+  - Optional: KB user dir (`RECON_KB_USER_DIR`).
+- **Update check.** One-shot fetch against the GitHub Releases API
+  (`/repos/0xemrek/recon-deck/releases/latest`) at first-run end.
+  Compare `tag_name` against `process.env.npm_package_version`. Show
+  a non-blocking toast if behind. Strictly opt-in — surface a checkbox
+  on the onboarding's last step. **Important:** outbound HTTP, so the
+  check must be opt-in (OPS-03 offline-by-default posture).
+- **Skip / replay.** A "Skip onboarding" link on every step, plus a
+  `/settings → Replay onboarding` button that wipes `onboarded_at`.
+
+### Open questions for design
+
+- Modal-overlay tour (highlight + arrow) vs dedicated `/welcome` route?
+- Should we ship a sample engagement (a fixture nmap file the user
+  can import in one click) so the tour has real data to point at?
+- "Skip" affordance in plain view, or buried behind a confirm so
+  operators don't blow past the path-config step by accident?
+
+### Closeout (TBD)
+
+- Bump → `1.9.0`, CHANGELOG entry, tag, ROADMAP "Shipped" line.
+
+---
+
 ## Milestone v2.0.0 — Screenshot annotation
 
 **Goal:** PoC-quality screenshots without leaving recon-deck.
