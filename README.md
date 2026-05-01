@@ -1,45 +1,136 @@
-# recon-deck
+<div align="center">
 
-> _From nmap output to an actionable, port-aware recon checklist in under 30 seconds — offline, single-binary self-host, every engagement export-ready as Markdown._
+# 🛰️ recon-deck
 
-![GHCR](https://img.shields.io/badge/ghcr.io-recon--deck-blue)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Next.js](https://img.shields.io/badge/Next.js-15.5-black)
+**From `nmap` output to an actionable, port-aware recon checklist in under 30 seconds.**
+Offline. Self-hosted. Every engagement export-ready as Markdown.
 
-Paste nmap text / XML / greppable output (or import an AutoRecon `results/` folder) and every open port becomes a card with pre-filled commands (IP interpolated), HackTricks links, tickable checks, evidence screenshots, and a notes field. Multi-host engagements get a host selector and per-host scoping. Built for OSCP/HTB students and solo pentesters who currently juggle 8 browser tabs and a scratch Obsidian file per box.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
+[![Schema](https://img.shields.io/badge/schema-0018-orange)](src/lib/db/migrations/)
+[![GHCR](https://img.shields.io/badge/ghcr.io-kocaemre%2Frecon--deck-2496ED?logo=docker&logoColor=white)](https://github.com/kocaemre/recon-deck/pkgs/container/recon-deck)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js)](https://nextjs.org)
+[![Offline-first](https://img.shields.io/badge/network-offline_by_default-success)](SECURITY.md)
 
-<!-- ![recon-deck demo](docs/demo.gif) (GIF to be added — record an 8-12 second clip of nmap paste → cards) -->
+</div>
 
 ---
 
-## Features at a glance
+Paste nmap text / XML / greppable output — or drag in an AutoRecon `results/` zip — and every open port becomes a card with pre-filled commands (IP interpolated), HackTricks links, tickable checks, evidence screenshots, and a notes field.
 
-- **Multi-format ingest** — nmap `-oN` text, `-oX` XML, `-oG` greppable; multi-host scans become a host selector in the header
-- **AutoRecon import** — drag a `results/` zip; per-port files, manual commands, gowitness screenshots, patterns / errors logs all surface in the right places
-- **Re-import + diff** — re-paste an nmap output to refresh an engagement; the heatmap badges new ports `NEW` and previously-open ports `CLOSED` (`scans: N` chip in the header tracks how many imports you've done)
-- **KB-driven port cards** — port, service, product/version match shipped YAML KB; commands have `{IP}` / `{HOST}` / `{PORT}` / `{WORDLIST_*}` placeholders interpolated for the active host
-- **Active Directory tooling baked in** — netexec (`nxc`) for SMB / LDAP / WinRM / RDP enumeration + spraying + LAPS dump + secretsdump; impacket suite for AS-REP roasting (`GetNPUsers`), Kerberoasting (`GetUserSPNs`), DCSync (`secretsdump`), TGT request, RPC dump; kerbrute for user enum + lockout-safe password spray; bloodhound-python (LDAP / LDAPS / Global Catalog); coercion helpers (PetitPotam, PrinterBug); shadow-credentials via pyWhisker. Ships as part of the `88` / `135` / `389` / `445` / `464` / `636` / `3268` / `3389` / `5985` KB entries — every relevant DC port surfaces the right command.
-- **Known-vulns auto-match** — when a port's `<product> <version>` matches a KB pattern (e.g. `vsFTPd 2.3.4`), the vulnerability + CVE + reference link surface directly on the port card
-- **searchsploit lookup** — one-click `searchsploit -t "<product>"` per port, results cached, friendly error if exploitdb isn't installed
-- **Findings catalog** — pentester-discovered findings (severity / title / description / CVE / evidence refs), grouped by severity in the side panel
-- **One-click "Add as finding"** — every KB known-vuln row and every searchsploit hit gets a `+ finding` button that pre-populates the finding modal (severity = KB risk tier, CVE auto-extracted from the note/title, port scope locked to the active port)
-- **Evidence pane** — per-port drag-drop / clipboard-paste screenshots; AutoRecon's gowitness PNGs auto-import into the right port's evidence list
-- **Manual ports** — heatmap "+ Add port" for services nmap missed (custom DNS zone transfer, alternate banner, etc.)
-- **Custom commands** — personal command snippets stored in `/settings/commands`, surfaced alongside KB commands, scoped by service / port
-- **Wordlist overrides** — `/settings/wordlists` rewrites `{WORDLIST_*}` placeholders to your own SecLists / dirb paths
-- **Cross-engagement search** — `⌃⇧F` opens an FTS5 modal, BM25-ranked across every engagement, hit rows show host context
-- **Six export formats** — Markdown (Obsidian frontmatter), JSON, single-file HTML, Findings CSV, SysReptor JSON, PwnDoc YAML, plus print-to-PDF report route
-- **Multi-host aware exports** — SysReptor scope and PwnDoc scope list every host; markdown / HTML render one section per host
-- **Sidebar engagement actions** — every row gets a hover-kebab with **Rename** (free-form label override), **Duplicate** (deep-copy: clone an engagement plus every port, script, note, evidence, finding, and scan history into a fresh row), and **Delete** (shadcn `AlertDialog` confirmation, no native `confirm()` dialogs)
-- **Command palette parity** (`⌘K`) — every action that lives in the UI also lives in the palette: **Add finding**, **Re-import**, **Settings**, **Delete engagement**, plus the six exports + Print
-- **KB editor** — `/settings/kb` paste-validate-save form for user YAML entries; live `KbEntrySchema` validation with field-level Zod issues, atomic save under `RECON_KB_USER_DIR` via a strict alnum/`-`/`_` filename allowlist, in-memory cache invalidated immediately so the new entry surfaces without a server restart
-- **KB hot-reload** — `fs.watch` on the shipped + user KB directories flips a "dirty" flag that the next request rebuilds; edit a YAML in your editor and the next page render picks it up
-- **Settings index** — `/settings` central page lists every engagement with a destructive **Delete** action (cascades through ports, scripts, evidence, findings, scan history) plus jump-off links to the **wordlist / custom command / KB editor** libraries
-- **Migration safety** — boot snapshots the live DB to `data/recon-deck.db.backup-pre-NNNN` via `VACUUM INTO` before applying anything new, wraps `migrate()` in try/catch with a copy-pasteable rollback message, and runs `PRAGMA integrity_check` + `PRAGMA foreign_key_check` after every migration
-- **First-run onboarding** — `/welcome` 4-step flow (scope · tour · local paths · updates) seeds an `app_state` singleton with your `local_export_dir`, `kb_user_dir`, `wordlist_base`, and the GitHub release-check toggle. Layout guards bounce un-onboarded operators to `/welcome` automatically; replay anytime from `/settings → First-run`
-- **Sample engagement** — "Try sample" on the paste panel inserts a canned 10-port HTB-easy box marked `is_sample = true`. The header surfaces a `SAMPLE` chip + a single-click `Discard sample` hard-delete button so it stays clearly signposted
-- **Notify-only update check** — opt-in toggle pings `api.github.com/repos/kocaemre/recon-deck/releases/latest` once per browser session; new tags surface a non-blocking toast with a "Release notes" link. Installs stay manual (`docker pull` / `git pull`) — no auto-update path
-- **Desktop-only viewport guard** — the heatmap layout assumes ≥ 1280px width. Narrower viewports get a clean "needs a wider screen" explainer instead of a cramped, unusable UI
+Built for **OSCP / HTB students and solo pentesters** who currently juggle 8 browser tabs and a scratch Obsidian file per box.
+
+<div align="center">
+  <img src="docs/screenshots/02-engagement-heatmap.png" alt="recon-deck heatmap — 28 ports across one host, KB-driven risk + check counts on each card" width="1100">
+  <br>
+  <sub><i>An engagement view: 28 open ports, KB-matched risk colors, per-port check completion. <a href="docs/screenshots/">More screenshots →</a></i></sub>
+</div>
+
+<br>
+
+```bash
+# 30-second smoke test — pulls the image, starts on http://localhost:13337
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+```
+
+---
+
+## Why recon-deck
+
+| Without it | With it |
+|---|---|
+| 8 browser tabs per box (HackTricks, payloadsallthethings, gtfobins, …) | One page per port, prefilled commands ready to copy |
+| Hand-typing `nmap -p- -sV` boilerplate per service | KB-driven commands with `{IP}` / `{HOST}` / `{PORT}` / `{WORDLIST_*}` placeholders |
+| Lost track of which checks you ran on box #7 | Tickable checklist + per-port notes saved in SQLite |
+| Markdown report = manual copy-paste from notes | One-click export: Markdown / HTML / JSON / SysReptor / PwnDoc / PDF |
+| AutoRecon dump → folder spelunking | Drop the zip, every per-port file routed to the right card |
+
+---
+
+## Feature highlights
+
+<details>
+<summary><b>📥 Ingest</b> — nmap text / XML / greppable + AutoRecon zip + manual ports</summary>
+
+- **Multi-format nmap parser** — `-oN`, `-oX`, `-oG`. Multi-host scans become a host-selector chip in the header
+- **AutoRecon zip import** — drag the `results/` folder zipped; per-port service files, `_manual_commands.txt`, gowitness screenshots, patterns / errors logs all routed automatically
+- **Re-import + diff** — re-paste a fresh nmap output and the heatmap badges new ports `NEW` and previously-open ports `CLOSED`. Header `scans: N` chip tracks how many imports you've done
+- **Manual ports** — heatmap `+ Add port` for services nmap missed (DNS zone transfer, alt banners, etc.)
+
+</details>
+
+<details>
+<summary><b>🎯 Triage</b> — KB-driven port cards, known-vulns, searchsploit, findings catalog</summary>
+
+- **KB-driven cards** — port + service + product/version match shipped YAML KB → tickable checks, prefilled commands, HackTricks links
+- **Active Directory toolkit** — `nxc` (netexec), impacket (`GetNPUsers`, `GetUserSPNs`, `secretsdump`), kerbrute, bloodhound-python, PetitPotam, pyWhisker — all wired to the right DC ports (88/135/389/445/464/636/3268/3389/5985)
+- **Known-vulns auto-match** — `vsFTPd 2.3.4` and friends → vuln + CVE + ref link surfaces on the port card
+- **searchsploit lookup** — one-click `searchsploit -t "<product>"` per port, cached
+- **Findings catalog** — severity / title / description / CVE / evidence refs. One-click `+ finding` button on KB rows pre-populates the modal
+
+</details>
+
+<details>
+<summary><b>🖼️ Evidence</b> — per-port screenshots, AutoRecon gowitness import, native annotation</summary>
+
+- **Drag-drop / clipboard-paste** screenshots into a per-port evidence pane
+- **Native HTML5 canvas annotation** — Box / Arrow / Pencil / Text tools, 5-color palette, undo stack. Save chains a new evidence row via `parent_evidence_id` so the original always survives
+- **AutoRecon gowitness / aquatone PNGs** auto-import into the matching port's evidence list
+
+</details>
+
+<details>
+<summary><b>📤 Export</b> — Markdown, JSON, HTML, CSV, SysReptor, PwnDoc, print-to-PDF</summary>
+
+- **Six export formats** plus a print-optimised PDF route
+- **Markdown** ships with Obsidian-compatible frontmatter
+- **SysReptor JSON** + **PwnDoc YAML** for reporting-tool feeds
+- **Findings CSV** for spreadsheet triage
+- **Multi-host aware** — SysReptor scope and PwnDoc scope list every host; markdown / HTML render one section per host
+
+</details>
+
+<details>
+<summary><b>⌨️ Workflow</b> — command palette, FTS5 search, keyboard shortcuts, sidebar actions</summary>
+
+- **Command palette** (`⌘K`) — every UI action lives in the palette: add finding, re-import, settings, delete, exports, print
+- **Cross-engagement search** (`⌃⇧F`) — FTS5 + BM25, hit rows show host context
+- **Sidebar engagement actions** — hover-kebab with rename / duplicate (deep-copy) / delete (shadcn AlertDialog)
+- **Custom commands** + **wordlist overrides** at `/settings/commands` and `/settings/wordlists` — your snippets surface alongside KB commands
+
+</details>
+
+<details>
+<summary><b>📚 Knowledge base</b> — YAML KB, in-app editor, hot-reload</summary>
+
+- **YAML KB** — drop entries in `/kb` (or wherever you point `kb_user_dir`); shipped KB lives under `knowledge/`
+- **In-app editor** at `/settings/kb` — paste, validate against the Zod `KbEntrySchema`, save under a strict filename allowlist
+- **Hot reload** — `fs.watch` on shipped + user dirs flips a dirty flag, next request rebuilds. Edit a YAML in your editor, refresh, see your change
+- **In-app editor** at `/settings/kb` — paste, validate, save (atomic write under a strict `[A-Za-z0-9_-]` filename allowlist)
+
+</details>
+
+<details>
+<summary><b>🛡️ Safety</b> — migration backup, host-header allowlist, rate limiter, offline-by-default</summary>
+
+- **Pre-migration snapshots** via `VACUUM INTO` — boot writes `data/recon-deck.db.backup-pre-NNNN` before any new migration runs. Failure logs surface a copy-pasteable `cp` rollback line
+- **Post-migration `PRAGMA integrity_check` + `foreign_key_check`** — either failing aborts boot
+- **Host-header allowlist middleware** — defends DNS-rebinding when the app is reachable on `0.0.0.0`
+- **Per-IP rate limiter** on `/api/*` — defense-in-depth for the LAN-exposure case
+- **Offline by default** — zero outbound HTTP unless the operator opts in to the GitHub release check
+
+</details>
+
+<details>
+<summary><b>🚀 First-run</b> (v2.1.0) — onboarding, sample engagement, update toast</summary>
+
+- **`/welcome` 4-step onboarding** — scope · tour · local paths · updates. Seeds the `app_state` singleton with your `local_export_dir`, `kb_user_dir`, `wordlist_base`, and the release-check toggle
+- **Replay onboarding** from `/settings → First-run` — paths preserved
+- **Sample engagement** — "Try sample" on the paste panel inserts a canned 10-port HTB-easy box marked `is_sample = true`. Header surfaces a `SAMPLE` chip + single-click Discard
+- **Notify-only update check** (opt-in) — pings `api.github.com/repos/kocaemre/recon-deck/releases/latest` once per session, toasts a "Release notes" link if a newer tag exists. Installs stay manual
+- **Desktop-only viewport guard** — `< 1280px` shows a clean "needs a wider screen" explainer
+
+</details>
 
 ---
 
