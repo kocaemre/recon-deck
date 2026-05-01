@@ -85,6 +85,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
       ? captionRaw.trim()
       : undefined;
 
+  // v2.0.0 #7: optional parent linkage. The screenshot annotator POSTs
+  // the source row's id alongside the new annotated PNG so the new
+  // evidence row records its provenance.
+  const parentRaw = formData.get("parentEvidenceId");
+  let parentEvidenceId: number | null = null;
+  if (parentRaw && typeof parentRaw === "string" && parentRaw.length > 0) {
+    const parsed = parseInt(parentRaw, 10);
+    if (Number.isInteger(parsed) && parsed > 0) parentEvidenceId = parsed;
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const bytes = Buffer.from(arrayBuffer);
 
@@ -98,6 +108,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       bytes,
       caption,
       source: "manual",
+      parentEvidenceId,
     });
   } catch (err) {
     return NextResponse.json(

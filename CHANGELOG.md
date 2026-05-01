@@ -2,6 +2,24 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-05-01
+
+Major version bump because the UI surface expands meaningfully (full-screen annotation modal, new schema column, new evidence flow). Underlying data model is fully backwards-compatible.
+
+### Added
+
+- **Screenshot annotation (#7) (Migration 0016).** New `port_evidence.parent_evidence_id INTEGER NULL` column. Every image evidence row in `EvidencePane` gains a per-tile **Annotate** button. Click opens a full-screen `AnnotatorModal` that loads the source PNG onto an HTML5 canvas and exposes four tools: **Box**, **Arrow**, **Pencil**, **Text**. Five-color palette (red / green / blue / yellow / white). Undo stack. Save exports a PNG via `canvas.toBlob()` and POSTs a NEW evidence row with `parentEvidenceId` set to the source — the original always survives. Annotated rows render a `GitFork` chip in the gallery so provenance is visible at a glance.
+- **Zero new dependencies.** Plan called for `tldraw` or `fabric.js`; native canvas turned out small enough to keep the bundle delta at zero. Re-evaluate if the operator asks for shapes/layers we don't currently support.
+- **`evidence-repo` test coverage.** First test file for the evidence repo; pins the parent linkage roundtrip and the legacy default-null behaviour.
+
+### Migrations
+
+- **0016** `port_evidence.parent_evidence_id INTEGER NULL`. Additive — no FK constraint (SQLite limitation), no index. Application invariant: parent rows are scoped to the same engagement; stale ids degrade silently to "no chip".
+
+### Tests
+
+- 458 / 458 passing.
+
 ## [1.4.1] — 2026-05-01
 
 Patch bundle.

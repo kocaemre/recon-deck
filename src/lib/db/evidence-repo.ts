@@ -35,6 +35,13 @@ export interface CreateEvidenceInput {
   bytes: Buffer;
   caption?: string;
   source?: "manual" | "autorecon-import";
+  /**
+   * Migration 0016 (v2.0.0 #7): when set, links the new row back to
+   * an existing evidence id. Used by the screenshot annotator save
+   * path so the original capture stays untouched and the annotated
+   * variant can render an "annotated from #N" affordance.
+   */
+  parentEvidenceId?: number | null;
 }
 
 export function createEvidence(
@@ -63,6 +70,7 @@ export function createEvidence(
       data_b64: input.bytes.toString("base64"),
       caption: input.caption ?? null,
       source: input.source ?? "manual",
+      parent_evidence_id: input.parentEvidenceId ?? null,
       created_at: now,
     })
     .returning()

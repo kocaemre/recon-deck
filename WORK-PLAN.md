@@ -215,7 +215,7 @@ expands meaningfully (new modal, new component dependency).
 
 ### Tasks
 
-- [ ] **#7 — Screenshot annotation** _(3–4 sa)_
+- [x] **#7 — Screenshot annotation** _(3–4 sa)_ — DONE (native Canvas, zero-dep)
   - Add `tldraw` (or fabric.js if tldraw is too heavy — measure bundle delta first)
   - Evidence pane gets an "**Annotate**" button per row
   - Click opens fullscreen modal with the image loaded onto the canvas

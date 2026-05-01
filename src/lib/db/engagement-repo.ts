@@ -433,6 +433,7 @@ export function getById(db: Db, id: number): FullEngagement | null {
       caption: port_evidence.caption,
       source: port_evidence.source,
       created_at: port_evidence.created_at,
+      parent_evidence_id: port_evidence.parent_evidence_id,
       // Stand-in for the full-shape `PortEvidence` consumer contract.
       // Empty string keeps the type narrow without adding a separate
       // "metadata only" alias type. Consumers that actually need the

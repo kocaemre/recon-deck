@@ -559,6 +559,13 @@ export const port_evidence = sqliteTable(
     source: text("source", { enum: ["manual", "autorecon-import"] })
       .notNull()
       .default("manual"),
+    /**
+     * Migration 0016 (v2.0.0 #7): id of the source evidence row this
+     * one was annotated from. Null = standalone upload. Stamped by the
+     * screenshot-annotator save path; UI uses it to surface a chip
+     * back-linking the annotated child to its original parent.
+     */
+    parent_evidence_id: integer("parent_evidence_id"),
     created_at: text("created_at").notNull(),
   },
   (t) => [

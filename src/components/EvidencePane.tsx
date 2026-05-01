@@ -15,9 +15,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, X, Trash2 } from "lucide-react";
+import { Upload, X, Trash2, Pencil, GitFork } from "lucide-react";
 import { toast } from "sonner";
 import type { PortEvidence } from "@/lib/db/schema";
+import { AnnotatorModal } from "@/components/AnnotatorModal";
 
 interface EvidencePaneProps {
   engagementId: number;
@@ -33,6 +34,8 @@ export function EvidencePane({
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [lightbox, setLightbox] = useState<PortEvidence | null>(null);
+  // v2.0.0 #7: which evidence row is currently being annotated.
+  const [annotating, setAnnotating] = useState<PortEvidence | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -250,28 +253,81 @@ export function EvidencePane({
                 {ev.source === "autorecon-import" ? "AR · " : ""}
                 {ev.filename}
               </div>
-              <button
-                type="button"
-                onClick={() => onDelete(ev)}
-                title="Delete evidence"
-                aria-label="Delete evidence"
+              {/* v2.0.0 #7: per-row hover toolbar — Annotate + Delete. */}
+              <div
                 style={{
                   position: "absolute",
                   top: 4,
                   right: 4,
-                  width: 18,
-                  height: 18,
-                  display: "grid",
-                  placeItems: "center",
-                  border: "1px solid var(--border-strong)",
-                  borderRadius: 3,
-                  background: "rgba(0,0,0,0.55)",
-                  color: "var(--risk-crit)",
-                  cursor: "pointer",
+                  display: "flex",
+                  gap: 4,
                 }}
               >
-                <Trash2 size={10} />
-              </button>
+                {ev.mime.startsWith("image/") && (
+                  <button
+                    type="button"
+                    onClick={() => setAnnotating(ev)}
+                    title="Annotate this screenshot"
+                    aria-label="Annotate"
+                    style={{
+                      width: 18,
+                      height: 18,
+                      display: "grid",
+                      placeItems: "center",
+                      border: "1px solid var(--border-strong)",
+                      borderRadius: 3,
+                      background: "rgba(0,0,0,0.55)",
+                      color: "var(--accent)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Pencil size={10} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onDelete(ev)}
+                  title="Delete evidence"
+                  aria-label="Delete evidence"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    display: "grid",
+                    placeItems: "center",
+                    border: "1px solid var(--border-strong)",
+                    borderRadius: 3,
+                    background: "rgba(0,0,0,0.55)",
+                    color: "var(--risk-crit)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={10} />
+                </button>
+              </div>
+              {/* v2.0.0 #7: provenance chip when this evidence was
+                  annotated from another row. Lives bottom-left so it
+                  doesn't crowd the action toolbar. */}
+              {ev.parent_evidence_id != null && (
+                <span
+                  className="mono inline-flex items-center gap-1"
+                  style={{
+                    position: "absolute",
+                    bottom: 22,
+                    left: 4,
+                    padding: "1px 5px",
+                    borderRadius: 3,
+                    background: "rgba(0,0,0,0.65)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
+                    fontSize: 9,
+                    lineHeight: 1.4,
+                  }}
+                  title={`Annotated from evidence #${ev.parent_evidence_id}`}
+                >
+                  <GitFork size={9} />
+                  annotated
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -344,6 +400,19 @@ export function EvidencePane({
             </button>
           </div>
         </div>
+      )}
+
+      {/* v2.0.0 #7: screenshot annotator. Mounted lazily so the canvas
+          render path doesn't run for engagements without evidence. */}
+      {annotating && (
+        <AnnotatorModal
+          engagementId={engagementId}
+          evidenceId={annotating.id}
+          filename={annotating.filename}
+          open
+          onOpenChange={(o) => !o && setAnnotating(null)}
+          onSaved={() => router.refresh()}
+        />
       )}
     </div>
   );
