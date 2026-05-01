@@ -2,6 +2,21 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] — 2026-05-01
+
+Patch bundle.
+
+### Added
+
+- **`npm run kb:check-links`** — CLI tool that walks every `knowledge/**.yaml` and verifies every `url:` / `link:` field returns a real page (not a redirect-to-404 mdbook stub). Use `--quick` for HEAD-only. Caught the HackTricks site rebuild after-the-fact; now any future site move surfaces immediately.
+
+### Changed
+
+- **HackTricks links rewritten** to the new `hacktricks.wiki/en/...html` canonical (33 KB files + 3 fixtures). The old `book.hacktricks.xyz/...` paths now redirect to a generic 404 page that returns HTTP 200 — easy to miss with a naive HEAD check, hence the new `kb:check-links` script.
+- **3268-gc.yaml** Microsoft Learn link replaced with the actual reachable Server 2003 docs page (the Server 2025 ad-ds/component-updates path was 404).
+- **Tag chips** in the sidebar now ride a deterministic FNV-hash → HSL color so the same tag keeps the same hue across renders. Same pattern the heatmap uses for risk colors; tints are dark-mode-friendly (low saturation bg + light fg).
+- **`fast-xml-parser`** bumped 5.5.12 → 5.7.2 (npm advisory: XMLBuilder comment/CDATA injection — moderate). Caret range now `^5.7.2`.
+
 ## [1.4.0] — 2026-05-01
 
 Polish bundle. Six small UX wins, plus the OS-detection chip lifted into the heatmap toolbar after a user pointed out it was buried at the bottom of the page.

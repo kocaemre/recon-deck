@@ -238,14 +238,13 @@ don't leak away:
   wants to spawn a quick popup against an active port to add a custom
   one-shot checklist item (vs. editing the YAML KB). Live alongside the
   existing kebab actions; persist to a per-port `custom_checks` table.
-- **KB hacktricks link audit + sweep** _(user spotted 2026-05-01)_ —
-  hacktricks shipped a 2026 site rebuild: `book.hacktricks.xyz/...`
-  redirects to a generic `404.html` (HTTP 200 mdbook page) for most
-  legacy slugs. Need to (1) move every shipped KB resource URL from
-  `book.hacktricks.xyz` → `book.hacktricks.wiki/en/...html`, (2) verify
-  each new slug 200s with a real title (not "Page not found - HackTricks"),
-  (3) emit a `npm run kb:check-links` script that operators can run
-  before opening a PR adding new YAML.
+- ~~**KB hacktricks link audit + sweep**~~ — DONE (commit `d4f9…`,
+  2026-05-01). 33 YAML files + 3 fixtures rewritten against the
+  HackTricks-wiki/hacktricks master tree (folder slugs →
+  `/<slug>/index.html`, single .md slugs → `/<slug>.html`). 27/27
+  unique URLs return real titles. Follow-up: still want the
+  `npm run kb:check-links` CI guard so we don't re-discover this from
+  scratch the next time HackTricks moves.
 
 - **API rate limit middleware** — single-user is fine, but LAN exposure
   warrants a token-bucket. Maybe v1.4 if there's room.

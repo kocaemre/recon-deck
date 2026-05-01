@@ -1,6 +1,6 @@
 {
   "name": "recon-deck",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint:kb": "tsx scripts/lint-kb.ts",
+    "kb:check-links": "tsx scripts/check-kb-links.ts",
     "analyze": "ANALYZE=true next build",
     "check:bundle": "node scripts/ci/check-bundle-size.mjs",
     "typecheck": "tsc --noEmit"
@@ -43,7 +44,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "drizzle-orm": "0.45.2",
-    "fast-xml-parser": "5.5.12",
+    "fast-xml-parser": "^5.7.2",
     "js-yaml": "4.1.1",
     "jszip": "3.10.1",
     "lucide-react": "^1.8.0",

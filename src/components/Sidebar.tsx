@@ -352,6 +352,7 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
         >
           {allTags.map((tag) => {
             const active = selectedTags.has(tag);
+            const c = tagColors(tag);
             return (
               <button
                 key={tag}
@@ -361,9 +362,9 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
                 style={{
                   padding: "1px 7px",
                   borderRadius: 3,
-                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                  background: active ? "var(--accent-bg, var(--bg-3))" : "var(--bg-2)",
-                  color: active ? "var(--accent)" : "var(--fg-muted)",
+                  border: `1px solid ${active ? c.borderColor : "var(--border)"}`,
+                  background: active ? c.bg : "var(--bg-2)",
+                  color: active ? c.fg : "var(--fg-muted)",
                   fontSize: 10.5,
                   cursor: "pointer",
                   lineHeight: 1.5,
@@ -793,23 +794,26 @@ function SidebarRow({
             className="flex flex-wrap gap-1"
             style={{ marginTop: 4 }}
           >
-            {tags.map((t) => (
-              <span
-                key={t}
-                className="mono"
-                style={{
-                  padding: "0 5px",
-                  borderRadius: 3,
-                  background: "var(--bg-3)",
-                  border: "1px solid var(--border-subtle)",
-                  fontSize: 9.5,
-                  color: "var(--fg-muted)",
-                  lineHeight: 1.55,
-                }}
-              >
-                #{t}
-              </span>
-            ))}
+            {tags.map((t) => {
+              const c = tagColors(t);
+              return (
+                <span
+                  key={t}
+                  className="mono"
+                  style={{
+                    padding: "0 5px",
+                    borderRadius: 3,
+                    background: c.bg,
+                    border: `1px solid ${c.borderColor}`,
+                    fontSize: 9.5,
+                    color: c.fg,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  #{t}
+                </span>
+              );
+            })}
           </div>
         )}
         <div
@@ -1055,6 +1059,34 @@ function Chip({
       {children}
     </span>
   );
+}
+
+/**
+ * v1.4.1: deterministic tag → HSL color. Same FNV-1a-style hash that
+ * the heatmap uses for risk colors so tag chips stay readable in dark
+ * mode and the same tag always gets the same hue across renders.
+ *
+ * Returns:
+ *   borderColor — saturated edge so the chip pops against the row bg
+ *   bg          — low-alpha tint for the fill
+ *   fg          — light text that meets ~AA on the tinted bg
+ */
+function tagColors(tag: string): {
+  borderColor: string;
+  bg: string;
+  fg: string;
+} {
+  let h = 2166136261;
+  for (let i = 0; i < tag.length; i++) {
+    h ^= tag.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const hue = Math.abs(h) % 360;
+  return {
+    borderColor: `hsl(${hue}, 55%, 45%)`,
+    bg: `hsl(${hue}, 40%, 18%)`,
+    fg: `hsl(${hue}, 70%, 78%)`,
+  };
 }
 
 function formatRelative(iso: string): string {

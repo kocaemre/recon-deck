@@ -31,7 +31,7 @@ commands:
     template: "windapsearch -d EXAMPLE.LOCAL --dc-ip {IP} -u <user> -p <pass> -t trusts"
 resources:
   - title: "Global Catalog overview"
-    url: "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/component-updates/the-global-catalog"
+    url: "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc737410(v=ws.10)"
     author: Microsoft Learn
   - title: "389,636 - Pentesting LDAP"
     url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ldap.html"
