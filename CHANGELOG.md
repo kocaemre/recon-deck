@@ -2,6 +2,28 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-05-01
+
+Minor. First-run onboarding flow + sample engagement + desktop-only viewport guard.
+
+### Added
+
+- **First-run onboarding** at `/welcome` — 4-step flow (Scope · Tour · Local paths · Updates). New `app_state` singleton table (Migration 0017) persists `onboarded_at`, `local_export_dir`, `kb_user_dir`, `wordlist_base`, `update_check`. Layout guards bounce un-onboarded operators to `/welcome` and onboarded operators away from it. Animated `BootTerminal` honours `prefers-reduced-motion`.
+- **Sample engagement** (Migration 0018 adds `engagements.is_sample`). The existing "Try sample" button now stamps `is_sample = true`; the engagement header surfaces a `SAMPLE` accent chip + "Discard sample" hard-delete button (single-click, no confirm — sample data is signposted).
+- **Settings → First-run section.** `Replay onboarding` clears `onboarded_at` (paths preserved) and bounces back to `/welcome`. `Check GitHub for new releases` toggles `app_state.update_check`.
+- **`UpdateAvailableToast`** — when the GitHub release-check toggle is on, recon-deck pings `api.github.com/repos/kocaemre/recon-deck/releases/latest` once per browser session and toasts the new tag with a "Release notes" link. Notify-only — installs are still manual (`docker pull` / `git pull`). Process-level 1-hour cache. Honours OPS-03 — when the toggle is off, the route short-circuits server-side and no outbound fetch happens.
+- **Desktop-only viewport guard** at `< 1280px`. Hides the cramped mobile rendering and shows a clean explainer instead.
+
+### Changed
+
+- **`createFromScan`** accepts an `opts.isSample` flag (defaults `false`).
+- **`getKb()` / `effectiveAppState()`** — KB user directory now resolves from `app_state.kb_user_dir` first, falling back to `RECON_KB_USER_DIR` env (legacy).
+- **`OpenInEditorLink`** accepts a `localExportDir` prop forwarded by `EngagementHeader` from the server. Wins over `NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR` build-time env so the path can be changed in `/settings` without a rebuild.
+
+### Tests
+
+- 471 / 471 passing. New: 7 `app_state` repo cases (singleton seeding, partial UPDATE, `markOnboarded`, `replayOnboarding` preserves paths, DB→env precedence, env fallback, both-null).
+
 ## [2.0.1] — 2026-05-01
 
 Patch.

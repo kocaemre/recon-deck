@@ -194,3 +194,20 @@ code, pre, .mono {
 @media (prefers-reduced-motion: reduce) {
   [style*="rd-blink"] { animation: none !important; opacity: 1; }
 }
+
+/* v2.1.0: desktop-only fallback. recon-deck's heatmap layout assumes a
+ * ≥ 1280px viewport — narrower screens cram the sidebar + main + detail
+ * pane to the point of being unusable. Show a clean explainer instead
+ * of a broken UI. Print rules above already hide #recon-mobile-block. */
+#recon-mobile-block { display: none; }
+@media (max-width: 1279px) {
+  body > main,
+  body > aside,
+  body > [data-sonner-toaster],
+  body > [role="dialog"] {
+    display: none !important;
+  }
+  #recon-mobile-block {
+    display: flex !important;
+  }
+}

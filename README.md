@@ -251,6 +251,30 @@ After every successful migration, `PRAGMA integrity_check` + `PRAGMA foreign_key
 
 ---
 
+## Upgrading
+
+recon-deck is **notify-only** for updates — installs are always manual so you control when and how the binary on disk changes. There is no auto-update path and no telemetry; the optional GitHub release check is opt-in (toggle in `/settings → First-run`) and only ever pings `api.github.com/repos/kocaemre/recon-deck/releases/latest`.
+
+**Docker:**
+
+```bash
+docker pull ghcr.io/kocaemre/recon-deck:latest
+docker stop recon-deck && docker rm recon-deck
+# then re-run your usual `docker run …` from Quick Start above.
+```
+
+The SQLite volume (`recon-deck-data`) is mounted by name in the docs above, so it survives the stop/rm/run cycle. Migrations are applied automatically on the next boot — never edit `schema.ts` after the fact; add a new `0019_*.sql` instead.
+
+**Local dev:**
+
+```bash
+git pull && npm install && npm run dev
+```
+
+The migration runner picks up new SQL files on boot. If a migration ever fails, the runner stops the boot — fix the migration and restart; nothing is half-applied.
+
+**Toggling the release check:** off by default. Enable it via `/settings → First-run → Check GitHub for new releases`. When on, you'll see one toast per browser session if a newer tag exists, with a link to the release notes. Disable it any time — the toggle persists in the local SQLite, not in env.
+
 ## Tech Stack
 
 | Layer         | Technology                                 |
