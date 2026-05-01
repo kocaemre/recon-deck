@@ -17,7 +17,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RotateCw, Search } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { RescanModal } from "@/components/RescanModal";
 import { OpenInEditorLink } from "@/components/OpenInEditorLink";
@@ -129,7 +129,6 @@ export function EngagementHeader({
   const router = useRouter();
   const prevIpRef = useRef(targetIp);
   const prevHostnameRef = useRef(targetHostname ?? "");
-  const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
   // Lifted into the store so the CommandPalette's "Re-import" action can
   // trigger the same modal without prop-drilling.
   const rescanOpen = useUIStore((s) => s.rescanOpen);
@@ -384,26 +383,10 @@ export function EngagementHeader({
             <RotateCw size={11} />
             Re-import
           </button>
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            className="btn-sm-ghost inline-flex items-center gap-1.5"
-            style={{
-              height: 24,
-              padding: "0 8px",
-              borderRadius: 5,
-              background: "transparent",
-              color: "var(--fg-muted)",
-              fontSize: 11.5,
-              fontWeight: 500,
-              border: "1px solid transparent",
-              cursor: "pointer",
-            }}
-          >
-            <Search size={12} />
-            Palette
-            <Kbd>⌘K</Kbd>
-          </button>
+          {/* v2.1.1: Palette button removed from the header — Cmd+K
+              shortcut still opens it. The visible button overlapped
+              conceptually with sidebar's "Search all engagements" and
+              ate header real estate next to the chip stack. */}
           {/* v1.4.0 #12: opt-in vscode://file/… link. Renders nothing
               when the user hasn't enabled the toggle in /settings or
               when NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR is unset. */}
@@ -663,28 +646,6 @@ function Divider() {
       aria-hidden
       style={{ width: 1, height: 34, background: "var(--border)" }}
     />
-  );
-}
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="mono inline-flex items-center justify-center"
-      style={{
-        minWidth: 18,
-        height: 18,
-        padding: "0 5px",
-        borderRadius: 3,
-        background: "var(--bg-3)",
-        border: "1px solid var(--border)",
-        borderBottomWidth: 2,
-        fontSize: 10,
-        color: "var(--fg-muted)",
-        lineHeight: 1,
-      }}
-    >
-      {children}
-    </span>
   );
 }
 
