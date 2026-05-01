@@ -21,3 +21,12 @@ prd.md
 # Local export / archive artifacts (manual zips of the repo, AR test bundles, etc.)
 /recon-deck.zip
 *.local.zip
+
+# Defensive — secrets / IDE / OS state never belong in git
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+*.swp
+*~
