@@ -133,6 +133,15 @@ export const engagements = sqliteTable(
      * to the engagement root.
      */
     last_visited_port_id: integer("last_visited_port_id"),
+    /**
+     * Migration 0018: marker for the bundled `lame.htb` sample
+     * engagement seeded by the post-onboarding "Try sample" button.
+     * UI surfaces a `sample` chip on the engagement header and a
+     * one-click "Discard sample" affordance for fast cleanup.
+     */
+    is_sample: integer("is_sample", { mode: "boolean" })
+      .notNull()
+      .default(false),
   },
   (t) => [
     index("engagements_created_at_idx").on(t.created_at),
@@ -703,3 +712,30 @@ export type Host = typeof hosts.$inferSelect;
 
 /** Row type for the scan_history table. */
 export type ScanHistory = typeof scan_history.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// app_state (v1.9.0: first-run onboarding singleton)
+// ---------------------------------------------------------------------------
+
+/**
+ * Single-row k/v table for app-level state. Migration 0017 enforces
+ * id = 1 via a CHECK constraint and seeds the row at install time, so
+ * every read can assume the row exists. The repo's setter does an
+ * UPDATE-only (no upsert) for the same reason.
+ *
+ * `onboarded_at = NULL` is the gate: every render path checks this and
+ * redirects to /welcome until it's set. Replay onboarding clears it.
+ */
+export const app_state = sqliteTable("app_state", {
+  id: integer("id").primaryKey(),
+  onboarded_at: text("onboarded_at"),
+  local_export_dir: text("local_export_dir"),
+  kb_user_dir: text("kb_user_dir"),
+  wordlist_base: text("wordlist_base"),
+  update_check: integer("update_check", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  updated_at: text("updated_at").notNull(),
+});
+
+export type AppState = typeof app_state.$inferSelect;

@@ -120,6 +120,20 @@
       "when": 1778600000000,
       "tag": "0016_add-evidence-parent-link",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1778700000000,
+      "tag": "0017_add-app-state",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1778800000000,
+      "tag": "0018_add-engagement-is-sample",
+      "breakpoints": true
     }
   ]
 }

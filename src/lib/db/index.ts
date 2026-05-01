@@ -27,6 +27,8 @@ export {
   wordlist_overrides,
   hosts,
   scan_history,
+  app_state,
+  type AppState,
   type Engagement,
   type Port,
   type PortScript,
@@ -67,6 +69,15 @@ export {
   archiveEngagement,
   type Db,
 } from "./engagement-repo";
+export {
+  getAppState,
+  setAppState,
+  markOnboarded,
+  replayOnboarding,
+  effectiveAppState,
+  type AppStatePatch,
+  type EffectiveConfig,
+} from "./app-state-repo";
 export { upsertCheck, getChecksByEngagement } from "./checklist-repo";
 export { upsertNote, getNotesByEngagement } from "./notes-repo";
 export {

@@ -84,6 +84,7 @@ function buildEngagement(): FullEngagement {
     writeup: "",
     last_visited_at: null,
     last_visited_port_id: null,
+    is_sample: false,
     // P1-F PR 1: every port carries host_id — fixture's primary host id is 1.
     hosts: [
       {

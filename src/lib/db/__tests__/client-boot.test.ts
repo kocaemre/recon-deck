@@ -56,7 +56,7 @@ describe("DB boot sequence (Plan 02)", () => {
     void db; // no explicit re-run needed; test above covers idempotency
   });
 
-  it("PERSIST-01: all 13 base tables exist after migration", () => {
+  it("PERSIST-01: all 14 base tables exist after migration", () => {
     // Updated in Phase 5 Plan 01: port_commands added for AutoRecon manual commands.
     // Updated in v2 Plan: search_index FTS5 virtual table added (migration 0002).
     // Updated in v2 P0-B: port_evidence added for screenshots/attachments (migration 0003).
@@ -76,6 +76,7 @@ describe("DB boot sequence (Plan 02)", () => {
     const tableNames = result.map((r) => r.name);
 
     expect(tableNames).toEqual([
+      "app_state",
       "check_states",
       "engagements",
       "findings",
