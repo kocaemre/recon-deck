@@ -115,12 +115,10 @@ export function KeyboardShortcutHandler({ engagementId, checksByPort }: Props) {
         return;
       }
 
-      // / — focus search (Open Decision #5: synonym for opening palette)
-      if (e.key === "/" && !isInForm(e.target)) {
-        e.preventDefault();
-        setPaletteOpen(true);
-        return;
-      }
+      // `/` is owned by Sidebar — focuses the engagement filter input.
+      // Used to open the palette here (Open Decision #5) but the Kbd hint
+      // next to "Filter engagements" promises a focus, so the listener
+      // moved to Sidebar to match the UI's own contract.
 
       // ---- Port-context shortcuts (early-return when typing) ----
       if (isInForm(e.target)) return;

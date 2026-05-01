@@ -51,7 +51,50 @@ interface SidebarProps {
 export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
   const [filter, setFilter] = useState("");
   const pathname = usePathname();
+  const router = useRouter();
   const setGlobalSearchOpen = useUIStore((s) => s.setGlobalSearchOpen);
+
+  // Global keyboard shortcuts that live on every page (sidebar mounts in
+  // the root layout). The Kbd hints next to "New engagement" / "Filter
+  // engagements" used to be cosmetic — these handlers wire them up.
+  //
+  //   n  → push("/") (the landing page IS the "new engagement" form)
+  //   /  → focus the sidebar filter input
+  //
+  // Both early-return when the user is already typing in a form so a
+  // textarea / input never gets hijacked by these one-key shortcuts.
+  // The "/" handler also early-returns when the engagement page's
+  // CommandPalette is open (cmdk owns slash inside its input). Cmd+K /
+  // ?  / j/k/x/c remain in KeyboardShortcutHandler — those are
+  // engagement-scoped.
+  useEffect(() => {
+    function isInForm(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      return (
+        el.tagName === "INPUT" ||
+        el.tagName === "TEXTAREA" ||
+        el.isContentEditable
+      );
+    }
+    function onKey(ev: KeyboardEvent) {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (isInForm(ev.target)) return;
+
+      if (ev.key === "n" || ev.key === "N") {
+        ev.preventDefault();
+        router.push("/");
+        return;
+      }
+      if (ev.key === "/") {
+        ev.preventDefault();
+        document.getElementById("sidebar-filter")?.focus();
+        return;
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [router]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
