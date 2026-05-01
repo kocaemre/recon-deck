@@ -21,5 +21,5 @@ commands:
     template: "nmap -p{PORT} --script=smtp-commands,ssl-cert,ssl-enum-ciphers {IP}"
 resources:
   - title: "25 - Pentesting SMTP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smtp/index.html"
     author: HackTricks

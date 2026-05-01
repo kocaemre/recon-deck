@@ -22,5 +22,5 @@ commands:
     template: "nmap -p{PORT} --script=smtp-commands,smtp-enum-users,smtp-brute {IP}"
 resources:
   - title: "25,465,587 - Pentesting SMTP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smtp/index.html"
     author: HackTricks

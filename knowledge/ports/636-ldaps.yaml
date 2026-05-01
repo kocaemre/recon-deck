@@ -32,5 +32,5 @@ commands:
     template: "pywhisker.py -d EXAMPLE.LOCAL -u <user> -p <pass> --target <victim> --action add --dc-ip {IP}"
 resources:
   - title: "389,636 - Pentesting LDAP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ldap.html"
     author: HackTricks

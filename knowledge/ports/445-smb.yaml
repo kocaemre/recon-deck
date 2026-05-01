@@ -72,20 +72,20 @@ known_vulns:
   # products that happen to start with "Samba".
   - match: "Windows Server 2008"
     note: "EternalBlue (MS17-010) — wormable SMBv1 RCE"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
   - match: "smbd 3.0.20"
     note: "Username map script command injection (CVE-2007-2447) — exploits MS-RPC SamrChangePassword"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
   - match: "smbd 4.5"
     note: "SambaCry / EternalRed (CVE-2017-7494) RCE via writable share"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
   - match: "smbd 4.6.0"
     note: "SambaCry / EternalRed (CVE-2017-7494) RCE — affected through 4.6.4"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
 resources:
   - title: "445 - Pentesting SMB"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
     author: HackTricks
   - title: "NetBIOS / SMB Cheatsheet"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/137-138-139-pentesting-netbios"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/137-138-139-pentesting-netbios.html"
     author: HackTricks

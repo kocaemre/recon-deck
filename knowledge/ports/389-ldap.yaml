@@ -43,5 +43,5 @@ commands:
     template: "windapsearch -d EXAMPLE.LOCAL --dc-ip {IP} -u <user> -p <pass> -U"
 resources:
   - title: "389 - Pentesting LDAP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ldap.html"
     author: HackTricks

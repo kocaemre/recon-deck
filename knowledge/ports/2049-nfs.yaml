@@ -23,5 +23,5 @@ commands:
     template: "nmap -p{PORT} --script=nfs-ls,nfs-showmount,nfs-statfs {IP}"
 resources:
   - title: "2049 - Pentesting NFS"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/nfs-service-pentesting"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/nfs-service-pentesting.html"
     author: HackTricks

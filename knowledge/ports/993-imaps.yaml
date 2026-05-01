@@ -20,5 +20,5 @@ commands:
     template: "nmap -p{PORT} --script=imap-capabilities,ssl-cert,ssl-enum-ciphers {IP}"
 resources:
   - title: "143,993 - Pentesting IMAP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-imap"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-imap.html"
     author: HackTricks

@@ -38,10 +38,10 @@ default_creds:
 known_vulns:
   - match: "MySQL 5.5"
     note: "Auth bypass via memcmp() race (CVE-2012-2122)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mysql"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-mysql.html"
 resources:
   - title: "3306 - Pentesting MySQL"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mysql"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-mysql.html"
     author: HackTricks
   - title: "MySQL Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"

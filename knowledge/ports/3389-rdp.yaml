@@ -46,11 +46,11 @@ default_creds:
 known_vulns:
   - match: "Windows 7"
     note: "BlueKeep wormable RCE (CVE-2019-0708)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-rdp.html"
   - match: "Windows Server 2008"
     note: "BlueKeep + ms12-020 DoS"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-rdp.html"
 resources:
   - title: "3389 - Pentesting RDP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rdp"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-rdp.html"
     author: HackTricks

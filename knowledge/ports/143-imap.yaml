@@ -18,5 +18,5 @@ commands:
     template: "nmap -p{PORT} --script=imap-capabilities,imap-ntlm-info,imap-brute {IP}"
 resources:
   - title: "143 - Pentesting IMAP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-imap"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-imap.html"
     author: HackTricks

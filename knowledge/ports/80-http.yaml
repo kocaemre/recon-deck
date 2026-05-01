@@ -39,13 +39,13 @@ commands:
 known_vulns:
   - match: "Apache 2.4.49"
     note: "Path traversal + RCE (CVE-2021-41773)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
   - match: "Apache 2.4.50"
     note: "Path traversal patch bypass (CVE-2021-42013)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
 resources:
   - title: "80,443 - Pentesting Web Methodology"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
     author: HackTricks
   - title: "SecLists Web-Content"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Discovery/Web-Content"

@@ -22,5 +22,5 @@ commands:
     template: "nmap -A -p{PORT} {IP}"
 resources:
   - title: "Pentesting Methodology"
-    url: "https://book.hacktricks.xyz/generic-methodologies-and-resources/pentesting-methodology"
+    url: "https://hacktricks.wiki/en/generic-methodologies-and-resources/pentesting-methodology.html"
     author: HackTricks

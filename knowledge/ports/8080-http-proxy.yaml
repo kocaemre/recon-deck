@@ -43,8 +43,8 @@ default_creds:
     notes: "Jenkins default on some installs"
 resources:
   - title: "8080 - Pentesting Web Methodology"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
     author: HackTricks
   - title: "Tomcat - Pentesting"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/tomcat"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/tomcat/index.html"
     author: HackTricks

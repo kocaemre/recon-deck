@@ -33,11 +33,11 @@ default_creds:
 known_vulns:
   - match: "Redis 4"
     note: "Master-slave replication module load → RCE"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
   - match: "Redis"
     note: "Unauthenticated CONFIG SET dir + SSH key write for code execution"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
 resources:
   - title: "6379 - Pentesting Redis"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/6379-pentesting-redis"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
     author: HackTricks

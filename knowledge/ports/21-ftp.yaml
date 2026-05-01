@@ -38,13 +38,13 @@ default_creds:
 known_vulns:
   - match: "vsFTPd 2.3.4"
     note: "Backdoor — smiley-face username triggers bind shell on tcp/6200 (CVE-2011-2523)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ftp/index.html"
   - match: "ProFTPD 1.3.5"
     note: "Mod_copy RCE (CVE-2015-3306)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ftp/index.html"
 resources:
   - title: "21 - Pentesting FTP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ftp"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ftp/index.html"
     author: HackTricks
   - title: "FTP Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"

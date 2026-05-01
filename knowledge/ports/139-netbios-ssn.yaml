@@ -25,8 +25,8 @@ commands:
     template: "nmap -p{PORT} --script=nbstat,smb-os-discovery {IP}"
 resources:
   - title: "137-138-139 - Pentesting NetBIOS"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/137-138-139-pentesting-netbios"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/137-138-139-pentesting-netbios.html"
     author: HackTricks
   - title: "445 - Pentesting SMB"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
     author: HackTricks

@@ -21,5 +21,5 @@ commands:
     template: "nmap -p{PORT} --script=rpcinfo,nfs-showmount {IP}"
 resources:
   - title: "111 - Pentesting Portmapper"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-rpcbind"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-rpcbind.html"
     author: HackTricks

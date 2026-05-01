@@ -35,13 +35,13 @@ default_creds:
 known_vulns:
   - match: "OpenSSH 7.2"
     note: "Username enumeration via timing (CVE-2016-6210)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ssh.html"
   - match: "OpenSSH 7.7"
     note: "Username enumeration via auth_request (CVE-2018-15473)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ssh.html"
 resources:
   - title: "22 - Pentesting SSH"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ssh.html"
     author: HackTricks
   - title: "SSH Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"

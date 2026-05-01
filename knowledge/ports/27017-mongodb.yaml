@@ -35,8 +35,8 @@ default_creds:
 known_vulns:
   - match: "MongoDB"
     note: "Unauthenticated remote access on default install pre-3.6"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/27017-27018-mongodb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/27017-27018-mongodb.html"
 resources:
   - title: "27017 - Pentesting MongoDB"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/27017-27018-mongodb"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/27017-27018-mongodb.html"
     author: HackTricks

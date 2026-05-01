@@ -20,5 +20,5 @@ commands:
     template: "nmap -p{PORT} --script=pop3-capabilities,ssl-cert,ssl-enum-ciphers {IP}"
 resources:
   - title: "110,995 - Pentesting POP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-pop"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-pop.html"
     author: HackTricks

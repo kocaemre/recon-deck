@@ -41,10 +41,10 @@ default_creds:
 known_vulns:
   - match: "Microsoft SQL Server"
     note: "xp_cmdshell command execution when enabled with sysadmin role"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mssql-microsoft-sql-server"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-mssql-microsoft-sql-server/index.html"
 resources:
   - title: "1433 - Pentesting MSSQL"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-mssql-microsoft-sql-server"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-mssql-microsoft-sql-server/index.html"
     author: HackTricks
   - title: "MSSQL Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"

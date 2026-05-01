@@ -18,5 +18,5 @@ commands:
     template: "nc -nv {IP} {PORT}"
 resources:
   - title: "Pentesting Network Services"
-    url: "https://book.hacktricks.xyz/network-services-pentesting"
+    url: "https://hacktricks.wiki/en/index.html"
     author: HackTricks

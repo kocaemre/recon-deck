@@ -25,5 +25,5 @@ commands:
     template: "rpcclient -U 'EXAMPLE\\<user>%<pass>' {IP} -c 'setuserinfo2 <target> 23 <newpass>'"
 resources:
   - title: "464 - Pentesting Kpasswd"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/464-pentesting-kpasswd"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-kerberos-88/index.html"
     author: HackTricks

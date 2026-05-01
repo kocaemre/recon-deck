@@ -20,5 +20,5 @@ commands:
     template: "nmap -p{PORT} --script=pop3-capabilities,pop3-ntlm-info,pop3-brute {IP}"
 resources:
   - title: "110 - Pentesting POP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-pop"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-pop.html"
     author: HackTricks

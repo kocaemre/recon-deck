@@ -22,5 +22,5 @@ commands:
     template: "smtp-user-enum -M VRFY -U /usr/share/seclists/Usernames/Names/names.txt -t {IP} -p {PORT}"
 resources:
   - title: "25 - Pentesting SMTP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smtp"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smtp/index.html"
     author: HackTricks

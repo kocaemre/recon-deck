@@ -34,5 +34,5 @@ resources:
     url: "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/component-updates/the-global-catalog"
     author: Microsoft Learn
   - title: "389,636 - Pentesting LDAP"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ldap"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ldap.html"
     author: HackTricks

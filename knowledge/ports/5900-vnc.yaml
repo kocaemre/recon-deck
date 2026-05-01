@@ -27,5 +27,5 @@ default_creds:
     notes: "Default on some installs"
 resources:
   - title: "5900 - Pentesting VNC"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-vnc"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-vnc.html"
     author: HackTricks

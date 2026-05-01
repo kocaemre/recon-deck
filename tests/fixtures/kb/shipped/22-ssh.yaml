@@ -9,5 +9,5 @@ commands:
     template: "nc -nv {IP} {PORT}"
 resources:
   - title: "22 - Pentesting SSH"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-ssh"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-ssh.html"
     author: HackTricks

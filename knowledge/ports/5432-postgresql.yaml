@@ -38,10 +38,10 @@ default_creds:
 known_vulns:
   - match: "PostgreSQL 9.3"
     note: "COPY FROM PROGRAM RCE for superuser (intended feature, not CVE)"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-postgresql"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-postgresql.html"
 resources:
   - title: "5432 - Pentesting PostgreSQL"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-postgresql"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-postgresql.html"
     author: HackTricks
   - title: "PostgreSQL Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"

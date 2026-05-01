@@ -39,8 +39,8 @@ default_creds:
 known_vulns:
   - match: "Oracle TNS Listener"
     note: "TNS Poisoning attack (CVE-2012-1675) on unpatched listeners"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener.html"
 resources:
   - title: "1521 - Pentesting Oracle Listener"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/1521-1522-1529-pentesting-oracle-listener.html"
     author: HackTricks

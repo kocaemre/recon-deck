@@ -26,8 +26,8 @@ default_creds:
 known_vulns:
   - match: "Windows Server 2008"
     note: "Eternal Blue (MS17-010) candidate."
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
 resources:
   - title: "445 - Pentesting SMB"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-smb"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
     author: HackTricks

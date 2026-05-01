@@ -36,10 +36,10 @@ commands:
 known_vulns:
   - match: "OpenSSL 1.0.1"
     note: "Heartbleed (CVE-2014-0160) memory disclosure"
-    link: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
 resources:
   - title: "80,443 - Pentesting Web Methodology"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-web"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-web/index.html"
     author: HackTricks
   - title: "TLS Cheatsheet"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"

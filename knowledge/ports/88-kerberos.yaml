@@ -39,5 +39,5 @@ commands:
     template: "impacket-getTGT EXAMPLE.LOCAL/<user>:<pass> -dc-ip {IP}"
 resources:
   - title: "88 - Pentesting Kerberos"
-    url: "https://book.hacktricks.xyz/network-services-pentesting/pentesting-kerberos-88"
+    url: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-kerberos-88/index.html"
     author: HackTricks
