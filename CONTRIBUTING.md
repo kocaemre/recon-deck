@@ -411,7 +411,7 @@ Each of these has a longer rationale in [`ROADMAP.md`](ROADMAP.md).
 Do **not** open a public issue or PR for a security vulnerability. Follow the
 coordinated-disclosure steps in [`SECURITY.md`](SECURITY.md):
 
-- Email: `emrekoca2003@gmail.com`
+- Email: `0xemrek@proton.me`
 - GitHub Security Advisories: <https://github.com/kocaemre/recon-deck/security/advisories/new>
 
 Expected response is best-effort within 7 days. Please wait for a response

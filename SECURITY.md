@@ -8,7 +8,7 @@ recon-deck is a single-user, self-hosted, offline tool. This document describes 
 
 If you find a security issue, please report it through one of these channels:
 
-- **Email:** emrekoca2003@gmail.com
+- **Email:** 0xemrek@proton.me
 - **GitHub Security Advisories:** <https://github.com/kocaemre/recon-deck/security/advisories/new>
 
 This is a solo-maintainer project, not an enterprise offering. Expected response is best-effort within 7 days. Please do not disclose publicly before the maintainer has had a chance to respond.
