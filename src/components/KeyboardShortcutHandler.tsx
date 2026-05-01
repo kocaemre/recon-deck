@@ -34,7 +34,7 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store";
-import { toggleCheck } from "../../app/engagements/[id]/actions";
+import { toggleCheck } from "../../app/(app)/engagements/[id]/actions";
 import { findingToMarkdown } from "@/components/FindingsPanel";
 import type { Finding } from "@/lib/db/schema";
 

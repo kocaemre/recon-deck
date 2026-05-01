@@ -184,3 +184,13 @@ code, pre, .mono {
     word-break: break-all;
   }
 }
+
+/* v1.9.0 #onboarding: blinking caret used by the BootTerminal +
+ * MiniPalette previews. */
+@keyframes rd-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="rd-blink"] { animation: none !important; opacity: 1; }
+}

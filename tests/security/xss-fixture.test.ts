@@ -27,7 +27,7 @@ describe("XSS fixture test (TEST-05)", () => {
   const portDetailPanePath = path.join(componentDir, "PortDetailPane.tsx");
   const engagementPagePath = path.resolve(
     __dirname,
-    "../../app/engagements/[id]/page.tsx",
+    "../../app/(app)/engagements/[id]/page.tsx",
   );
   // Phase 07-04 (UI-11) extracted the per-script render path into
   // StructuredScriptOutput, which is consumed by both the port detail pane

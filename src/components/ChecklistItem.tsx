@@ -10,7 +10,7 @@
 
 import { useOptimistic, useTransition } from "react";
 import { Check } from "lucide-react";
-import { toggleCheck } from "../../app/engagements/[id]/actions";
+import { toggleCheck } from "../../app/(app)/engagements/[id]/actions";
 
 interface ChecklistItemProps {
   engagementId: number;

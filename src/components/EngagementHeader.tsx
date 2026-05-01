@@ -29,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUIStore } from "@/lib/store";
-import { updateEngagementTarget } from "../../app/engagements/[id]/actions";
+import { updateEngagementTarget } from "../../app/(app)/engagements/[id]/actions";
 
 type RiskKey = "critical" | "high" | "medium" | "low" | "info";
 
