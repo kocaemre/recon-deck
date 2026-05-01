@@ -1,0 +1,206 @@
+# recon-deck — Work Plan (internal)
+
+> Internal handoff doc. Not user-facing. Tracks the multi-milestone plan
+> agreed on after v1.1.0 ship. Update status in place; promote shipped
+> items to ROADMAP.md / CHANGELOG.md when each milestone closes.
+>
+> Convention: `[ ]` todo, `[~]` in-progress, `[x]` done.
+> Each task carries its rough effort estimate so a future session can
+> chunk a milestone into a single sitting.
+
+## Status — `2026-04-26`
+
+- v1.1.0 shipped (tag pushed; release.yml workflow rebuild after port migration in flight)
+- 9 commits ahead of v1.0; 439/439 tests; schema 0010
+- WORK-PLAN.md added so a fresh context can resume from here
+
+---
+
+## Milestone v1.2.0 — Portfolio management
+
+**Goal:** make 50+ engagements manageable. Tag, archive, bulk filter, port
+star — the whole sidebar refactor sits inside this one milestone so the
+schema migration + filter logic land together.
+
+**Estimated effort:** 4–5 hours.
+
+### Tasks
+
+- [ ] **#1 + #2 — Engagement tags + archive (combined)** _(2–3 sa)_
+  - Migration `0011_add-engagement-tags-and-archive.sql`:
+    - `engagements.tags TEXT NOT NULL DEFAULT '[]'` (JSON array of strings)
+    - `engagements.is_archived INTEGER NOT NULL DEFAULT 0`
+  - Schema.ts: add `tags`, `is_archived` to `engagements` table
+  - Repo: `setEngagementTags(db, id, tags[])`, `archiveEngagement(db, id, archived)`
+  - API: `PATCH /api/engagements/:id` extends with `tags` and `is_archived` fields
+  - View-model: `listSummaries` returns `tags`, `is_archived`
+  - Sidebar UI:
+    - Tag chips next to engagement name (mono, color from hash)
+    - "Active / Archived" sekme toggle at top (default Active)
+    - Archive count chip next to toggle
+  - Engagement page: `EngagementHeader` gains "Archive" button (toast + sidebar refresh; reverse via the Archived view's "Unarchive")
+  - CommandPalette actions: "Archive engagement", "Add tag…" (prompt → comma-separated)
+  - Tests:
+    - Repo: tag set/clear roundtrip, archive flag roundtrip
+    - View-model: `listSummaries` exposes new fields
+    - Cascade unaffected (delete still works on archived rows)
+
+- [ ] **#4 — Bulk filter chips** _(30 dk)_
+  - Sidebar above engagement list: chip group `[ All ] [ Coverage 0% ] [ Risk ≥ high ] [ Has findings ]`
+  - Chips are toggles; multiple can stack (AND logic)
+  - State client-side only (Zustand or local state)
+  - Plays nicely with the Active/Archived toggle from #1+#2
+
+- [ ] **#3 — Clone name override UX** _(15–30 dk)_
+  - Sidebar Duplicate menu → opens shadcn AlertDialog (similar pattern to delete) with input pre-filled `${name} (copy)`
+  - Submit calls existing `POST /api/engagements/:id/clone` with `{ name }` body
+  - Drop the unconditional "(copy)" suffix; if user clears the field, fallback to existing default
+
+- [ ] **#11 — Port starring** _(30 dk)_
+  - Migration `0012_add-port-starred.sql`: `ports.starred INTEGER NOT NULL DEFAULT 0`
+  - Schema.ts + repo: `togglePortStar(db, portId)` (returns new state)
+  - API: `PATCH /api/engagements/:id/ports/:portId` accepts `{ starred: boolean }`
+  - Heatmap tile: ★ icon top-right when `starred=true`; click toggles
+  - Sort: starred ports first within their host group, then by port number
+  - Tests: repo toggle roundtrip, sort order
+
+### Closeout
+
+- [ ] Bump `package.json` → `1.2.0`, add CHANGELOG entry
+- [ ] Tag `v1.2.0`, push, watch release.yml
+- [ ] Update ROADMAP.md: drop "v1.1 candidates" entries that are now done; add a brief "v1.2.0 — portfolio management" line
+
+---
+
+## Milestone v1.3.0 — Data safety + writeup
+
+**Goal:** stop catastrophic accidental deletes; give writeups a home.
+
+**Estimated effort:** 3–4 hours.
+
+### Tasks
+
+- [ ] **#6 — Recycle bin / soft delete** _(2–3 sa)_
+  - Migration `0013_add-engagement-soft-delete.sql`: `engagements.deleted_at TEXT NULL`
+  - DELETE route flips `deleted_at = now()` instead of cascading; soft-deleted rows excluded from `listSummaries` by default
+  - Settings adds "Recently deleted" tab listing soft-deleted engagements with **Restore** + **Delete forever** buttons
+  - "Delete forever" hits the actual cascade DELETE
+  - Auto-purge skipped intentionally (single-user, manual is safer)
+  - FTS5 index hides soft-deleted rows (trigger update)
+  - Tests: soft delete keeps row, restore brings it back, hard delete cascades
+
+- [ ] **#9 — Engagement writeup field** _(1–2 sa)_
+  - Migration `0014_add-engagement-writeup.sql`: `engagements.writeup TEXT NOT NULL DEFAULT ''`
+  - Engagement page: collapsible "Writeup" section above Findings (or in EngagementExtras)
+  - Plain `<textarea>` first pass (markdown preview deferred; if user complains, add `react-markdown` later)
+  - PATCH route accepts `writeup` field
+  - Markdown export: top of doc gets `## Writeup\n\n${writeup}\n\n---\n` block when non-empty
+  - SysReptor / PwnDoc: writeup → `notes` or `executive_summary` field
+  - Tests: writeup roundtrip; export embeds when populated
+
+### Closeout
+
+- Bump → `1.3.0`, CHANGELOG entry, tag, ROADMAP update
+
+---
+
+## Milestone v1.4.0 — Polish bundle
+
+**Goal:** six small UX wins in one release.
+
+**Estimated effort:** 3–4 hours.
+
+### Tasks
+
+- [ ] **#5 — Findings → Markdown copy** _(30 dk)_
+  - In `FindingsPanel`, every finding row gets a small "copy md" icon
+  - Generates `### {severity}: {title}\n\n{description}\n\n_CVE:_ {cve}\n_Port:_ {host:port}` block
+  - `Cmd+Shift+C` shortcut in `KeyboardShortcutHandler` copies the FIRST finding (or all if multi-select arrives later)
+
+- [ ] **#10 — Default credentials helper** _(1 sa)_
+  - KB entries already carry `default_creds[]`
+  - When a port resolves to a KB entry with non-empty `default_creds`, surface an "**Try default creds**" panel under PortDetailPane
+  - Each cred row shows username/password + a "Generate hydra command" button
+  - Generated snippet copied to clipboard: `hydra -l {user} -p {pass} {host} {service}` with `{host}` / `{service}` interpolated
+  - Toast on copy
+
+- [ ] **#12 — Open in editor** _(45 dk)_
+  - Settings adds opt-in toggle: "Enable 'Open in editor' links" (default off)
+  - When on, every evidence row + engagement page header shows a small `vscode://file/{path}` link
+  - Path resolves to a hypothetical local export dir (configurable via `RECON_LOCAL_EXPORT_DIR` env)
+  - Doc the protocol + caveat: only works if VS Code is installed and protocol is registered
+
+- [ ] **#13 — Search severity filter chip** _(30 dk)_
+  - GlobalSearchModal: chip group `[ all ] [ critical ] [ high ] [ medium+ ]`
+  - When chip active, FTS5 query joins on `findings` and filters by `severity >= chosen`
+  - Default = all (current behavior)
+
+- [ ] **#14 — Cheat-sheet enrichment** _(20 dk)_
+  - `CheatSheetModal` currently lists Cmd+K, ?
+  - Expand to: `n`, `/`, `j`, `k`, `x`, `c`, `Cmd+K`, `Cmd+Shift+F`, `Cmd+Shift+C` (after #5 lands)
+  - Group by scope (Global / Engagement / Findings)
+
+- [ ] **#15 — Last-active "resume here" banner** _(1 sa)_
+  - Migration `0015_add-engagement-last-visited.sql`: `engagements.last_visited_at TEXT`, `engagements.last_visited_port_id INTEGER NULL`
+  - Engagement page server component bumps these on every render
+  - Landing page (`/`) shows a banner above the paste form: `Resume {engagement} → {port} (2h ago)` — links to `/engagements/:id?host=…&port=…`
+  - Hide banner if last visit > 7 days ago
+
+### Closeout
+
+- Bump → `1.4.0`, CHANGELOG entry, tag, ROADMAP update
+
+---
+
+## Milestone v2.0.0 — Screenshot annotation
+
+**Goal:** PoC-quality screenshots without leaving recon-deck.
+
+**Estimated effort:** 3–4 hours. Major version bump because UI surface
+expands meaningfully (new modal, new component dependency).
+
+### Tasks
+
+- [ ] **#7 — Screenshot annotation** _(3–4 sa)_
+  - Add `tldraw` (or fabric.js if tldraw is too heavy — measure bundle delta first)
+  - Evidence pane gets an "**Annotate**" button per row
+  - Click opens fullscreen modal with the image loaded onto the canvas
+  - Save button exports new PNG → POST a NEW evidence row (don't overwrite the original; chain with `parent_evidence_id`)
+  - Migration `0016_add-evidence-parent-link.sql`: `port_evidence.parent_evidence_id INTEGER NULL` (FK self-reference)
+  - Tests: parent linkage roundtrip, original survives, annotated child renders
+
+### Closeout
+
+- Bump → `2.0.0`, CHANGELOG entry, tag, ROADMAP major-version note
+
+---
+
+## Out-of-band ideas (not on the milestones above)
+
+Things that came up but aren't on a numbered list yet — capture so they
+don't leak away:
+
+- **API rate limit middleware** — single-user is fine, but LAN exposure
+  warrants a token-bucket. Maybe v1.4 if there's room.
+- **`npm audit fix` for `fast-xml-parser`** — direct dep bump 5.5 → 5.7,
+  30-second job; queue for the next minor patch (v1.2.x).
+- **`listSummaries` N+1** — 4 correlated subqueries; convert to one
+  JOIN if benchmarks ever flag it. Unlikely to matter < 200 engagements.
+- **Tag color from hash function** — use the same hash → HSL pattern
+  the heatmap uses for risk colors so chips stay readable in dark mode.
+
+## Already done (v1.1.0 highlights — do NOT redo)
+
+Quick reference so a fresh session can grep and avoid re-implementing:
+
+- Sidebar hover-kebab (Rename / Duplicate / Delete)
+- shadcn `AlertDialog` for delete confirmations
+- Engagement clone (deep-copy SQL transaction)
+- Migration safety (VACUUM INTO snapshot + integrity_check + foreign_key_check)
+- KB hot-reload (cached singleton + fs.watch)
+- `/settings/kb` validation editor
+- "Add as finding" buttons on KB known_vulns + searchsploit hits
+- Command palette parity (Settings, Add finding, Re-import, Delete, 6 export formats)
+- Sidebar `n` and `/` shortcuts (post-v1.1.0 fix)
+- Default port `3000` → `13337` migration
+- Schema `0010` (`port_scripts.host_id` for multi-host attribution)
