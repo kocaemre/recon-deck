@@ -808,7 +808,17 @@ function SidebarRow({
           <span>
             {done}/{total}
           </span>
-          <span style={{ marginLeft: "auto" }}>{when}</span>
+          {/* v2.1.1: suppressHydrationWarning — formatRelative(createdAt)
+              uses Date.now() so the server render and the client mount
+              are bound to disagree by a few seconds (e.g. "2m" → "3m"
+              in the React 19 hydration warning). The drift is harmless
+              and the value reconciles on the very next render. */}
+          <span
+            style={{ marginLeft: "auto" }}
+            suppressHydrationWarning
+          >
+            {when}
+          </span>
         </div>
         <div style={{ marginTop: 6 }}>
           <div

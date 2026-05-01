@@ -177,6 +177,13 @@ export function KeyboardShortcutHandler({
       // ---- Port-context shortcuts (early-return when typing) ----
       if (isInForm(e.target)) return;
 
+      // v2.1.1: ignore plain-letter shortcuts when ANY modifier is held.
+      // Without this guard, Ctrl+C on selected text triggered the `c` =
+      // copyActiveCommand path, hijacking the native clipboard with the
+      // active port's first KB command. Same risk on Ctrl+J/K (devtools)
+      // and Ctrl+X (browser cut).
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       const activePortId = useUIStore.getState().activePortId;
 
       if (e.key === "j") {
