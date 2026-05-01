@@ -14,6 +14,7 @@ import Link from "next/link";
 import { db, listSummaries, listDeletedSummaries } from "@/lib/db";
 import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
+import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,22 @@ export default function SettingsIndexPage() {
             : `${engagements.length} engagement${engagements.length === 1 ? "" : "s"} · ${totalHosts} host${totalHosts === 1 ? "" : "s"} · ${totalPorts} port${totalPorts === 1 ? "" : "s"} total. Use the inline edit on the engagement header to rename.`}
         </p>
         <EngagementSettingsList engagements={engagements} />
+      </section>
+
+      {/* v1.4.0 #12: Editor integration toggle. */}
+      <section style={{ marginBottom: 32 }}>
+        <SectionLabel>Editor integration</SectionLabel>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-muted)",
+            margin: "6px 0 12px",
+          }}
+        >
+          Optional `vscode://file/…` jump link on the engagement header.
+          Off by default — opt in here per browser.
+        </p>
+        <EditorIntegrationToggle />
       </section>
 
       {/* v1.3.0 #6: recycle bin. Only renders the section header when

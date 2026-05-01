@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Clipboard } from "lucide-react";
 import { toast } from "sonner";
 import type { Finding } from "@/lib/db/schema";
 import { useUIStore } from "@/lib/store";
@@ -397,6 +397,24 @@ function FindingRow({
       <div className="flex items-center gap-1">
         <button
           type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(
+                findingToMarkdown(finding, portInfo ?? null),
+              );
+              toast.success("Finding copied as Markdown");
+            } catch {
+              toast.error("Clipboard unavailable.");
+            }
+          }}
+          aria-label="Copy as Markdown"
+          title="Copy as Markdown"
+          style={iconBtn}
+        >
+          <Clipboard size={11} />
+        </button>
+        <button
+          type="button"
           onClick={onEdit}
           aria-label="Edit"
           title="Edit"
@@ -725,4 +743,38 @@ function Field({
       {children}
     </div>
   );
+}
+
+/**
+ * v1.4.0 #5: render a finding as a self-contained Markdown block. Used
+ * by the per-row "copy md" button and the Cmd+Shift+C keyboard shortcut.
+ * Format chosen so the block can be pasted straight into a Notion /
+ * Obsidian / SysReptor draft without further formatting.
+ */
+export function findingToMarkdown(
+  finding: Finding,
+  port?: {
+    port: number;
+    protocol: string;
+    service: string | null;
+    hostIp?: string | null;
+    hostHostname?: string | null;
+  } | null,
+): string {
+  const lines: string[] = [];
+  lines.push(`### ${finding.severity}: ${finding.title}`);
+  lines.push("");
+  if (finding.description?.trim()) {
+    lines.push(finding.description.trim());
+    lines.push("");
+  }
+  if (finding.cve) lines.push(`_CVE:_ ${finding.cve}`);
+  if (port) {
+    const host = port.hostHostname ?? port.hostIp;
+    const target = host ? `${host}:${port.port}` : `${port.port}`;
+    lines.push(`_Port:_ ${target}/${port.protocol}`);
+  } else if (finding.port_id == null) {
+    lines.push(`_Scope:_ engagement-level`);
+  }
+  return lines.join("\n").trimEnd() + "\n";
 }

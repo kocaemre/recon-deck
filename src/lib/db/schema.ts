@@ -120,6 +120,19 @@ export const engagements = sqliteTable(
      * export prepends a `## Writeup` block when non-empty.
      */
     writeup: text("writeup").notNull().default(""),
+    /**
+     * Migration 0015: most-recent visit timestamp. Updated server-side
+     * on every engagement detail render so the landing page banner can
+     * surface "Resume {engagement}" with a freshness window.
+     */
+    last_visited_at: text("last_visited_at"),
+    /**
+     * Migration 0015: most-recent active port id. Lets the banner deep
+     * link back to the host:port the operator was on. Plain integer —
+     * we resolve to host/port lazily so a deleted port silently degrades
+     * to the engagement root.
+     */
+    last_visited_port_id: integer("last_visited_port_id"),
   },
   (t) => [
     index("engagements_created_at_idx").on(t.created_at),

@@ -64,7 +64,7 @@ export function NotesField({
       <textarea
         value={body}
         onChange={handleChange}
-        placeholder="No notes yet — press N to add."
+        placeholder="No notes yet."
         className="mono w-full resize-y placeholder:italic placeholder:text-[var(--fg-subtle)]"
         style={{
           minHeight: 60,

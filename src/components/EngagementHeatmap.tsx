@@ -74,6 +74,10 @@ interface PortTileData {
   kbResources: Array<{ title: string; url: string }>;
   /** P2: KB known_vulns matches for this port's product+version. */
   knownVulns?: Array<{ match: string; note: string; link: string }>;
+  /** v1.4.0 #10: KB-declared default credentials, surfaced as a hydra-ready helper panel. */
+  defaultCreds?: Array<{ username: string; password: string; notes: string | null }>;
+  /** v1.4.0 #10: host label (hostname when present, otherwise IP) so the hydra command picks the right target. */
+  hostLabel?: string;
   arFiles: Array<{ filename: string; content: string }>;
   arCommands: Array<{ label: string; command: string }>;
   /** v2/P0-D: user-defined snippets that matched this port. */
@@ -92,6 +96,14 @@ interface EngagementHeatmapProps {
    * engagements pass null.
    */
   activeHostId?: number | null;
+  /**
+   * v1.4.0 user-feedback: OS label for the active host, surfaced in the
+   * Attack Surface toolbar so the operator doesn't have to scroll to
+   * the OS Detection panel to know whether they're hitting a Windows or
+   * Linux box. Empty/undefined hides the chip.
+   */
+  osLabel?: string | null;
+  osAccuracy?: number | null;
 }
 
 export function EngagementHeatmap({
@@ -99,6 +111,8 @@ export function EngagementHeatmap({
   ports,
   showAddPort = false,
   activeHostId = null,
+  osLabel = null,
+  osAccuracy = null,
 }: EngagementHeatmapProps) {
   const activePortId = useUIStore((s) => s.activePortId);
   const setActivePortId = useUIStore((s) => s.setActivePortId);
@@ -170,6 +184,34 @@ export function EngagementHeatmap({
             Attack Surface · {visiblePorts.length} open port
             {visiblePorts.length === 1 ? "" : "s"}
           </span>
+          {/* v1.4.0 user-feedback: surface OS up-top so the operator
+              can shape their attack plan (Windows vs Linux) without
+              scrolling to the OS Detection panel. */}
+          {osLabel && (
+            <span
+              className="mono ml-3 inline-flex items-center gap-1.5"
+              style={{
+                padding: "1px 8px",
+                borderRadius: 3,
+                background: "var(--bg-2)",
+                border: "1px solid var(--border)",
+                color: "var(--fg-muted)",
+                fontSize: 10.5,
+                lineHeight: 1.5,
+              }}
+              title={
+                osAccuracy
+                  ? `OS detection · ${osAccuracy}%`
+                  : "OS detection"
+              }
+            >
+              <span style={{ color: "var(--fg-subtle)" }}>OS</span>
+              <span style={{ color: "var(--fg)" }}>{osLabel}</span>
+              {osAccuracy != null && (
+                <span style={{ color: "var(--fg-faint)" }}>· {osAccuracy}%</span>
+              )}
+            </span>
+          )}
           {/* P1-G PR 2: closed-port toggle — only renders when there is at
               least one closed port (i.e. the engagement has been re-imported
               and a previously-open port disappeared). */}
@@ -240,10 +282,11 @@ export function EngagementHeatmap({
               data={p}
               active={p.id === selected.id}
               onClick={() => {
+                // v1.4.0 user-feedback: tile click selects the port
+                // without yanking the viewport — the detail pane is
+                // already in view and the heatmap shouldn't fight the
+                // operator's scroll position.
                 setActivePortId(p.id);
-                document
-                  .getElementById("port-detail-pane")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
               }}
             />
           ))}
@@ -335,6 +378,10 @@ export function EngagementHeatmap({
           kbChecks={selected.kbChecks}
           kbResources={selected.kbResources}
           knownVulns={selected.knownVulns}
+          defaultCreds={selected.defaultCreds}
+          servicePortLabel={`${selected.port}/${selected.protocol}`}
+          serviceName={selected.service}
+          targetHost={selected.hostLabel}
           arFiles={selected.arFiles}
           arCommands={selected.arCommands}
           userCommands={selected.userCommands}

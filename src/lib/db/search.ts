@@ -61,13 +61,33 @@ function buildFtsQuery(raw: string): string {
     .join(" ");
 }
 
+export type SeverityFilter =
+  | "all"
+  | "critical"
+  | "high"
+  | "medium-plus";
+
 export function searchEngagements(
   db: BetterSQLite3Database<Record<string, unknown>>,
   query: string,
   limit = 30,
+  severity: SeverityFilter = "all",
 ): SearchHit[] {
   const fts = buildFtsQuery(query);
   if (!fts) return [];
+
+  // v1.4.0 #13: severity filter narrows finding-kind hits to a min level
+  // ("critical" → only critical; "high" → critical+high; "medium-plus" →
+  // critical+high+medium). Non-finding hits are dropped when a filter is
+  // active so the operator gets a focused finding-list view.
+  const sevAllowed: string[] | null =
+    severity === "critical"
+      ? ["critical"]
+      : severity === "high"
+        ? ["critical", "high"]
+        : severity === "medium-plus"
+          ? ["critical", "high", "medium"]
+          : null;
 
   // Join search_index back to engagements to surface engagement name in hits.
   // `bm25(search_index)` returns lower-is-better — we sort ASC and surface as
@@ -114,11 +134,22 @@ export function searchEngagements(
       FROM search_index si
       JOIN engagements e ON e.id = si.engagement_id
       WHERE search_index MATCH ${fts}
-        -- Migration 0013: soft-deleted engagements stay in the FTS
-        -- index (we don't rewrite triggers) but the global search
-        -- modal should not surface them. /settings → Recently deleted
-        -- is the only path back to a soft-deleted engagement.
         AND e.deleted_at IS NULL
+        ${
+          sevAllowed
+            ? sql`
+                AND si.kind = 'finding'
+                AND EXISTS (
+                  SELECT 1 FROM findings f
+                  WHERE f.id = si.ref_id
+                    AND f.severity IN (${sql.join(
+                      sevAllowed.map((s) => sql`${s}`),
+                      sql`, `,
+                    )})
+                )
+              `
+            : sql``
+        }
       ORDER BY rank ASC
       LIMIT ${limit}
     `,

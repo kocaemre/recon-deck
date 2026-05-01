@@ -43,6 +43,12 @@ export function GlobalSearchModal() {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  // v1.4.0 #13: severity filter chip — narrows results to finding-kind
+  // hits at or above the chosen level. Default "all" preserves the v1.3
+  // behaviour byte-for-byte (no extra filter applied server-side).
+  const [severity, setSeverity] = useState<
+    "all" | "critical" | "high" | "medium-plus"
+  >("all");
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -64,6 +70,7 @@ export function GlobalSearchModal() {
       setQuery("");
       setHits([]);
       setActiveIdx(0);
+      setSeverity("all");
       // Defer to next tick so the input mounts first.
       const t = setTimeout(() => inputRef.current?.focus(), 0);
       return () => clearTimeout(t);
@@ -81,10 +88,14 @@ export function GlobalSearchModal() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/search?q=${encodeURIComponent(query)}&limit=40`,
-          { signal: ctrl.signal },
-        );
+        const params = new URLSearchParams({
+          q: query,
+          limit: "40",
+        });
+        if (severity !== "all") params.set("severity", severity);
+        const res = await fetch(`/api/search?${params.toString()}`, {
+          signal: ctrl.signal,
+        });
         if (!res.ok) return;
         const data = await res.json();
         setHits(data.hits ?? []);
@@ -99,7 +110,7 @@ export function GlobalSearchModal() {
       ctrl.abort();
       clearTimeout(t);
     };
-  }, [query, open]);
+  }, [query, open, severity]);
 
   // Group hits by engagement for visual clarity
   const grouped = useMemo(() => {
@@ -215,6 +226,50 @@ export function GlobalSearchModal() {
             </span>
           )}
           <Kbd>ESC</Kbd>
+        </div>
+
+        {/* v1.4.0 #13: severity filter chips. When non-"all" the result
+            list narrows to finding-kind hits at or above the chosen
+            level — surface text/host/port hits drop out so the
+            operator gets a focused finding view. */}
+        <div
+          style={{
+            padding: "6px 14px 4px",
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+          }}
+        >
+          {(
+            [
+              ["all", "all"],
+              ["critical", "critical"],
+              ["high", "high"],
+              ["medium-plus", "medium+"],
+            ] as const
+          ).map(([key, label]) => {
+            const active = severity === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSeverity(key)}
+                style={{
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  background: active ? "var(--bg-3)" : "var(--bg-2)",
+                  color: active ? "var(--accent)" : "var(--fg-muted)",
+                  fontSize: 10.5,
+                  cursor: "pointer",
+                  lineHeight: 1.55,
+                  textTransform: "lowercase",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "6px 0" }}>

@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { RotateCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { RescanModal } from "@/components/RescanModal";
+import { OpenInEditorLink } from "@/components/OpenInEditorLink";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -346,6 +347,10 @@ export function EngagementHeader({
             Palette
             <Kbd>⌘K</Kbd>
           </button>
+          {/* v1.4.0 #12: opt-in vscode://file/… link. Renders nothing
+              when the user hasn't enabled the toggle in /settings or
+              when NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR is unset. */}
+          <OpenInEditorLink engagementSlug={name} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

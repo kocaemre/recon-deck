@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import {
   db,
   getById,
+  touchEngagementVisit,
   matchUserCommands,
   getWordlistOverridesMap,
   listScanHistory,
@@ -53,7 +54,7 @@ function interpolateCommand(
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ host?: string }>;
+  searchParams: Promise<{ host?: string; port?: string }>;
 }
 
 export default async function EngagementPage({
@@ -66,6 +67,19 @@ export default async function EngagementPage({
 
   const engagement = getById(db, id);
   if (!engagement) notFound();
+
+  // v1.4.0 #15: stamp the visit so the landing-page banner can resume
+  // back here. `?port=<id>` (used by the banner's deep-link target)
+  // wins; otherwise we record null and let the heatmap pick its
+  // default selection on the next render.
+  const { port: portParam } = await searchParams;
+  const portIdParsed = portParam ? parseInt(portParam, 10) : NaN;
+  const validPortId =
+    Number.isInteger(portIdParsed) &&
+    engagement.ports.some((p) => p.id === portIdParsed)
+      ? portIdParsed
+      : null;
+  touchEngagementVisit(db, engagement.id, validPortId);
 
   // KB resolves through the cached singleton — picks up user YAML
   // edits since the last fs.watch tick without a server restart.
@@ -280,6 +294,16 @@ export default async function EngagementPage({
       )
       .map((v) => ({ match: v.match, note: v.note, link: v.link }));
 
+    // v1.4.0 #10: surface KB-declared default credentials so the
+    // operator can drop straight into a hydra brute attempt without
+    // re-Googling vendor docs. KB authors put the most common pairs
+    // first (e.g. "admin/admin" before "service/service").
+    const defaultCreds = (kbEntry.default_creds ?? []).map((c) => ({
+      username: c.username,
+      password: c.password,
+      notes: c.notes ?? null,
+    }));
+
     const checkMap = new Map(p.checks.map((c) => [c.check_key, c.checked]));
     totalChecks += kbChecks.length;
     doneChecks += kbChecks.filter((c) => checkMap.get(c.key) === true).length;
@@ -340,6 +364,7 @@ export default async function EngagementPage({
       kbChecks,
       kbResources,
       knownVulns,
+      defaultCreds,
       arFiles,
       arCommands,
       userCommands,
@@ -358,6 +383,14 @@ export default async function EngagementPage({
       // v1.2.0 #11: surface the starred flag so the heatmap renders the
       // ★ glyph and lifts the tile to the top of its host group.
       starred: p.starred ?? false,
+      // v1.4.0 #10: host label for the default-credentials hydra
+      // command generator. Multi-host engagements pick the host the
+      // port actually belongs to; single-host fall back to the
+      // engagement's primary host.
+      hostLabel: (() => {
+        const host = engagement.hosts.find((h) => h.id === p.host_id);
+        return host?.hostname ?? host?.ip ?? targetHostname ?? targetIp;
+      })(),
       // P2: searchsploit query. Prefer `<product> <version>` (most
       // specific), fall back to `<product>` alone, then `<service>`,
       // then nothing — empty/undefined suppresses the section.
@@ -437,6 +470,36 @@ export default async function EngagementPage({
       <KeyboardShortcutHandler
         engagementId={engagement.id}
         checksByPort={checksByPort}
+        findings={engagement.findings}
+        portsByFindingId={(() => {
+          // v1.4.0 #5: build a finding-id → port info lookup so the
+          // Cmd+Shift+C shortcut can render `_Port:_ host:port/proto`
+          // without re-walking the ports tree on every keypress.
+          const m = new Map<
+            number,
+            {
+              port: number;
+              protocol: string;
+              service: string | null;
+              hostIp?: string | null;
+              hostHostname?: string | null;
+            }
+          >();
+          for (const f of engagement.findings) {
+            if (f.port_id == null) continue;
+            const p = engagement.ports.find((pp) => pp.id === f.port_id);
+            if (!p) continue;
+            const host = engagement.hosts.find((h) => h.id === p.host_id);
+            m.set(f.id, {
+              port: p.port,
+              protocol: p.protocol,
+              service: p.service,
+              hostIp: host?.ip,
+              hostHostname: host?.hostname,
+            });
+          }
+          return m;
+        })()}
       />
 
       <EngagementHeader
@@ -490,6 +553,20 @@ export default async function EngagementPage({
         ports={portData}
         showAddPort
         activeHostId={activeHostId}
+        osLabel={(() => {
+          const active =
+            engagement.hosts.find((h) => h.id === activeHostId) ??
+            engagement.hosts.find((h) => h.is_primary) ??
+            engagement.hosts[0];
+          return active?.os_name ?? engagement.os_name ?? null;
+        })()}
+        osAccuracy={(() => {
+          const active =
+            engagement.hosts.find((h) => h.id === activeHostId) ??
+            engagement.hosts.find((h) => h.is_primary) ??
+            engagement.hosts[0];
+          return active?.os_accuracy ?? engagement.os_accuracy ?? null;
+        })()}
       />
 
       <WriteupPanel

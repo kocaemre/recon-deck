@@ -588,6 +588,104 @@ export function setEngagementTags(
 }
 
 /**
+ * v1.4.0 #15: stamp the engagement as just-visited. Called server-side
+ * on every engagement detail render. Optional `portId` records the
+ * active deep-link target so the banner can resume to host:port.
+ *
+ * Bypasses `updated_at` deliberately — visit-tracking is not a meaningful
+ * mutation and shouldn't disturb the sidebar's recency ordering.
+ */
+export function touchEngagementVisit(
+  db: Db,
+  engagementId: number,
+  portId: number | null,
+): void {
+  const now = new Date().toISOString();
+  db
+    .update(engagements)
+    .set({ last_visited_at: now, last_visited_port_id: portId })
+    .where(eq(engagements.id, engagementId))
+    .run();
+}
+
+export interface ResumeCandidate {
+  id: number;
+  name: string;
+  primary_ip: string;
+  last_visited_at: string;
+  last_visited_port_id: number | null;
+  /** Resolved port label "<port>/<proto>" if the row is still alive. */
+  port_label: string | null;
+  host_label: string | null;
+}
+
+/**
+ * v1.4.0 #15: most-recently-visited engagement, capped at 7 days.
+ * Returns null when nobody's visited an engagement recently — the
+ * landing banner just doesn't render in that case.
+ *
+ * Soft-deleted engagements are excluded so a deleted-and-restored row
+ * doesn't ghost-resurface as a banner before the operator clicks
+ * Restore.
+ */
+export function getResumeCandidate(db: Db): ResumeCandidate | null {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    .toISOString();
+  const row = db
+    .select({
+      id: engagements.id,
+      name: engagements.name,
+      last_visited_at: engagements.last_visited_at,
+      last_visited_port_id: engagements.last_visited_port_id,
+      primary_ip: sql<string>`(SELECT ip FROM hosts WHERE hosts.engagement_id = engagements.id AND hosts.is_primary = 1 LIMIT 1)`,
+    })
+    .from(engagements)
+    .where(
+      sql`${engagements.deleted_at} IS NULL AND ${engagements.last_visited_at} IS NOT NULL AND ${engagements.last_visited_at} >= ${sevenDaysAgo}`,
+    )
+    .orderBy(desc(engagements.last_visited_at))
+    .limit(1)
+    .get();
+
+  if (!row || row.last_visited_at == null) return null;
+
+  let port_label: string | null = null;
+  let host_label: string | null = null;
+  if (row.last_visited_port_id != null) {
+    const port = db
+      .select({
+        port: ports.port,
+        protocol: ports.protocol,
+        host_id: ports.host_id,
+      })
+      .from(ports)
+      .where(eq(ports.id, row.last_visited_port_id))
+      .get();
+    if (port) {
+      port_label = `${port.port}/${port.protocol}`;
+      if (port.host_id != null) {
+        const host = db
+          .select({ ip: hosts.ip, hostname: hosts.hostname })
+          .from(hosts)
+          .where(eq(hosts.id, port.host_id))
+          .get();
+        if (host) host_label = host.hostname ?? host.ip;
+      }
+    }
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    primary_ip: row.primary_ip,
+    last_visited_at: row.last_visited_at,
+    last_visited_port_id: row.last_visited_port_id,
+    port_label,
+    host_label,
+  };
+}
+
+/**
  * Replace the engagement's writeup body (v1.3.0 #9). Empty string is a
  * valid value (clears the section). Returns true when the row was
  * updated.

@@ -6,7 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db, searchEngagements } from "@/lib/db";
+import { db, searchEngagements, type SeverityFilter } from "@/lib/db";
+
+const VALID_SEVERITIES: SeverityFilter[] = [
+  "all",
+  "critical",
+  "high",
+  "medium-plus",
+];
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +25,20 @@ export async function GET(request: NextRequest) {
     ? Math.min(Math.max(limitRaw, 1), 100)
     : 30;
 
+  // v1.4.0 #13: optional severity filter chip — narrows hits to a min level.
+  const sevRaw = searchParams.get("severity") ?? "all";
+  const severity: SeverityFilter = (
+    VALID_SEVERITIES as string[]
+  ).includes(sevRaw)
+    ? (sevRaw as SeverityFilter)
+    : "all";
+
   if (!q) {
     return NextResponse.json({ hits: [] });
   }
 
   try {
-    const hits = searchEngagements(db, q, limit);
+    const hits = searchEngagements(db, q, limit, severity);
     return NextResponse.json({ hits });
   } catch (err) {
     console.error("search failed:", err);

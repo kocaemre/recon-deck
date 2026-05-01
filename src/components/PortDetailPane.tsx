@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { CopyButton } from "@/components/CopyButton";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { NotesField } from "@/components/NotesField";
@@ -99,6 +100,23 @@ interface PortDetailPaneProps {
    * click. Falls back to "medium" when undefined.
    */
   risk?: string;
+  /**
+   * v1.4.0 #10: KB-declared default credentials. Empty/undefined
+   * suppresses the Default Credentials panel. Each row gets a
+   * "Generate hydra command" button that copies a hydra invocation
+   * to the clipboard (host + service inferred from `serviceName` /
+   * `servicePortLabel`).
+   */
+  defaultCreds?: Array<{ username: string; password: string; notes: string | null }>;
+  /**
+   * v1.4.0 #10: passed to the hydra-command generator so the snippet
+   * can interpolate the host:port pair without us re-walking the
+   * engagement tree from inside the pane.
+   */
+  servicePortLabel?: string;
+  serviceName?: string | null;
+  /** v1.4.0 #10: host label for the hydra command (hostname or IP). */
+  targetHost?: string;
 }
 
 export function PortDetailPane({
@@ -118,6 +136,10 @@ export function PortDetailPane({
   exploitQuery,
   knownVulns = [],
   risk,
+  defaultCreds = [],
+  servicePortLabel,
+  serviceName,
+  targetHost,
 }: PortDetailPaneProps) {
   const checkMap = new Map(checks.map((c) => [c.check_key, c.checked]));
   const setFindingPrefill = useUIStore((s) => s.setFindingPrefill);
@@ -205,6 +227,15 @@ export function PortDetailPane({
               ))}
             </ul>
           </Section>
+        )}
+
+        {defaultCreds.length > 0 && (
+          <DefaultCredsSection
+            creds={defaultCreds}
+            host={targetHost ?? null}
+            servicePortLabel={servicePortLabel ?? null}
+            serviceName={serviceName ?? null}
+          />
         )}
 
         {exploitQuery && (
@@ -500,6 +531,145 @@ function safeHostname(url: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * v1.4.0 #10: surface KB-declared default credentials with a clipboard
+ * helper that emits a hydra invocation per row. Hydra service mapping is
+ * a best-effort lookup against common nmap services — operators can
+ * still tweak the snippet in their terminal before running it.
+ */
+const HYDRA_SERVICE_MAP: Record<string, string> = {
+  ftp: "ftp",
+  ssh: "ssh",
+  telnet: "telnet",
+  smtp: "smtp",
+  http: "http-get",
+  https: "https-get",
+  pop3: "pop3",
+  imap: "imap",
+  rdp: "rdp",
+  smb: "smb",
+  "microsoft-ds": "smb",
+  netbios: "smb",
+  "netbios-ssn": "smb",
+  vnc: "vnc",
+  mysql: "mysql",
+  postgresql: "postgres",
+  postgres: "postgres",
+  mssql: "mssql",
+  redis: "redis",
+};
+
+function hydraServiceFor(serviceName: string | null): string | null {
+  if (!serviceName) return null;
+  return HYDRA_SERVICE_MAP[serviceName.toLowerCase()] ?? null;
+}
+
+function DefaultCredsSection({
+  creds,
+  host,
+  servicePortLabel,
+  serviceName,
+}: {
+  creds: Array<{ username: string; password: string; notes: string | null }>;
+  host: string | null;
+  servicePortLabel: string | null;
+  serviceName: string | null;
+}) {
+  const hydraService = hydraServiceFor(serviceName);
+  const target = host ?? "<host>";
+  const port = servicePortLabel?.split("/")[0] ?? "<port>";
+
+  function buildHydraCommand(user: string, pass: string): string {
+    if (hydraService) {
+      return `hydra -l ${user} -p ${pass} -s ${port} ${target} ${hydraService}`;
+    }
+    // Unknown service — emit a generic skeleton so the operator still gets
+    // a starting point without having to look up the syntax.
+    return `hydra -l ${user} -p ${pass} ${target}:${port} <service>`;
+  }
+
+  async function copyHydra(user: string, pass: string) {
+    const cmd = buildHydraCommand(user, pass);
+    try {
+      await navigator.clipboard.writeText(cmd);
+      toast.success("hydra command copied");
+    } catch {
+      toast.error("Clipboard unavailable.");
+    }
+  }
+
+  return (
+    <Section label="Default Credentials" count={creds.length}>
+      <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {creds.map((c, i) => (
+          <li
+            key={i}
+            style={{
+              padding: "6px 8px",
+              borderTop: i === 0 ? "none" : "1px solid var(--border-subtle)",
+              fontSize: 12,
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="mono"
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: 3,
+                  background: "var(--bg-3)",
+                  border: "1px solid var(--border)",
+                  color: "var(--fg)",
+                  fontSize: 11,
+                }}
+                title={c.notes ?? undefined}
+              >
+                {c.username || "<empty>"}
+                {" / "}
+                {c.password || "<empty>"}
+              </span>
+              {c.notes && (
+                <span
+                  style={{
+                    color: "var(--fg-subtle)",
+                    fontSize: 11,
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                  className="truncate"
+                >
+                  {c.notes}
+                </span>
+              )}
+              {!c.notes && <span style={{ flex: 1 }} />}
+              <button
+                type="button"
+                onClick={() => copyHydra(c.username, c.password)}
+                title={
+                  hydraService
+                    ? `Copy: hydra -l … -p … -s ${port} ${target} ${hydraService}`
+                    : "Service unknown — generic hydra skeleton (edit before running)"
+                }
+                style={{
+                  fontSize: 10.5,
+                  padding: "2px 8px",
+                  borderRadius: 3,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg-2)",
+                  color: "var(--fg-muted)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                hydra
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
 }
 
 /**

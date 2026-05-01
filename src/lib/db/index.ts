@@ -61,12 +61,20 @@ export {
   cloneEngagement,
   setEngagementTags,
   setEngagementWriteup,
+  touchEngagementVisit,
+  getResumeCandidate,
+  type ResumeCandidate,
   archiveEngagement,
   type Db,
 } from "./engagement-repo";
 export { upsertCheck, getChecksByEngagement } from "./checklist-repo";
 export { upsertNote, getNotesByEngagement } from "./notes-repo";
-export { searchEngagements, type SearchHit, type SearchKind } from "./search";
+export {
+  searchEngagements,
+  type SearchHit,
+  type SearchKind,
+  type SeverityFilter,
+} from "./search";
 export {
   createEvidence,
   listEvidenceForEngagement,

@@ -318,6 +318,8 @@ const engagement: Engagement = {
   is_archived: false,
   deleted_at: null,
   writeup: "",
+  last_visited_at: null,
+  last_visited_port_id: null,
 };
 
 // P1-F PR 1: primary host row mirroring the legacy target columns. Once the

@@ -112,35 +112,35 @@ schema migration + filter logic land together.
 
 ### Tasks
 
-- [ ] **#5 — Findings → Markdown copy** _(30 dk)_
+- [x] **#5 — Findings → Markdown copy** _(30 dk)_
   - In `FindingsPanel`, every finding row gets a small "copy md" icon
   - Generates `### {severity}: {title}\n\n{description}\n\n_CVE:_ {cve}\n_Port:_ {host:port}` block
   - `Cmd+Shift+C` shortcut in `KeyboardShortcutHandler` copies the FIRST finding (or all if multi-select arrives later)
 
-- [ ] **#10 — Default credentials helper** _(1 sa)_
+- [x] **#10 — Default credentials helper** _(1 sa)_
   - KB entries already carry `default_creds[]`
   - When a port resolves to a KB entry with non-empty `default_creds`, surface an "**Try default creds**" panel under PortDetailPane
   - Each cred row shows username/password + a "Generate hydra command" button
   - Generated snippet copied to clipboard: `hydra -l {user} -p {pass} {host} {service}` with `{host}` / `{service}` interpolated
   - Toast on copy
 
-- [ ] **#12 — Open in editor** _(45 dk)_
+- [x] **#12 — Open in editor** _(45 dk)_
   - Settings adds opt-in toggle: "Enable 'Open in editor' links" (default off)
   - When on, every evidence row + engagement page header shows a small `vscode://file/{path}` link
   - Path resolves to a hypothetical local export dir (configurable via `RECON_LOCAL_EXPORT_DIR` env)
   - Doc the protocol + caveat: only works if VS Code is installed and protocol is registered
 
-- [ ] **#13 — Search severity filter chip** _(30 dk)_
+- [x] **#13 — Search severity filter chip** _(30 dk)_
   - GlobalSearchModal: chip group `[ all ] [ critical ] [ high ] [ medium+ ]`
   - When chip active, FTS5 query joins on `findings` and filters by `severity >= chosen`
   - Default = all (current behavior)
 
-- [ ] **#14 — Cheat-sheet enrichment** _(20 dk)_
+- [x] **#14 — Cheat-sheet enrichment** _(20 dk)_
   - `CheatSheetModal` currently lists Cmd+K, ?
   - Expand to: `n`, `/`, `j`, `k`, `x`, `c`, `Cmd+K`, `Cmd+Shift+F`, `Cmd+Shift+C` (after #5 lands)
   - Group by scope (Global / Engagement / Findings)
 
-- [ ] **#15 — Last-active "resume here" banner** _(1 sa)_
+- [x] **#15 — Last-active "resume here" banner** _(1 sa)_
   - Migration `0015_add-engagement-last-visited.sql`: `engagements.last_visited_at TEXT`, `engagements.last_visited_port_id INTEGER NULL`
   - Engagement page server component bumps these on every render
   - Landing page (`/`) shows a banner above the paste form: `Resume {engagement} → {port} (2h ago)` — links to `/engagements/:id?host=…&port=…`
@@ -148,7 +148,7 @@ schema migration + filter logic land together.
 
 ### Closeout
 
-- Bump → `1.4.0`, CHANGELOG entry, tag, ROADMAP update
+- [x] Bump → `1.4.0`, CHANGELOG entry, tag, ROADMAP update
 
 ---
 
@@ -179,6 +179,19 @@ expands meaningfully (new modal, new component dependency).
 
 Things that came up but aren't on a numbered list yet — capture so they
 don't leak away:
+
+- **v2 — Popup checklist editor** _(user request, 2026-05-01)_ — operator
+  wants to spawn a quick popup against an active port to add a custom
+  one-shot checklist item (vs. editing the YAML KB). Live alongside the
+  existing kebab actions; persist to a per-port `custom_checks` table.
+- **KB hacktricks link audit + sweep** _(user spotted 2026-05-01)_ —
+  hacktricks shipped a 2026 site rebuild: `book.hacktricks.xyz/...`
+  redirects to a generic `404.html` (HTTP 200 mdbook page) for most
+  legacy slugs. Need to (1) move every shipped KB resource URL from
+  `book.hacktricks.xyz` → `book.hacktricks.wiki/en/...html`, (2) verify
+  each new slug 200s with a real title (not "Page not found - HackTricks"),
+  (3) emit a `npm run kb:check-links` script that operators can run
+  before opening a PR adding new YAML.
 
 - **API rate limit middleware** — single-user is fine, but LAN exposure
   warrants a token-bucket. Maybe v1.4 if there's room.

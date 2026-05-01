@@ -2,6 +2,34 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-05-01
+
+Polish bundle. Six small UX wins, plus the OS-detection chip lifted into the heatmap toolbar after a user pointed out it was buried at the bottom of the page.
+
+### Added
+
+- **Findings → Markdown copy (#5).** Every finding row in `FindingsPanel` gets a clipboard icon that emits a `### {severity}: {title}` block with description, CVE, and `_Port:_ host:port/proto`. `Cmd+Shift+C` / `Ctrl+Shift+C` on the engagement page copies the highest-severity finding via the same formatter (`findingToMarkdown`). Stays out of the form-input early-return so the shortcut works mid-typing.
+- **Default credentials helper (#10).** When a port resolves to a KB entry with `default_creds[]`, `PortDetailPane` surfaces a **Default Credentials** panel under known vulns. Each row shows `user / pass` plus a per-row **hydra** button that copies an interpolated invocation (`hydra -l … -p … -s {port} {host} {service}`). Hydra service detection covers the common 17 service slugs; unknown services fall back to a `<service>` placeholder.
+- **Open in editor (#12).** Opt-in `vscode://file/…` link on the engagement header. Toggle lives in `/settings → Editor integration`; persisted per-machine via `localStorage`. Path resolves to `${NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR}/${slug}` where the slug is a lowercase-alnum-hyphen rewrite of the engagement name. Off by default — caveat (only works if VS Code is installed) called out in the toggle description.
+- **Search severity filter chip (#13).** `GlobalSearchModal` gains a chip group `[ all ] [ critical ] [ high ] [ medium+ ]` between the input and the results. Active chip narrows hits to finding-kind rows at or above the chosen level via `searchEngagements(db, q, limit, severity)`. Default `all` preserves v1.3 behaviour.
+- **Cheat-sheet enrichment (#14).** `CheatSheetModal` shortcuts grouped by scope (Global / Engagement page / Findings) and expanded to cover `n`, `/`, `⇧ ⌘ F`, `⇧ ⌘ C` alongside the original four port-context bindings.
+- **Resume-here banner (#15) (Migration 0015).** Two new columns on `engagements`: `last_visited_at TEXT NULL`, `last_visited_port_id INTEGER NULL`. Engagement page stamps both on every render via `touchEngagementVisit`; the landing page reads the most recent visit (≤ 7 days, soft-deleted excluded) and renders a `ResumeBanner` above the paste form with a deep-link to `/engagements/:id?port={portId}`.
+- **OS chip on the heatmap toolbar.** Active host's OS + accuracy now rides the "Attack Surface" header so operators don't have to scroll to the OS Detection panel to know whether they're hitting Windows or Linux.
+
+### Changed
+
+- **Heatmap tile click no longer scrolls the viewport.** Selecting a port just flips the active id; the detail pane is already onscreen and yanking the scroll position fights muscle memory.
+- **Notes textarea placeholder.** Dropped the misleading "press N to add" hint — the `n` shortcut focuses the sidebar filter, not the active port's notes.
+- **Sidebar version chip** flipped from `v1.3` → `v1.4`.
+
+### Migrations
+
+- **0015** `engagements.last_visited_at TEXT NULL` + `engagements.last_visited_port_id INTEGER NULL`. Additive — no backfill, no index.
+
+### Tests
+
+- 456 / 456 passing.
+
 ## [1.3.0] — 2026-05-01
 
 Data safety + writeup release. Engagement deletion is no longer a one-shot cascade — it goes to a recycle bin in `/settings` and only the explicit "Delete forever" affordance there hits the destructive path. Engagements gain a free-form writeup body that lands in every export.

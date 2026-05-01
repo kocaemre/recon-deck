@@ -35,6 +35,8 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store";
 import { toggleCheck } from "../../app/engagements/[id]/actions";
+import { findingToMarkdown } from "@/components/FindingsPanel";
+import type { Finding } from "@/lib/db/schema";
 
 interface Props {
   engagementId: number;
@@ -47,9 +49,34 @@ interface Props {
     number,
     Array<{ key: string; label: string; checked: boolean }>
   >;
+  /**
+   * v1.4.0 #5: findings list snapshot — drives the Cmd+Shift+C shortcut
+   * which copies the FIRST finding (highest severity bucket first per
+   * SEVERITY_ORDER). Empty list disables the shortcut silently.
+   */
+  findings: Finding[];
+  /**
+   * Port lookup mirroring FindingsPanel's portMap. Lets the markdown
+   * formatter render `_Port:_ host:port/proto` instead of a bare id.
+   */
+  portsByFindingId: Map<
+    number,
+    {
+      port: number;
+      protocol: string;
+      service: string | null;
+      hostIp?: string | null;
+      hostHostname?: string | null;
+    }
+  >;
 }
 
-export function KeyboardShortcutHandler({ engagementId, checksByPort }: Props) {
+export function KeyboardShortcutHandler({
+  engagementId,
+  checksByPort,
+  findings,
+  portsByFindingId,
+}: Props) {
   const setPaletteOpen = useUIStore((s) => s.setPaletteOpen);
   const setCheatSheetOpen = useUIStore((s) => s.setCheatSheetOpen);
   const nextPort = useUIStore((s) => s.nextPort);
@@ -108,6 +135,33 @@ export function KeyboardShortcutHandler({ engagementId, checksByPort }: Props) {
         return;
       }
 
+      // v1.4.0 #5: Cmd+Shift+C / Ctrl+Shift+C — copy first finding as
+      // Markdown. Stays out of the form-input early-return below so a
+      // pentester drafting notes can still grab a finding mid-typing.
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "c"
+      ) {
+        e.preventDefault();
+        if (findings.length === 0) {
+          toast.error("No findings to copy.");
+          return;
+        }
+        const order = ["critical", "high", "medium", "low", "info"] as const;
+        const first =
+          order
+            .map((sev) => findings.find((f) => f.severity === sev))
+            .find((f) => f !== undefined) ?? findings[0];
+        const port = portsByFindingId.get(first.id);
+        const md = findingToMarkdown(first, port ?? null);
+        navigator.clipboard
+          .writeText(md)
+          .then(() => toast.success("First finding copied as Markdown"))
+          .catch(() => toast.error("Clipboard unavailable."));
+        return;
+      }
+
       // ? — cheat-sheet (matches typed `?` regardless of Shift handling)
       if (e.key === "?") {
         e.preventDefault();
@@ -152,6 +206,8 @@ export function KeyboardShortcutHandler({ engagementId, checksByPort }: Props) {
   }, [
     engagementId,
     checksByPort,
+    findings,
+    portsByFindingId,
     setPaletteOpen,
     setCheatSheetOpen,
     nextPort,

@@ -8,11 +8,20 @@
 
 import { PastePanel } from "@/components/PastePanel";
 import { ImportPanel } from "@/components/ImportPanel";
+import { ResumeBanner } from "@/components/ResumeBanner";
+import { db, getResumeCandidate } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export default function HomePage() {
+  // v1.4.0 #15: surface the most-recent visit (≤7 days) so the operator
+  // bouncing back to recon-deck mid-engagement gets a one-click resume
+  // path instead of having to scan the sidebar.
+  const resume = getResumeCandidate(db);
   return (
     <div className="flex min-h-screen items-center justify-center p-8">
       <div style={{ width: 640 }}>
+        {resume && <ResumeBanner candidate={resume} />}
         <div
           className="mono uppercase tracking-[0.08em] font-medium"
           style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 10 }}
