@@ -31,13 +31,20 @@ export function UpdateAvailableToast() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sessionStorage.getItem(SESSION_KEY) === "1") return;
-    sessionStorage.setItem(SESSION_KEY, "1");
+    // NOTE: don't set the dedupe key up-front — only mark "shown" once a
+    // toast actually fires. Otherwise toggling the auto-check on after a
+    // page that fetched while it was off would silently swallow the
+    // toast for the rest of the session, and the user has no way to
+    // recover except a hard browser restart. The fetch itself is cheap
+    // (server-side cache + sessionStorage scope), so re-firing it on
+    // navigation is fine until something is actually shown.
 
     const ac = new AbortController();
     fetch("/api/update-check", { signal: ac.signal })
       .then((r) => r.json() as Promise<UpdatePayload>)
       .then((data) => {
         if (!data.enabled || !data.hasUpdate || !data.latest) return;
+        sessionStorage.setItem(SESSION_KEY, "1");
         toast(`v${data.latest} available`, {
           description:
             "Re-run the install one-liner (or git pull for local dev) to upgrade — your data stays.",
