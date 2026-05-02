@@ -283,7 +283,13 @@ Boot also takes a `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` snapshot be
 
 Notify-only — no auto-update, no telemetry. Optional release check is opt-in at `/settings → First-run`.
 
-**Docker:**
+**Docker (easy):** the install one-liner is idempotent — re-run it to upgrade. It pulls the new image, removes the prior container (named volumes survive), and starts fresh:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+```
+
+**Docker (manual):**
 
 ```bash
 docker pull ghcr.io/kocaemre/recon-deck:latest

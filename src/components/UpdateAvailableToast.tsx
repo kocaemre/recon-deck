@@ -39,7 +39,8 @@ export function UpdateAvailableToast() {
       .then((data) => {
         if (!data.enabled || !data.hasUpdate || !data.latest) return;
         toast(`v${data.latest} available`, {
-          description: "Pull the new image (docker pull) or git pull to upgrade.",
+          description:
+            "Re-run the install one-liner (or git pull for local dev) to upgrade — your data stays.",
           duration: 12000,
           action: data.url
             ? {
