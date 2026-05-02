@@ -21,6 +21,13 @@ Paste nmap text / XML / greppable output — or drag in an AutoRecon `results/` 
 Built for **OSCP / HTB students and solo pentesters** who currently juggle 8 browser tabs and a scratch Obsidian file per box.
 
 <div align="center">
+
+[![Watch the 50-second demo](https://img.youtube.com/vi/bZP_6gsokFQ/maxresdefault.jpg)](https://youtu.be/bZP_6gsokFQ)
+
+<sub><i>▶ <a href="https://youtu.be/bZP_6gsokFQ">Watch the 50-second demo</a> — paste nmap → drill into a port → tick checks → switch ports.</i></sub>
+
+<br><br>
+
   <img src="docs/screenshots/02-engagement-heatmap.png" alt="recon-deck heatmap — 28 ports across one host, KB-driven risk + check counts on each card" width="1100">
   <br>
   <sub><i>An engagement view: 28 open ports, KB-matched risk colors, per-port check completion. <a href="docs/screenshots/">More screenshots →</a></i></sub>
