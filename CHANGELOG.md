@@ -2,6 +2,41 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] — 2026-05-02
+
+Patch. Settings polish: manual "Check now" button + visible current
+version, sidebar drops the static version chip, update toast no
+longer self-suppresses on no-update sessions.
+
+### Added
+
+- **`/settings → First-run` "Check now" button.** Bypasses both the
+  auto-check toggle and the 1-hour process-level cache via a new
+  `?force=1` query on `/api/update-check`. Toasts the result —
+  "v2.1.4 available" with a Release notes action, or
+  "You're on the latest version (v2.1.3)" success when current.
+- **Currently-running version line** under the toggle description so
+  operators always know what build they're on without diffing
+  CHANGELOG.
+
+### Changed
+
+- Sidebar brand row drops the static `v2.0` chip — the version
+  belongs in `/settings`, not the global chrome.
+
+### Fixed
+
+- **Update toast dedupe key was set up-front**, before the fetch
+  resolved. So if the auto-check toggle was off, the key was still
+  set — meaning if the operator later flipped the toggle on in the
+  same session, the toast was silently swallowed. Now we only mark
+  "shown" inside the branch that actually fires the toast.
+- **Auto-create GitHub Release on tag push** (`release.yml`). The
+  in-app update toast queries `api.github.com/.../releases/latest`;
+  without a Release row, even a built+pushed image returned 404 and
+  the toast never fired. `softprops/action-gh-release` now runs at
+  the end of the multi-arch publish.
+
 ## [2.1.2] — 2026-05-02
 
 Patch. Bundle searchsploit into the Docker image so the "Lookup
