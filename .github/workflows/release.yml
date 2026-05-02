@@ -10,7 +10,9 @@ on:
 # contents: read is standard for checkout. id-token: write is harmless and enables future
 # cosign signing (deferred to v1.1 per RESEARCH.md Open Question #2).
 permissions:
-  contents: read
+  # `contents: write` is required by softprops/action-gh-release to
+  # create the GitHub Release row at the end of the workflow.
+  contents: write
   packages: write
   id-token: write
 
@@ -90,3 +92,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # ─── Create the GitHub Release entry so api.github.com/.../releases/latest
+      # surfaces this tag. The in-app update toast queries that endpoint —
+      # without a Release row, every fresh install thinks it's already current.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
