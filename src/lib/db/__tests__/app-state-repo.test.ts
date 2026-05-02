@@ -25,8 +25,14 @@ describe("app-state-repo (v1.9.0 #onboarding)", () => {
     expect(row.update_check).toBe(false);
   });
 
-  it("setAppState updates only the supplied fields", () => {
+  it("setAppState updates only the supplied fields", async () => {
     const before = getAppState(db).updated_at;
+    // setAppState stamps `updated_at = new Date().toISOString()`. On a
+    // fast CI runner the read+write can land within the same millisecond,
+    // making the strict-equality assertion below flake. A 5 ms delay
+    // guarantees the next ISO string is distinct without slowing the
+    // suite meaningfully.
+    await new Promise((r) => setTimeout(r, 5));
     const row = setAppState(db, { local_export_dir: "/tmp/exports" });
     expect(row.local_export_dir).toBe("/tmp/exports");
     expect(row.kb_user_dir).toBeNull();
