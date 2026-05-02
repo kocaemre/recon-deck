@@ -5,7 +5,7 @@
  *
  * Handles a local "filter engagements" state (the reason this is client).
  * Structure (top → bottom):
- *   1. Brand row — accent "rd" square, app name, version chip.
+ *   1. Brand row — radar mark, app name, version chip.
  *   2. New engagement button — full-width, Plus icon, N kbd.
  *   3. Filter input — search icon, `/` kbd.
  *   4. Engagements count label.
@@ -35,6 +35,7 @@ import type { EngagementSummary } from "@/lib/db/types";
 import { useUIStore } from "@/lib/store";
 import { DeleteEngagementDialog } from "@/components/DeleteEngagementDialog";
 import { CloneEngagementDialog } from "@/components/CloneEngagementDialog";
+import { RadarMark } from "@/components/RadarMark";
 
 export type SidebarEngagement = EngagementSummary & {
   total: number;
@@ -191,18 +192,10 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
       <div className="px-[14px] pt-[14px] pb-[10px]">
         <div className="mb-[10px] flex items-center gap-2">
           <div
-            className="mono grid place-items-center"
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: 5,
-              background: "var(--accent)",
-              color: "#05170d",
-              fontWeight: 700,
-              fontSize: 11,
-            }}
+            className="grid place-items-center"
+            style={{ width: 22, height: 22 }}
           >
-            rd
+            <RadarMark size={22} contactCount={2} />
           </div>
           <span
             className="font-semibold"
