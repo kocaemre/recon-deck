@@ -30,7 +30,19 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 if ! docker info >/dev/null 2>&1; then
-  printf 'docker daemon not reachable. Start the daemon (e.g. `sudo systemctl start docker`).\n' >&2
+  printf 'docker daemon not reachable. Start the daemon, then re-run this script:\n' >&2
+  case "$(uname -s)" in
+    Darwin)
+      printf '  open -a Docker            # macOS: launch Docker Desktop, wait for the menubar whale to settle\n' >&2
+      ;;
+    Linux)
+      printf '  sudo systemctl start docker   # systemd\n' >&2
+      printf '  # or:  sudo service docker start\n' >&2
+      ;;
+    *)
+      printf '  (start Docker via your platforms preferred mechanism)\n' >&2
+      ;;
+  esac
   exit 1
 fi
 
