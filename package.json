@@ -4,6 +4,28 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "description": "Offline pentest workflow tracker — turns nmap output into a port-aware, KB-matched recon checklist in under 30 seconds.",
+  "author": "Emre Koca <0xemrek@proton.me>",
+  "homepage": "https://github.com/kocaemre/recon-deck#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kocaemre/recon-deck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kocaemre/recon-deck/issues"
+  },
+  "keywords": [
+    "pentest",
+    "nmap",
+    "recon",
+    "checklist",
+    "offline",
+    "self-hosted",
+    "ctf",
+    "security",
+    "drizzle",
+    "nextjs"
+  ],
   "engines": {
     "node": ">=22.0.0 <23.0.0"
   },

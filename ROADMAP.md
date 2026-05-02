@@ -34,7 +34,7 @@ issue first so scope is aligned before code is written.
 | Candidate                          | Why                                                                                           | Status        |
 | ---------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |
 | Bind-mount AutoRecon folder         | Power-user path for users who don't want to zip every engagement. Chromium-only today via File System Access API — needs a Firefox fallback. | Scoped         |
-| Light mode                          | v1.0 ships dark-only. `next-themes` is already wired in for this exact reason.                | Scoped         |
+| Light mode                          | recon-deck currently ships dark-only. `next-themes` is already wired in for this exact reason. | Scoped         |
 | Cosign / sigstore image signing     | Increases supply-chain trust for the GHCR image beyond `GITHUB_TOKEN` provenance.             | Scoped         |
 | Nonce-based CSP                     | Replace `script-src 'unsafe-inline'` with per-request nonce in middleware. See SECURITY.md.    | Scoped         |
 | Egress-blocking CI guard            | Run the container in a network-null-routed CI job, assert zero outbound packets. Enforces OPS-03 automatically. | Backlog       |
@@ -47,7 +47,7 @@ issue first so scope is aligned before code is written.
 ## v2.x Future Considerations
 
 These are larger directions on the long horizon — not scoped, not committed,
-not happening before v1.x feature work is complete. Listed here so users know
+deferred until current feature work settles. Listed here so users know
 the maintainer is aware of the request and has a view on it.
 
 | Direction                                            | What it might look like                                                                                                                                                                                                                                                                                                                                       | Constraints that must hold                                                                                                                                                                          |

@@ -399,7 +399,7 @@ The four most common requests the project receives, and the short answer:
 - **"Can recon-deck run scans?"** No. recon-deck is post-scan workflow only.
   Run AutoRecon (or nmap directly) to generate the scan, then import.
 - **"Can this be multi-user?"** No. It's a single-user local tool by design.
-- **"Can you add AI / exploit suggestions?"** No, not in v1.x.
+- **"Can you add AI / exploit suggestions?"** Not currently. The KB stays human-curated by design.
 - **"Is there a mobile app?"** No. Desktop-only — pentesting happens on laptops.
 
 Each of these has a longer rationale in [`ROADMAP.md`](ROADMAP.md).

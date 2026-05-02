@@ -32,7 +32,7 @@ If everything else fails, this must work: paste nmap → see cards → copy comm
 ### Core Technologies
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Next.js | **15.5.15** (pin to `15.5.x`) | Full-stack React framework (App Router + API routes) | Author committed to 15; 15.5.x is the final 15-line stable, Turbopack-stable, React 19 compatible, fully supports `output: "standalone"` which is mandatory for the slim Docker image. Next.js 16 (16.2.3) is current but the 15.5 line has more community Docker/Drizzle baking — stay on 15.5 for v1.0, upgrade post-launch. |
+| Next.js | **15.5.15** (pin to `15.5.x`) | Full-stack React framework (App Router + API routes) | Author committed to 15; 15.5.x is the final 15-line stable, Turbopack-stable, React 19 compatible, fully supports `output: "standalone"` which is mandatory for the slim Docker image. Next.js 16 (16.2.3) is current but the 15.5 line has more community Docker/Drizzle baking — 15.5.x retained through v2.x; consider 16 in a future major. |
 | React | **19.1.x** (pair with Next 15.5) | UI runtime | Next.js 15.5 ships with React 19.1 as the canonical pairing. React 19.2 is out (19.2.5) but tie it to whatever Next 15.5.15 pulls in — don't pin a newer React independently. |
 | TypeScript | **5.9.x** | Type safety | Next 15.5 supports TS 5.x. Do NOT jump to TypeScript 6.0.2 yet — it was released recently and has breaking changes (stricter `unknown` in catch, removed deprecated flags) that several Next/Drizzle plugins haven't caught up on. 5.9 is the safe stable. |
 | Tailwind CSS | **4.2.2** | Styling | Tailwind 4 is the current major. Uses the new Oxide engine (Rust-based), zero-config via `@import "tailwindcss"`, no `tailwind.config.js` needed in most cases. Tree-shakes aggressively — critical for the < 2 MB bundle. |
@@ -50,7 +50,7 @@ If everything else fails, this must work: paste nmap → see cards → copy comm
 | **clsx** + **tailwind-merge** | 2.1.1 / 3.5.0 | Conditional className composition | Used by shadcn `cn()` helper. Both < 1 KB. |
 | **lucide-react** | **1.8.0** | Icons | shadcn's default icon set. Tree-shakes per-icon — import only the glyphs you use. |
 | **sonner** | **2.0.7** | Toast notifications (e.g., "Copied!") | shadcn's recommended toast lib. ~3 KB. |
-| **cmdk** | **1.1.1** | Command palette (optional, for keyboard shortcuts UX) | If you want a `Ctrl+K` launcher. Skip for v1.0 if bundle budget is tight. |
+| **cmdk** | **1.1.1** | Command palette (Ctrl+K launcher) | Powers the global engagement search + keyboard nav. ~3 KB. |
 | **next-themes** | **0.4.6** | Dark mode (even though default is dark) | Lets you future-proof for v1.1 light mode without a rewrite. ~2 KB. |
 | **zustand** | **5.0.12** | Client state (per-engagement UI state) | Use instead of Context for port-card open/closed, active engagement, keyboard shortcut registry. 1 KB, no provider needed. **Preferred over Redux/Jotai** for this scope. Server state (checklist persistence) goes through API routes → SQLite, no React Query needed. |
 | **react-markdown** + **remark-gfm** | 10.1.0 / 4.0.1 | Render KB `resources[]` descriptions if they contain markdown | Optional; skip if KB stays plain-text. |
@@ -65,13 +65,13 @@ If everything else fails, this must work: paste nmap → see cards → copy comm
 |---------|---------|---------|-------|
 | **Hand-rolled Markdown generator** | — | `.md` export with Obsidian frontmatter | Just template strings. Do NOT pull in `marked` or `unified` — unnecessary weight for generating (vs parsing) markdown. |
 | **Native `JSON.stringify`** | — | JSON export | No library. |
-| **Print CSS + browser print-to-PDF** | — | HTML/PDF report (recommended path for v1.0) | Ship a dedicated `/engagements/[id]/report` route with print-optimized Tailwind classes (`print:` variants) and instruct users to Ctrl+P → Save as PDF. **Zero extra dependencies, zero bundle cost, zero native deps in Docker.** |
-| ~~`@react-pdf/renderer` 4.4.1~~ | — | Server-side PDF generation | Fallback only if print CSS is insufficient. Adds ~800 KB to the bundle. Avoid for v1.0. |
+| **Print CSS + browser print-to-PDF** | — | HTML/PDF report (in use) | Dedicated `/engagements/[id]/report` route with print-optimized Tailwind classes (`print:` variants); users do Ctrl+P → Save as PDF. **Zero extra dependencies, zero bundle cost, zero native deps in Docker.** |
+| ~~`@react-pdf/renderer` 4.4.1~~ | — | Server-side PDF generation | Fallback only if print CSS is insufficient. Adds ~800 KB to the bundle. Not used. |
 | ~~`puppeteer` 24.40.0~~ | — | Headless Chromium PDF | **Do NOT use.** Bundles Chromium (~300 MB), breaks the single-image-slim Docker goal, and violates offline constraint at install time on alpine. |
 ### Development Tools
 | Tool | Version | Purpose | Notes |
 |------|---------|---------|-------|
-| **vitest** | **4.1.4** | Unit tests for parsers and KB schema | Fast, Vite-based, Jest-compatible API. Required by the v1.0 quality bar. |
+| **vitest** | **4.1.4** | Unit tests for parsers and KB schema | Fast, Vite-based, Jest-compatible API. 470+ tests in tree. |
 | **@vitejs/plugin-react** | **6.0.1** | Vitest JSX support if you add component tests | Optional; parser tests are pure TS so this may be unneeded. |
 | **happy-dom** | **20.9.0** | DOM environment for vitest (if testing components) | Lighter than jsdom. Optional. |
 | **tsx** | **4.21.0** | Run one-off TS scripts (KB validation, seed scripts) | For `scripts/validate-kb.ts` etc. |
@@ -96,7 +96,7 @@ If everything else fails, this must work: paste nmap → see cards → copy comm
 - **Pin Node major version** (e.g. `node:22-alpine`). Upgrading Node across majors may require rebuilding better-sqlite3 against a new ABI. Node 22 LTS is the sweet spot for April 2026 — supported until April 2027, Next.js 15.5 fully compatible.
 - **Bind to `127.0.0.1` inside the container** via `HOSTNAME=127.0.0.1`. Users who want to expose publicly must pass `-e HOSTNAME=0.0.0.0` AND map the port — deliberate two-step opt-in, matching your security posture.
 - **Do NOT use `npm install --omit=dev` in the runtime stage.** The better-sqlite3 `.node` is under `dependencies`, but copying just the build artifact (as above) is cleaner and smaller than `npm prune`-ing.
-- **Alternative considered**: `@libsql/client` (0.17.2) bundles a prebuilt musl binary. If alpine compilation becomes a pain, swap drivers — Drizzle supports both. For v1.0, stick with better-sqlite3 for the synchronous API and broader community patterns. **Recorded as a known escape hatch.**
+- **Alternative considered**: `@libsql/client` (0.17.2) bundles a prebuilt musl binary. If alpine compilation becomes a pain, swap drivers — Drizzle supports both. recon-deck stays on better-sqlite3 for the synchronous API and broader community patterns. **Recorded as a known escape hatch.**
 ## Bundle Size Strategy (< 2 MB target)
 | Threat | Mitigation |
 |--------|------------|
@@ -116,7 +116,7 @@ If everything else fails, this must work: paste nmap → see cards → copy comm
 ## Alternatives Considered
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| **Next.js 15.5** | Next.js 16.2.3 | Post-v1.0 upgrade. 16 works but forces a Turbopack-only build and some middleware API changes — not worth the churn mid-project. |
+| **Next.js 15.5** | Next.js 16.2.3 | Future major upgrade. 16 works but forces a Turbopack-only build and some middleware API changes — deferred until 15.5 EOLs. |
 | **better-sqlite3** | `@libsql/client` (libSQL) | If alpine native compile breaks or you later want replication. Drizzle supports both drivers with minimal code change. |
 | **Drizzle** | Prisma | Prisma adds 5 MB+ runtime, a separate engine binary, and generates a client at install — overkill for single-file SQLite and fights the slim-Docker goal. |
 | **zustand** | React Context + useReducer | For a 2-3 slice store, Context is fine. zustand wins when you need cross-tree state without prop drilling. |

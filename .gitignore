@@ -18,7 +18,7 @@ next-env.d.ts
 # Local notes (untracked drafts)
 prd.md
 
-# Demo video bundle (Claude Design handoff — local-only, not for release)
+# Local demo video bundle (not for release)
 /demo/
 
 # Local export / archive artifacts (manual zips of the repo, AR test bundles, etc.)
