@@ -33,6 +33,8 @@ issue first so scope is aligned before code is written.
 
 | Candidate                          | Why                                                                                           | Status        |
 | ---------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |
+| "Check all" / bulk-toggle in port checklist | Operator workflow polish — one click to mark every KB-derived check (or every unchecked one) on the active port. Should round-trip through the existing `setCheck` server action so undo / re-import behaviour stays consistent. | Scoped         |
+| Collapsible sidebar                 | Toggle button in the brand row that hides the engagement list and shrinks the chrome to an icon rail. Persists in `app_state` so the layout doesn't reset between sessions. Useful on smaller laptops + when working a single engagement. | Scoped         |
 | Bind-mount AutoRecon folder         | Power-user path for users who don't want to zip every engagement. Chromium-only today via File System Access API — needs a Firefox fallback. | Scoped         |
 | Light mode                          | recon-deck currently ships dark-only. `next-themes` is already wired in for this exact reason. | Scoped         |
 | Cosign / sigstore image signing     | Increases supply-chain trust for the GHCR image beyond `GITHUB_TOKEN` provenance.             | Scoped         |
