@@ -2,6 +2,26 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] — 2026-05-02
+
+Patch. Public-release polish: radar identity mark in the sidebar,
+package.json metadata for npm/GitHub side-panel, stale "v1.0" phrasing
+removed from public docs, and a Dockerfile fix so multi-arch CI builds
+succeed.
+
+### Added
+
+- **Radar identity mark** — replaces the green `rd` square in `Sidebar`. New `src/components/RadarMark.tsx` (static SVG, phosphor-green oklch palette, scales cleanly for future favicon/social-card use).
+
+### Changed
+
+- `package.json` now ships `author`, `repository`, `homepage`, `bugs`, `description`, `keywords`.
+- `ARCHITECTURE.md`, `CONTRIBUTING.md`, `ROADMAP.md` rephrased to drop "in v1.0" / "before v1.x" wording — those files were authored pre-launch and never updated past v1.
+
+### Fixed
+
+- **Dockerfile multi-arch CI**: `public/.gitkeep` stub so the directory survives `git clone` on the runner. Without it, `COPY --from=builder /app/public ./public` failed with `not found` and the GHCR publish never ran.
+
 ## [2.1.0] — 2026-05-01
 
 Minor. First-run onboarding flow + sample engagement + desktop-only viewport guard.
