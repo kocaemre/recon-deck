@@ -21,6 +21,7 @@ import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
 import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
 import { OnboardingSettingsSection } from "@/components/OnboardingSettingsSection";
+import pkg from "../../../package.json";
 
 export const dynamic = "force-dynamic";
 
@@ -125,7 +126,10 @@ export default function SettingsIndexPage() {
           Replay the welcome flow or toggle the GitHub release check. Both
           live in the local <code className="mono">app_state</code> singleton.
         </p>
-        <OnboardingSettingsSection initialUpdateCheck={cfg.updateCheck} />
+        <OnboardingSettingsSection
+          initialUpdateCheck={cfg.updateCheck}
+          currentVersion={pkg.version}
+        />
       </section>
 
       {/* v1.3.0 #6: recycle bin. Only renders the section header when

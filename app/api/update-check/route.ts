@@ -44,13 +44,20 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const force = url.searchParams.get("force") === "1";
+
   const cfg = effectiveAppState(db);
-  if (!cfg.updateCheck) {
+  // Manual "Check now" (force=1) bypasses both the toggle gate and the
+  // process-level cache. The settings UI uses this to give operators
+  // an explicit way to test the version check without flipping the
+  // automatic toggle on.
+  if (!cfg.updateCheck && !force) {
     return NextResponse.json({ enabled: false, current: pkg.version });
   }
 
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
+  if (!force && cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return NextResponse.json(cache.payload);
   }
 

@@ -26,10 +26,13 @@ import {
 
 export function OnboardingSettingsSection({
   initialUpdateCheck,
+  currentVersion,
 }: {
   initialUpdateCheck: boolean;
+  currentVersion: string;
 }) {
   const [updateCheck, setUpdateCheck] = useState(initialUpdateCheck);
+  const [checking, setChecking] = useState(false);
   const [, startTransition] = useTransition();
 
   function handleToggle(next: boolean) {
@@ -45,6 +48,47 @@ export function OnboardingSettingsSection({
     });
   }
 
+  // Manual "Check now" — bypasses both the auto-check toggle and the
+  // 1-hour process cache via ?force=1, hits api.github.com once, toasts
+  // the result. Useful for operators who want to test the version check
+  // without flipping the toggle on.
+  async function checkNow() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const res = await fetch("/api/update-check?force=1");
+      const data = (await res.json()) as {
+        latest?: string;
+        hasUpdate?: boolean;
+        url?: string;
+      };
+      if (data.hasUpdate && data.latest) {
+        toast(`v${data.latest} available`, {
+          description:
+            "Re-run the install one-liner (or git pull for local dev) to upgrade — your data stays.",
+          duration: 12000,
+          action: data.url
+            ? {
+                label: "Release notes",
+                onClick: () =>
+                  window.open(data.url, "_blank", "noopener,noreferrer"),
+              }
+            : undefined,
+        });
+      } else if (data.latest) {
+        toast.success(`You're on the latest version (v${data.latest}).`);
+      } else {
+        toast.message(
+          "Could not reach api.github.com. Check your connection or try again later.",
+        );
+      }
+    } catch {
+      toast.error("Update check failed.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -54,39 +98,71 @@ export function OnboardingSettingsSection({
         background: "var(--bg-2)",
       }}
     >
-      {/* Update-check toggle */}
-      <label
-        className="flex items-center gap-3"
-        style={{ cursor: "pointer" }}
-      >
-        <input
-          type="checkbox"
-          checked={updateCheck}
-          onChange={(e) => handleToggle(e.target.checked)}
-          style={{ accentColor: "var(--accent)" }}
-        />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>
-            Check GitHub for new releases
+      {/* Update-check toggle + manual "Check now" */}
+      <div className="flex items-start gap-3">
+        <label
+          className="flex items-start gap-3"
+          style={{ cursor: "pointer", flex: 1 }}
+        >
+          <input
+            type="checkbox"
+            checked={updateCheck}
+            onChange={(e) => handleToggle(e.target.checked)}
+            style={{ accentColor: "var(--accent)", marginTop: 3 }}
+          />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              Check GitHub for new releases
+            </div>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: "var(--fg-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              Once at startup, recon-deck pings{" "}
+              <code className="mono">
+                api.github.com/repos/kocaemre/recon-deck/releases/latest
+              </code>
+              . Notify-only — installs are manual (
+              <code className="mono">docker pull</code> or{" "}
+              <code className="mono">git pull</code>).
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 11.5,
+                color: "var(--fg-faint)",
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              Currently running <span style={{ color: "var(--fg-muted)" }}>v{currentVersion}</span>
+            </div>
           </div>
-          <div
-            style={{
-              marginTop: 4,
-              fontSize: 12,
-              color: "var(--fg-muted)",
-              lineHeight: 1.5,
-            }}
-          >
-            Once at startup, recon-deck pings{" "}
-            <code className="mono">
-              api.github.com/repos/kocaemre/recon-deck/releases/latest
-            </code>
-            . Notify-only — installs are manual (
-            <code className="mono">docker pull</code> or{" "}
-            <code className="mono">git pull</code>).
-          </div>
-        </div>
-      </label>
+        </label>
+        <button
+          type="button"
+          onClick={checkNow}
+          disabled={checking}
+          style={{
+            height: 28,
+            padding: "0 12px",
+            borderRadius: 5,
+            background: "var(--bg-1)",
+            color: "var(--fg)",
+            border: "1px solid var(--border)",
+            fontSize: 12,
+            fontWeight: 500,
+            cursor: checking ? "wait" : "pointer",
+            opacity: checking ? 0.6 : 1,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {checking ? "Checking…" : "Check now"}
+        </button>
+      </div>
 
       <div
         style={{
