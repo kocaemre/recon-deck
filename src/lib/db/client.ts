@@ -58,72 +58,102 @@ const MIGRATIONS_DIR = path.resolve(
 
 const JOURNAL_PATH = path.join(MIGRATIONS_DIR, "meta", "_journal.json");
 
-// D-06 Step 1: Writability probe (PERSIST-06)
-checkWritability(DB_DIR);
+// `next build`'s page-data collection imports server modules to extract
+// route metadata. We don't want it touching the DB at all — migrations
+// are a runtime concern, and the build's parallel collectors would race
+// to migrate the same on-disk file (amd64 native passes; arm64 under
+// QEMU emulation is slow enough that one collector tries to apply 0001
+// after another already created the tables, surfacing as
+// `table … already exists`). Short-circuit the whole boot dance during
+// `next build` and re-export a stub. Any module that *runs* the build
+// would already need the DB at request time, where NEXT_PHASE is unset.
+const isBuildPhase =
+  process.env.NEXT_PHASE === "phase-production-build";
 
-// D-06 Step 2: Open database
-const sqlite = new Database(DB_PATH);
+let sqlite: Database.Database;
+if (isBuildPhase) {
+  // In-memory throwaway. drizzle() needs *something* to wrap, but no
+  // route handler will ever execute a query against this — Next.js only
+  // pulls the route module's exported config / metadata.
+  sqlite = new Database(":memory:");
+} else {
+  // D-06 Step 1: Writability probe (PERSIST-06)
+  checkWritability(DB_DIR);
+  // D-06 Step 2: Open database
+  sqlite = new Database(DB_PATH);
+}
 
 // D-06 Step 3-5: Pragmas (D-09: WAL before any queries, Pitfall 5: FK per connection)
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-sqlite.pragma("busy_timeout = 5000");
+// Skip during build — the in-memory throwaway DB doesn't need them and
+// `journal_mode = WAL` would noisily fail on `:memory:`.
+if (!isBuildPhase) {
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("busy_timeout = 5000");
+}
 
 // D-06 Step 6: Idempotent migrations (PERSIST-05) wrapped in safety net.
 export const db = drizzle(sqlite, { schema });
 
-const appliedBefore = countAppliedMigrations(sqlite);
-const expected = countJournalEntries(JOURNAL_PATH);
-// Pre-migration snapshot only matters when we have a populated DB that
-// is about to be mutated. Fresh DBs (appliedBefore === 0) have no data
-// to lose; up-to-date DBs (expected === appliedBefore) won't trigger
-// migrate() to do anything.
-const migrationPending = expected > appliedBefore && appliedBefore > 0;
+// During `next build`, exit early — no migrations, no integrity checks,
+// no snapshot dance. The build only needs `db` to exist as an export.
+// All boot-time DB work (snapshot · migrate · integrity check) is
+// skipped during `next build`. Runtime cold-starts (NEXT_PHASE unset)
+// run the full sequence as before.
+if (!isBuildPhase) {
+  const appliedBefore = countAppliedMigrations(sqlite);
+  const expected = countJournalEntries(JOURNAL_PATH);
+  // Pre-migration snapshot only matters when we have a populated DB that
+  // is about to be mutated. Fresh DBs (appliedBefore === 0) have no data
+  // to lose; up-to-date DBs (expected === appliedBefore) won't trigger
+  // migrate() to do anything.
+  const migrationPending = expected > appliedBefore && appliedBefore > 0;
 
-let backupPath: string | null = null;
-if (migrationPending) {
-  backupPath = takePreMigrationSnapshot(sqlite, DB_PATH, appliedBefore);
-  if (backupPath) {
-    console.log(`[recon-deck] Pre-migration snapshot ready: ${backupPath}`);
-  } else {
-    console.warn(
-      "[recon-deck] Pre-migration snapshot failed; continuing without a backup. " +
-        "Roll-forward only — make sure the migration is reversible.",
+  let backupPath: string | null = null;
+  if (migrationPending) {
+    backupPath = takePreMigrationSnapshot(sqlite, DB_PATH, appliedBefore);
+    if (backupPath) {
+      console.log(`[recon-deck] Pre-migration snapshot ready: ${backupPath}`);
+    } else {
+      console.warn(
+        "[recon-deck] Pre-migration snapshot failed; continuing without a backup. " +
+          "Roll-forward only — make sure the migration is reversible.",
+      );
+    }
+  }
+
+  try {
+    migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  } catch (err) {
+    console.error("[recon-deck] Migration failed:", err);
+    if (backupPath) {
+      console.error(
+        `[recon-deck] Pre-migration snapshot is at ${backupPath}.\n` +
+          `[recon-deck] To roll back: stop the dev server, then\n` +
+          `  cp "${backupPath}" "${DB_PATH}"\n` +
+          `  rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"\n` +
+          `[recon-deck] See CONTRIBUTING.md › "Migration safety and recovery" for the full procedure.`,
+      );
+    } else {
+      console.error(
+        `[recon-deck] No pre-migration snapshot was written (fresh DB or snapshot itself failed).\n` +
+          `[recon-deck] Inspect the error above and fix the migration SQL before booting again.`,
+      );
+    }
+    // Re-throw so Next.js fails the request loudly instead of serving a
+    // half-migrated DB. Module-level rethrow takes the process down on cold
+    // start, which is the right outcome for a corrupted boot.
+    throw err;
+  }
+
+  // Post-migrate integrity check — only when we actually applied something,
+  // so cold starts on a stable DB pay no extra cost.
+  const appliedAfter = countAppliedMigrations(sqlite);
+  if (appliedAfter > appliedBefore) {
+    verifyDbIntegrity(sqlite);
+    console.log(
+      `[recon-deck] Applied ${appliedAfter - appliedBefore} migration(s); now at ${appliedAfter}.` +
+        (backupPath ? ` Snapshot: ${backupPath}` : ""),
     );
   }
-}
-
-try {
-  migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-} catch (err) {
-  console.error("[recon-deck] Migration failed:", err);
-  if (backupPath) {
-    console.error(
-      `[recon-deck] Pre-migration snapshot is at ${backupPath}.\n` +
-        `[recon-deck] To roll back: stop the dev server, then\n` +
-        `  cp "${backupPath}" "${DB_PATH}"\n` +
-        `  rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"\n` +
-        `[recon-deck] See CONTRIBUTING.md › "Migration safety and recovery" for the full procedure.`,
-    );
-  } else {
-    console.error(
-      `[recon-deck] No pre-migration snapshot was written (fresh DB or snapshot itself failed).\n` +
-        `[recon-deck] Inspect the error above and fix the migration SQL before booting again.`,
-    );
-  }
-  // Re-throw so Next.js fails the request loudly instead of serving a
-  // half-migrated DB. Module-level rethrow takes the process down on cold
-  // start, which is the right outcome for a corrupted boot.
-  throw err;
-}
-
-// Post-migrate integrity check — only when we actually applied something,
-// so cold starts on a stable DB pay no extra cost.
-const appliedAfter = countAppliedMigrations(sqlite);
-if (appliedAfter > appliedBefore) {
-  verifyDbIntegrity(sqlite);
-  console.log(
-    `[recon-deck] Applied ${appliedAfter - appliedBefore} migration(s); now at ${appliedAfter}.` +
-      (backupPath ? ` Snapshot: ${backupPath}` : ""),
-  );
 }
