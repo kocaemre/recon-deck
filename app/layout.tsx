@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -11,21 +11,27 @@ import "./globals.css";
  * onboarded operator sees. `welcome/layout.tsx` owns the full-screen
  * onboarding chrome. The root only hands them a styled body.
  *
+ * Fonts are bundled locally (`app/fonts/`) instead of pulled from
+ * Google at build time — recon-deck claims an offline-by-default
+ * posture and `next/font/google` violated that with a build-step HTTP
+ * fetch. Local variable fonts also stop arm64 CI builds from flaking
+ * on Google Fonts ETIMEDOUT under QEMU emulation.
+ *
  * Dark-mode-only (UI-06). Light theme deferred.
  */
 
-const fontUI = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const fontUI = localFont({
+  src: "./fonts/InterVariable.woff2",
   variable: "--font-ui",
   display: "swap",
+  weight: "100 900",
 });
 
-const fontMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const fontMono = localFont({
+  src: "./fonts/JetBrainsMono.ttf",
   variable: "--font-mono",
   display: "swap",
+  weight: "100 800",
 });
 
 export const metadata: Metadata = {
