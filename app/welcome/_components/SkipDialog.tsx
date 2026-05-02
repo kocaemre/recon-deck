@@ -44,7 +44,7 @@ export function SkipDialog({
             className="mono uppercase tracking-[0.08em]"
             style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 4 }}
           >
-            // confirm
+            {"// "}confirm
           </div>
           <AlertDialogTitle style={{ color: "var(--fg)", fontSize: 18 }}>
             Skip the path config?

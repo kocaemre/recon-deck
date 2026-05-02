@@ -73,7 +73,7 @@ export function UpdatesStep({
           className="mono"
           style={{ fontSize: 11, color: "var(--fg-subtle)", marginBottom: 12 }}
         >
-          // what you&apos;ll see
+          {"// "}what you&apos;ll see
         </div>
         <ToastPreview />
       </div>
@@ -201,7 +201,7 @@ function UpdateOptIn({
         }}
       >
         <Chip>
-          <span className="mono">// only this single request leaves your machine</span>
+          <span className="mono">{"// "}only this single request leaves your machine</span>
         </Chip>
         <Chip>no telemetry</Chip>
         <Chip>no analytics</Chip>

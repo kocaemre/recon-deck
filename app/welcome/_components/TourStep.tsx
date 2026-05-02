@@ -155,7 +155,7 @@ export function TourStep() {
             lineHeight: 1.55,
           }}
         >
-          // tip — press <span style={{ color: "var(--fg)" }}>?</span> anywhere
+          {"// "}tip — press <span style={{ color: "var(--fg)" }}>?</span> anywhere
           for the cheat sheet · <span style={{ color: "var(--fg)" }}>⌘K</span>{" "}
           opens the palette
         </div>

@@ -194,7 +194,7 @@ export function PathsStep({
             lineHeight: 1.55,
           }}
         >
-          // note empty fields fall back to current default behaviour. You
+          {"// "}note empty fields fall back to current default behaviour. You
           can edit any of this later under{" "}
           <span style={{ color: "var(--fg)" }}>/settings</span>.
         </div>
