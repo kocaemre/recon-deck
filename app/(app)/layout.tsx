@@ -72,7 +72,15 @@ export default function AppLayout({
         engagements={engagements}
         schemaVersion={SCHEMA_VERSION_LABEL}
       />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      {/* `max-width` caps the engagement view on wide monitors. Above
+          ~1800px the layout was stretching to the full viewport, leaving
+          a long, hard-to-scan tail of whitespace and very long lines.
+          1800px keeps the heatmap + 2-col detail pane comfortable up to
+          ultrawide; the inner content is left-aligned so the sidebar
+          stays glued to the left edge. */}
+      <main className="flex-1 overflow-y-auto" style={{ maxWidth: 1800 }}>
+        {children}
+      </main>
       <CommandPalette />
       <CheatSheetModal />
       <GlobalSearchModal />
