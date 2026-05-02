@@ -41,14 +41,33 @@ RUN test -f node_modules/better-sqlite3/build/Release/better_sqlite3.node \
     || (echo "ERROR: better-sqlite3 native binary missing" && exit 1)
 
 # ─────────────────────────────────────────────────────────────────────
-# Stage 3: runner — minimal image, non-root, default bind 127.0.0.1
+# Stage 3: exploitdb — pull exploit-database for searchsploit lookups.
+# Multi-stage so `git` never reaches the runtime layer; we copy the
+# resolved tree (without .git) into /opt/exploitdb in the runner.
+# ─────────────────────────────────────────────────────────────────────
+FROM alpine:3.20 AS exploitdb
+RUN apk add --no-cache git
+RUN git clone --depth=1 https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb \
+ && rm -rf /opt/exploitdb/.git
+
+# ─────────────────────────────────────────────────────────────────────
+# Stage 4: runner — minimal image, non-root, default bind 127.0.0.1
 # ─────────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
-# Only libstdc++ is needed at runtime for the compiled .node binary.
-# No build tooling shipped — keeps the image minimal.
-RUN apk add --no-cache libstdc++
+# libstdc++   — required at runtime for the better-sqlite3 .node binary
+# bash        — searchsploit is a bash script
+# coreutils   — searchsploit relies on full GNU sort/cut/etc.
+# gawk        — searchsploit uses gawk-specific features
+# python3     — searchsploit -j (JSON output) shells out to python3
+RUN apk add --no-cache libstdc++ bash coreutils gawk python3
+
+# Bundle exploit-database so searchsploit lookups work fully offline.
+# /opt/exploitdb contains the searchsploit script + CSV index + exploits/
+# tree. ~150 MB on disk; pulled fresh in the dedicated stage above.
+COPY --from=exploitdb /opt/exploitdb /opt/exploitdb
+RUN ln -s /opt/exploitdb/searchsploit /usr/local/bin/searchsploit
 
 # Security defaults per SEC-06 and ARCHITECTURE.md:
 #   - USER node (UID 1000) — non-root

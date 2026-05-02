@@ -2,6 +2,29 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] — 2026-05-02
+
+Patch. Bundle searchsploit into the Docker image so the "Lookup
+exploits" port action works out of the box, fix a misleading error
+that referenced a non-existent settings route.
+
+### Added
+
+- **searchsploit (exploit-database) inside the Docker image.** A new
+  multi-stage `exploitdb` build pulls the upstream
+  `gitlab.com/exploit-database/exploitdb` repo (depth 1, ~150 MB), the
+  runner installs `bash`, `coreutils`, `gawk`, `python3` and symlinks
+  the script at `/usr/local/bin/searchsploit`. The "Lookup exploits"
+  button in the port detail pane now resolves directly against the
+  bundled CSV index — fully offline, no host install required.
+
+### Fixed
+
+- ENOENT error from `searchsploit` previously pointed users at a
+  `/settings/exploits` route that doesn't exist. Updated the message
+  to mention the bundled image, the Kali/Debian apt path, and the
+  upstream GitLab clone alternative.
+
 ## [2.1.1] — 2026-05-02
 
 Patch. Public-release polish: radar identity mark in the sidebar,
