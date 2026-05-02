@@ -6,7 +6,7 @@
 Offline. Self-hosted. Every engagement export-ready as Markdown.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.1.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue)](CHANGELOG.md)
 [![Schema](https://img.shields.io/badge/schema-0018-orange)](src/lib/db/migrations/)
 [![GHCR](https://img.shields.io/badge/ghcr.io-kocaemre%2Frecon--deck-2496ED?logo=docker&logoColor=white)](https://github.com/kocaemre/recon-deck/pkgs/container/recon-deck)
 [![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js)](https://nextjs.org)
@@ -161,9 +161,7 @@ docker run -d --name recon-deck -p 127.0.0.1:13337:13337 \
   ghcr.io/kocaemre/recon-deck
 ```
 
-Open <http://localhost:13337>, paste nmap output, see cards.
-
-**What `-e HOSTNAME=0.0.0.0` does:** the image binds to `127.0.0.1` inside the container by default. For Docker's `-p` port mapping to reach the app, the container must bind all interfaces internally. The `-p 127.0.0.1:13337:13337` form on the host side then restricts external visibility to the loopback interface — only your local machine can reach the app. See [Exposing to LAN](#exposing-to-lan) if you need LAN reachability.
+Open <http://localhost:13337>, paste nmap output, see cards. The `-p 127.0.0.1:13337:13337` host-side prefix keeps the app loopback-only — see [Exposing to LAN](#exposing-to-lan) for LAN reachability.
 
 ---
 
@@ -196,52 +194,25 @@ This activates the host-header allowlist (mitigates DNS rebinding). Requests who
 
 ## Customizing the Knowledge Base
 
-recon-deck ships a curated knowledge base under `/app/knowledge` inside the image. To extend or override it, drop YAML files into the `/kb` volume:
+Drop YAML files into `/kb/ports/*.yaml` (volume-mounted) — they override shipped entries with the same port/service at startup. Schema, denylist, and placeholder syntax in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-# One-off override: add a custom entry for port 445/smb
-docker run ... -v $(pwd)/my-kb:/kb ... ghcr.io/kocaemre/recon-deck
-```
-
-Your YAML files in `/kb/ports/*.yaml` are loaded at startup and take precedence over shipped entries with the same port/service. See [CONTRIBUTING.md](CONTRIBUTING.md) for the schema, denylist rules, and placeholder syntax.
-
-**UID ownership note:** the container runs as UID 1000 (`USER node`). If you bind-mount a host directory, make sure it's readable by UID 1000:
-
-```bash
-chown 1000:1000 /path/to/my-kb
-```
-
-Or use a Docker named volume (`-v recondeck-kb:/kb`), which inherits container ownership automatically on first write.
+Bind-mounting a host dir? Container runs as UID 1000 — `chown 1000:1000 /path/to/my-kb` first, or use a named volume (`-v recondeck-kb:/kb`) which inherits ownership automatically.
 
 ---
 
 ## AutoRecon Import
 
-1. Run AutoRecon: `autorecon <target>` — produces `results/<ip>/`.
-2. Zip the folder: `cd results && zip -r my-target.zip <ip>/`.
-3. Drag the `.zip` onto the import panel in recon-deck.
+1. `autorecon <target>` → produces `results/<ip>/`
+2. `cd results && zip -r my-target.zip <ip>/`
+3. Drag the zip onto the import panel
 
-The importer unpacks server-side, parses the full / quick TCP XML scan, and seeds port cards with everything it finds:
-
-- per-port files (`tcp80/...`, `tcp_22_ssh_*`) → port detail pane
-- `_manual_commands.txt` → "Manual commands" section per port
-- `_patterns.log`, `_errors.log`, `_commands.log` → engagement-level warning panel
-- `report/screenshots/*.png` (gowitness / aquatone) → port_evidence rows, filename-matched to the right port
-- `loot/`, `report/`, `exploit/` → engagement artifacts
-
-Multi-IP zips (`results/<ip1>/`, `results/<ip2>/`) are detected — primary host inherits AR data, secondary hosts get ports + scripts only (a warning surfaces on import).
+Server-side unzip routes everything: per-port files (`tcp80/…`, `tcp_22_ssh_*`) into the right card, `_manual_commands.txt` into Manual commands, gowitness/aquatone PNGs into port evidence, log files (`_patterns`, `_errors`, `_commands`) into an engagement warning panel. Multi-IP zips become multi-host engagements (primary inherits full AR data, secondaries get ports + scripts).
 
 ---
 
 ## Multi-host engagements
 
-A single engagement holds N hosts (DC + workstations during an AD pentest, two related boxes, etc.). The engagement header surfaces a **Hosts** row with switchable chips; the heatmap, command palette, and per-port commands all rescope to the active host. Use `?host=<id>` in the URL or the keyboard palette (`⌘K` → host name).
-
-Multi-host arrives via three paths:
-
-- **XML upload** — every `<host>` in the scan becomes its own host row.
-- **Text / greppable upload** — every `Nmap scan report for ...` block (or distinct `Host:` IP in greppable) becomes its own host row.
-- **AutoRecon multi-IP zip** — every `results/<ip>/` directory becomes a host row.
+One engagement, N hosts (DC + workstations, related boxes, etc.). Hosts chip-switch in the header; heatmap + commands + palette all rescope. Multi-host is detected from XML `<host>` blocks, text/greppable `Nmap scan report for ...` boundaries, and AutoRecon multi-IP zips.
 
 ---
 
@@ -257,118 +228,70 @@ Hit **Re-import** in the engagement header and paste a fresh nmap output. The re
 
 ---
 
-## Cross-engagement search
-
-Press `⌃⇧F` (or `⌘⇧F` on Mac, or click "Search all engagements" in the sidebar). Searches port services / products / versions, NSE script output, port notes, finding titles + descriptions, and engagement names across every engagement in your local DB. Results are FTS5 + BM25 ranked, port hits show a host-context chip when the engagement has multiple hosts.
-
----
-
 ## Settings
 
-Open `/settings` (footer link in the sidebar) for:
+`/settings` (footer link in the sidebar) covers:
 
-- **Engagement list** — every engagement with an inline **Delete** button (cascades through ports, scripts, evidence, findings, scan history). Confirms with the host / port count so you know what you're nuking.
-- **Wordlist library** (`/settings/wordlists`) — override `{WORDLIST_*}` placeholders to your own SecLists / dirb paths.
-- **Custom command library** (`/settings/commands`) — personal command snippets surfaced alongside KB commands. Scope by service / port (or leave blank for global).
-- **KB editor** (`/settings/kb`) — paste a YAML KB entry, validate against `KbEntrySchema`, and (with `RECON_KB_USER_DIR` configured) save it to your user dir. Save invalidates the in-memory KB cache so the new entry surfaces in subsequent renders without a server restart.
+- **Engagement list** — inline delete with cascade confirmation
+- **Wordlists** (`/settings/wordlists`) — override `{WORDLIST_*}` placeholders
+- **Custom commands** (`/settings/commands`) — personal snippets alongside KB commands, scopable by service/port
+- **KB editor** (`/settings/kb`) — paste, validate, save to your user dir; cache invalidates immediately
 
-Engagement renames live in two places: the **inline edit on the engagement header** (click the IP or hostname field, type, blur) for target identity, and the **sidebar hover-kebab → Rename** for the engagement's display label. Hover-kebab also exposes **Duplicate** (deep-copy SQL transaction — every child row gets fresh primary keys; the clone is fully independent) and **Delete** (shadcn `AlertDialog` confirmation; same destructive cascade as the settings list, no native browser dialog).
+Engagement renames are inline on the header (target identity) or via the sidebar kebab (display label). The kebab also exposes Duplicate (deep-copy transaction) and Delete (cascade with confirmation).
 
 ---
 
 ## Exports
 
-Every engagement is export-ready in six formats plus a print route:
+Six formats + a print route. All multi-host aware.
 
-- **Markdown** — Obsidian-compatible frontmatter, one file per engagement. Paste into your vault.
-- **JSON** — structured dump of hosts / ports / commands / checks / notes / findings. For scripting.
-- **HTML** — single-file standalone report, opens in any browser offline.
-- **Findings CSV** — flat severity / title / host / port / cve / description rows for spreadsheet triage.
-- **SysReptor JSON** — generic `projects/v1` shape with multi-host scope; map onto your SysReptor design template.
-- **PwnDoc YAML** — minimal `findings + scope` document; multi-host aware.
-- **Print-to-PDF** — dedicated `/report` route with print-optimized CSS. Ctrl+P → Save as PDF in your browser.
-
-Multi-host engagements export every host in `scope[]` (SysReptor / PwnDoc) and one section per host (Markdown / HTML).
+| Format | Use |
+|---|---|
+| **Markdown** | Obsidian-compatible frontmatter, paste into your vault |
+| **JSON** | Structured dump for scripting |
+| **HTML** | Standalone single-file report, opens offline |
+| **Findings CSV** | Severity / host / port / CVE rows for spreadsheets |
+| **SysReptor JSON** | `projects/v1` shape with `scope[]` |
+| **PwnDoc YAML** | Findings + scope, multi-host aware |
+| **Print-to-PDF** | `/report` route, Ctrl+P → Save as PDF |
 
 ---
 
 ## Backup & Restore
 
-Everything that survives a crash lives in two named volumes (or two host paths if you bind-mounted them):
+State lives in two volumes — back both up together:
 
-- `recondeck-data` → SQLite DB, scan history, evidence (base64-encoded inside the DB), findings, notes
+- `recondeck-data` → SQLite DB (history, evidence, findings, notes)
 - `recondeck-kb` → your YAML overrides under `/kb`
 
-Always back both up together — restoring just one will leave you with KB matches that point at engagements that no longer exist (or vice versa).
-
-**Snapshot to a tarball (works while the container is running, but for a fully consistent point-in-time snapshot stop the container first):**
+**Snapshot to tarball:**
 
 ```bash
 docker stop recon-deck
-docker run --rm \
-  -v recondeck-data:/data \
-  -v recondeck-kb:/kb \
-  -v "$(pwd)":/out \
+docker run --rm -v recondeck-data:/data -v recondeck-kb:/kb -v "$(pwd)":/out \
   alpine sh -c 'tar -C / -czf /out/recon-deck-$(date +%F).tar.gz data kb'
 docker start recon-deck
 ```
 
-The tarball is your full restore point — copy it off-host (rsync, S3, anywhere) and you can rebuild a recon-deck install identical to the moment you snapshotted.
+**Restore:** stop + rm container, recreate volumes, `tar -xzf` from inside an alpine container, restart. Migrations re-apply on boot. Pin a specific image tag (`ghcr.io/kocaemre/recon-deck:v2.1`) for production restores so a `:latest` jump doesn't surprise you.
 
-**Restore from a tarball into fresh volumes:**
-
-```bash
-docker stop recon-deck && docker rm recon-deck
-docker volume rm recondeck-data recondeck-kb
-docker volume create recondeck-data
-docker volume create recondeck-kb
-docker run --rm \
-  -v recondeck-data:/data \
-  -v recondeck-kb:/kb \
-  -v "$(pwd)":/in \
-  alpine sh -c 'tar -C / -xzf /in/recon-deck-2026-04-26.tar.gz'
-# now restart the container — migrations apply on boot, KB reload is automatic
-docker start recon-deck   # or re-run the docker run command from Quick Start
-```
-
-**Schema version pins.** The DB carries Drizzle's `__drizzle_migrations` ledger so re-applying the same migration is a no-op. The current shipped version is **schema `0018`** (the v2.1.0 `app_state` singleton + `engagements.is_sample` pair). Backing up an `0018` DB and restoring it under a build that expects `≥ 0018` works — Drizzle migrations are forward-only, so restoring a snapshot under an older build will leave the runtime confused. Pin the recon-deck image tag (`ghcr.io/kocaemre/recon-deck:v2.1`) for production restores rather than rolling with `:latest`.
-
-**Pre-migration snapshots (boot-time safety net).** When the journal lists more entries than `__drizzle_migrations` has applied, the boot sequence runs `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` *before* invoking `migrate()`. `NNNN` is the applied count when the snapshot was written, so `backup-pre-0017` means "captured at schema 0017, restoring puts you back there". On any migration failure the log surfaces the snapshot path with a copy-pasteable rollback command:
-
-```bash
-# Inside the container (or directly on the host if you bind-mounted /data):
-cp data/recon-deck.db.backup-pre-0017 data/recon-deck.db
-rm -f data/recon-deck.db-wal data/recon-deck.db-shm
-# restart — boot retries from the restored state
-```
-
-After every successful migration, `PRAGMA integrity_check` + `PRAGMA foreign_key_check` run; either failing aborts boot. Snapshots accumulate on disk one per migration tier (`…-0016`, `…-0017`, `…-0018`) — recycle them manually when you trust the new schema. See [CONTRIBUTING.md](CONTRIBUTING.md) › "Migration safety and recovery" for the full procedure.
+Boot also takes a `VACUUM INTO 'data/recon-deck.db.backup-pre-NNNN'` snapshot before running pending migrations; on failure the log prints a copy-pasteable rollback line. Schema is forward-only — see [CONTRIBUTING.md](CONTRIBUTING.md) › "Migration safety and recovery" for the full procedure.
 
 ---
 
 ## Upgrading
 
-recon-deck is **notify-only** for updates — installs are always manual so you control when and how the binary on disk changes. There is no auto-update path and no telemetry; the optional GitHub release check is opt-in (toggle in `/settings → First-run`) and only ever pings `api.github.com/repos/kocaemre/recon-deck/releases/latest`.
+Notify-only — no auto-update, no telemetry. Optional release check is opt-in at `/settings → First-run`.
 
 **Docker:**
 
 ```bash
 docker pull ghcr.io/kocaemre/recon-deck:latest
 docker stop recon-deck && docker rm recon-deck
-# then re-run your usual `docker run …` from Quick Start above.
+# re-run docker run from Quick Start; named volumes survive
 ```
 
-The SQLite volume (`recon-deck-data`) is mounted by name in the docs above, so it survives the stop/rm/run cycle. Migrations are applied automatically on the next boot — never edit `schema.ts` after the fact; add a new `0019_*.sql` instead.
-
-**Local dev:**
-
-```bash
-git pull && npm install && npm run dev
-```
-
-The migration runner picks up new SQL files on boot. If a migration ever fails, the runner stops the boot — fix the migration and restart; nothing is half-applied.
-
-**Toggling the release check:** off by default. Enable it via `/settings → First-run → Check GitHub for new releases`. When on, you'll see one toast per browser session if a newer tag exists, with a link to the release notes. Disable it any time — the toggle persists in the local SQLite, not in env.
+**Local dev:** `git pull && npm install && npm run dev`. Migrations apply at boot.
 
 ## Tech Stack
 
@@ -416,8 +339,8 @@ npm run build         # production build (output: "standalone")
 | `HOSTNAME`                  | `127.0.0.1`             | Bind address inside the container. Override to `0.0.0.0` for port-map reach.   |
 | `PORT`                      | `13337`                 | Port the app listens on (also drives the host-header allowlist default).       |
 | `RECON_DB_PATH`             | `/data/recon-deck.db`   | SQLite file location. Keep on a mounted volume for persistence.                |
-| `RECON_KB_USER_DIR`         | `/kb`                   | **Legacy fallback** for the user KB directory. v2.1.0 onwards `app_state.kb_user_dir` (set during onboarding or `/settings`) wins; the env var is only consulted when the DB column is null. |
-| `RECON_LOCAL_EXPORT_DIR`    | _(empty)_               | **Legacy fallback** for the engagement header's `vscode://file/…` link. v2.1.0 onwards `app_state.local_export_dir` wins. The older `NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR` build-time env still works as the last fallback. |
+| `RECON_KB_USER_DIR`         | `/kb`                   | User KB directory. Onboarding writes this to `app_state.kb_user_dir` which takes precedence; env var is the fallback. |
+| `RECON_LOCAL_EXPORT_DIR`    | _(empty)_               | Engagement header's `vscode://file/…` link. `app_state.local_export_dir` wins; this and `NEXT_PUBLIC_RECON_LOCAL_EXPORT_DIR` are fallbacks. |
 | `RECON_DECK_TRUSTED_HOSTS`  | _(empty)_               | Comma-separated extra hosts allowed by the host-header middleware.             |
 | `NEXT_TELEMETRY_DISABLED`   | `1`                     | Disables Next.js telemetry. Preserves the offline guarantee.                   |
 
