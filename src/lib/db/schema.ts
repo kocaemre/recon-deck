@@ -735,6 +735,9 @@ export const app_state = sqliteTable("app_state", {
   update_check: integer("update_check", { mode: "boolean" })
     .notNull()
     .default(false),
+  sidebar_collapsed: integer("sidebar_collapsed", { mode: "boolean" })
+    .notNull()
+    .default(false),
   updated_at: text("updated_at").notNull(),
 });
 

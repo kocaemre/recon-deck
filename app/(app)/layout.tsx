@@ -71,6 +71,7 @@ export default function AppLayout({
       <Sidebar
         engagements={engagements}
         schemaVersion={SCHEMA_VERSION_LABEL}
+        collapsed={cfg.sidebarCollapsed}
       />
       {/* `max-width` caps the engagement view on wide monitors. Above
           ~1800px the layout was stretching to the full viewport, leaving
