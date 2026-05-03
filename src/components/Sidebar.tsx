@@ -13,7 +13,7 @@
  *   6. Footer status bar — offline/local DB indicator.
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -29,6 +29,8 @@ import {
   Tag as TagIcon,
   Archive,
   ArchiveRestore,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { EngagementSummary } from "@/lib/db/types";
@@ -36,6 +38,7 @@ import { useUIStore } from "@/lib/store";
 import { DeleteEngagementDialog } from "@/components/DeleteEngagementDialog";
 import { CloneEngagementDialog } from "@/components/CloneEngagementDialog";
 import { RadarMark } from "@/components/RadarMark";
+import { setSidebarCollapsed } from "../../app/(app)/_actions";
 
 export type SidebarEngagement = EngagementSummary & {
   total: number;
@@ -51,9 +54,36 @@ interface SidebarProps {
    * matrix.
    */
   schemaVersion?: string;
+  /** Persisted collapse state from app_state.sidebar_collapsed (#2). */
+  collapsed?: boolean;
 }
 
-export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
+export function Sidebar({
+  engagements,
+  schemaVersion,
+  collapsed = false,
+}: SidebarProps) {
+  const [, startCollapseTransition] = useTransition();
+  function toggleCollapsed() {
+    startCollapseTransition(async () => {
+      await setSidebarCollapsed(!collapsed);
+    });
+  }
+  // Cmd+B / Ctrl+B toggles collapse globally. Skip when modifier-less typing
+  // is happening — the cmd-palette + the engagement search use plain `/`
+  // and `n`, but Cmd+B only fires with the modifier so it never collides.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        startCollapseTransition(async () => {
+          await setSidebarCollapsed(!collapsed);
+        });
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [collapsed]);
   const [filter, setFilter] = useState("");
   // v1.2: view mode (active vs archived) and a multi-select tag filter.
   // Both flow through the same `filtered` memo below so tag chips and the
@@ -179,6 +209,10 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
     });
   }
 
+  if (collapsed) {
+    return <CollapsedSidebar onExpand={toggleCollapsed} />;
+  }
+
   return (
     <aside
       className="flex h-screen shrink-0 flex-col"
@@ -203,6 +237,24 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
           >
             recon-deck
           </span>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            title="Collapse sidebar (⌘B)"
+            aria-label="Collapse sidebar"
+            className="ml-auto grid place-items-center"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 4,
+              background: "transparent",
+              border: 0,
+              color: "var(--fg-subtle)",
+              cursor: "pointer",
+            }}
+          >
+            <PanelLeftClose size={14} />
+          </button>
         </div>
 
         <Link
@@ -465,6 +517,82 @@ export function Sidebar({ engagements, schemaVersion }: SidebarProps) {
 }
 
 /* ---------------- sub components ---------------- */
+
+function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
+  return (
+    <aside
+      className="flex h-screen shrink-0 flex-col items-center"
+      style={{
+        width: 52,
+        background: "var(--bg-1)",
+        borderRight: "1px solid var(--border)",
+        padding: "12px 0",
+      }}
+    >
+      <Link
+        href="/"
+        className="grid place-items-center"
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 6,
+          textDecoration: "none",
+        }}
+        title="Home"
+      >
+        <RadarMark size={22} contactCount={2} />
+      </Link>
+      <button
+        type="button"
+        onClick={onExpand}
+        title="Expand sidebar (⌘B)"
+        aria-label="Expand sidebar"
+        className="mt-2 grid place-items-center"
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 6,
+          border: "1px solid var(--border)",
+          background: "var(--bg-2)",
+          color: "var(--fg-muted)",
+          cursor: "pointer",
+        }}
+      >
+        <PanelLeftOpen size={14} />
+      </button>
+      <div className="mt-auto flex flex-col items-center gap-1">
+        <Link
+          href="/"
+          className="grid place-items-center"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            color: "var(--fg-muted)",
+            textDecoration: "none",
+          }}
+          title="New engagement"
+        >
+          <Plus size={14} />
+        </Link>
+        <Link
+          href="/settings"
+          className="grid place-items-center"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 6,
+            color: "var(--fg-muted)",
+            textDecoration: "none",
+          }}
+          title="Settings"
+        >
+          <Cog size={14} />
+        </Link>
+      </div>
+    </aside>
+  );
+}
 
 function SekmeButton({
   active,

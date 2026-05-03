@@ -46,6 +46,7 @@ export interface AppStatePatch {
   kb_user_dir?: string | null;
   wordlist_base?: string | null;
   update_check?: boolean;
+  sidebar_collapsed?: boolean;
 }
 
 /** Partial UPDATE on the singleton; bumps `updated_at` automatically. */
@@ -59,6 +60,8 @@ export function setAppState(db: Db, patch: AppStatePatch): AppState {
   if (patch.wordlist_base !== undefined)
     update.wordlist_base = patch.wordlist_base;
   if (patch.update_check !== undefined) update.update_check = patch.update_check;
+  if (patch.sidebar_collapsed !== undefined)
+    update.sidebar_collapsed = patch.sidebar_collapsed;
 
   db.update(app_state).set(update).where(eq(app_state.id, 1)).run();
   return getAppState(db);
@@ -93,6 +96,7 @@ export interface EffectiveConfig {
   kbUserDir: string | null;
   wordlistBase: string | null;
   updateCheck: boolean;
+  sidebarCollapsed: boolean;
   onboardedAt: string | null;
 }
 
@@ -107,6 +111,7 @@ export function effectiveAppState(db: Db): EffectiveConfig {
     kbUserDir: row.kb_user_dir ?? process.env.RECON_KB_USER_DIR ?? null,
     wordlistBase: row.wordlist_base ?? null,
     updateCheck: row.update_check,
+    sidebarCollapsed: row.sidebar_collapsed,
     onboardedAt: row.onboarded_at,
   };
 }
