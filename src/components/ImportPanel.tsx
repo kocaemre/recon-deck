@@ -69,6 +69,7 @@ export function ImportPanel() {
       }
       const data = await res.json();
       router.push(`/engagements/${data.id}`);
+      router.refresh();
     } catch {
       setError("Failed to import AutoRecon results. Please try again.");
       setFile(null);
