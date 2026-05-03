@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 import {
   db,
   upsertCheck,
+  upsertChecksBatch,
   upsertNote,
   updateTarget,
   deleteEngagement,
@@ -67,6 +68,34 @@ export async function toggleCheck(
     throw new Error("Invalid checkKey.");
   }
   upsertCheck(db, eid, pid, checkKey.trim(), Boolean(checked));
+  revalidatePath(`/engagements/${eid}`);
+}
+
+/**
+ * Bulk-set every checklist item on a port to the same state (#1).
+ *
+ * Powers the "Check all / Uncheck all" header button. One transaction =
+ * one revalidate, so toggling 12 items doesn't fire 12 RSC re-renders.
+ * The per-row ChecklistItem still uses toggleCheck for its useOptimistic
+ * path; this is the bulk shortcut for power users who already have
+ * coverage and want to stamp the whole list at once.
+ */
+export async function setAllChecksForPort(
+  engagementId: number,
+  portId: number,
+  checkKeys: ReadonlyArray<string>,
+  checked: boolean,
+): Promise<void> {
+  const eid = validateId(engagementId, "engagementId");
+  const pid = validateId(portId, "portId");
+  if (!Array.isArray(checkKeys)) {
+    throw new Error("checkKeys must be an array.");
+  }
+  const items = checkKeys
+    .filter((k): k is string => typeof k === "string" && k.trim().length > 0)
+    .map((k) => ({ checkKey: k.trim(), checked: Boolean(checked) }));
+  if (items.length === 0) return;
+  upsertChecksBatch(db, eid, pid, items);
   revalidatePath(`/engagements/${eid}`);
 }
 
