@@ -43,6 +43,7 @@ export function PastePanel() {
       }
       const data = await res.json();
       router.push(`/engagements/${data.id}`);
+      router.refresh();
     } catch {
       setError(
         "Could not parse this input. Paste raw nmap text output or XML (-oN / -oX).",
@@ -63,6 +64,7 @@ export function PastePanel() {
       }
       const data = await res.json();
       router.push(`/engagements/${data.id}`);
+      router.refresh();
     } catch {
       setError("Could not load sample engagement. Please try again.");
     } finally {
