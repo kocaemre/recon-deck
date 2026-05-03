@@ -21,6 +21,7 @@ import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
 import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
 import { OnboardingSettingsSection } from "@/components/OnboardingSettingsSection";
+import { detectToolPaths } from "@/lib/tool-paths";
 import pkg from "../../../package.json";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export default function SettingsIndexPage() {
   const engagements = listSummaries(db);
   const deleted = listDeletedSummaries(db);
   const cfg = effectiveAppState(db);
+  const tools = detectToolPaths();
   const totalHosts = engagements.reduce((acc, e) => acc + e.host_count, 0);
   const totalPorts = engagements.reduce((acc, e) => acc + e.port_count, 0);
 
@@ -77,6 +79,43 @@ export default function SettingsIndexPage() {
             title="KB editor"
             description="Validate and save user knowledge-base entries against the schema. Hot-reloads."
           />
+        </div>
+      </section>
+
+      {/* #9: external tool path detection. Read-only — surfaces what we
+          found at common install locations so operators don't have to
+          hunt for paths. Wordlists/searchsploit defaults can still be
+          overridden via the existing /settings/wordlists editor and the
+          KB lookup binary itself. */}
+      <section style={{ marginBottom: 32 }}>
+        <SectionLabel>Detected tools</SectionLabel>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-muted)",
+            margin: "6px 0 12px",
+          }}
+        >
+          Common install locations probed at request time.{" "}
+          <span className="mono">Not found</span> means recon-deck
+          couldn{"’"}t locate the tool — install via apt / git clone
+          or override individual wordlist paths in{" "}
+          <Link
+            href="/settings/wordlists"
+            style={{ color: "var(--accent)", textDecoration: "underline" }}
+          >
+            Wordlists
+          </Link>
+          .
+        </p>
+        <div
+          className="grid grid-cols-1 gap-2"
+          style={{ fontSize: 12.5 }}
+        >
+          <DetectedRow label="searchsploit" value={tools.searchsploit} />
+          <DetectedRow label="SecLists" value={tools.seclists} />
+          <DetectedRow label="dirb wordlists" value={tools.dirb} />
+          <DetectedRow label="dirbuster wordlists" value={tools.dirbuster} />
         </div>
       </section>
 
@@ -165,6 +204,68 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
     >
       {children}
+    </div>
+  );
+}
+
+function DetectedRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: { path: string; source: string } | null;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-3"
+      style={{
+        padding: "10px 12px",
+        borderRadius: 6,
+        border: "1px solid var(--border)",
+        background: "var(--bg-2)",
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: value ? "var(--accent)" : "var(--fg-subtle)",
+            opacity: value ? 1 : 0.5,
+          }}
+        />
+        <span style={{ fontWeight: 500 }}>{label}</span>
+      </div>
+      {value ? (
+        <div className="flex items-center gap-2 min-w-0">
+          <code
+            className="mono truncate"
+            style={{
+              fontSize: 12,
+              color: "var(--fg-muted)",
+              maxWidth: 360,
+            }}
+            title={value.path}
+          >
+            {value.path}
+          </code>
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--fg-subtle)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {value.source}
+          </span>
+        </div>
+      ) : (
+        <span style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
+          Not found
+        </span>
+      )}
     </div>
   );
 }
