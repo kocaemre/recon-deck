@@ -59,6 +59,43 @@ export function upsertCheck(
 }
 
 /**
+ * Bulk upsert every (checkKey → checked) pair for one port in a single
+ * transaction. Used by the "Check all / Uncheck all" power-user shortcut
+ * — semantically equivalent to calling `upsertCheck` N times, but one
+ * write barrier means the engagement page revalidates exactly once.
+ */
+export function upsertChecksBatch(
+  db: Db,
+  engagementId: number,
+  portId: number,
+  items: ReadonlyArray<{ checkKey: string; checked: boolean }>,
+): void {
+  if (items.length === 0) return;
+  const now = new Date().toISOString();
+  db.transaction((tx) => {
+    for (const { checkKey, checked } of items) {
+      tx.insert(check_states)
+        .values({
+          engagement_id: engagementId,
+          port_id: portId,
+          check_key: checkKey,
+          checked,
+          updated_at: now,
+        })
+        .onConflictDoUpdate({
+          target: [
+            check_states.engagement_id,
+            check_states.port_id,
+            check_states.check_key,
+          ],
+          set: { checked, updated_at: now },
+        })
+        .run();
+    }
+  });
+}
+
+/**
  * Get all check states for an engagement.
  *
  * Returns all (check_key, checked) pairs across all ports in the engagement.

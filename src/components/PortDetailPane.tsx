@@ -16,6 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CopyButton } from "@/components/CopyButton";
 import { ChecklistItem } from "@/components/ChecklistItem";
+import { BulkCheckButton } from "@/components/BulkCheckButton";
 import { NotesField } from "@/components/NotesField";
 import { StructuredScriptOutput } from "@/components/StructuredScriptOutput";
 import { EvidencePane } from "@/components/EvidencePane";
@@ -373,6 +374,16 @@ export function PortDetailPane({
         {kbChecks.length > 0 && (
           <Section
             label={`Checklist · ${kbChecks.filter((c) => checkMap.get(c.key)).length}/${kbChecks.length}`}
+            action={
+              <BulkCheckButton
+                engagementId={engagementId}
+                portId={portId}
+                checkKeys={kbChecks.map((c) => c.key)}
+                checkedCount={
+                  kbChecks.filter((c) => checkMap.get(c.key)).length
+                }
+              />
+            }
           >
             <div className="flex flex-col" style={{ gap: 2 }}>
               {kbChecks.map((check) => (
@@ -488,10 +499,12 @@ function CommandCard({ label, command }: { label: string; command: string }) {
 function Section({
   label,
   count,
+  action,
   children,
 }: {
   label: string;
   count?: number;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -519,6 +532,7 @@ function Section({
             marginLeft: 6,
           }}
         />
+        {action}
       </div>
       {children}
     </section>

@@ -78,7 +78,7 @@ export {
   type AppStatePatch,
   type EffectiveConfig,
 } from "./app-state-repo";
-export { upsertCheck, getChecksByEngagement } from "./checklist-repo";
+export { upsertCheck, upsertChecksBatch, getChecksByEngagement } from "./checklist-repo";
 export { upsertNote, getNotesByEngagement } from "./notes-repo";
 export {
   searchEngagements,
