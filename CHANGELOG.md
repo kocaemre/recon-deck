@@ -2,6 +2,49 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-05-03
+
+Minor. Workflow ergonomics: bulk-tick the per-port checklist, collapse
+the sidebar to a thin rail on small screens, see at a glance which
+external tools recon-deck found on the host, and stop fighting
+searchsploit's overly strict query allowlist. Also clears a UX
+papercut on engagement creation.
+
+### Added
+
+- **Bulk `Check all` / `Uncheck all` toggle** on the per-port checklist
+  header. Wraps every check in a single transaction so toggling 12
+  items fires one revalidate, not twelve. Per-row toggle still uses
+  the existing optimistic path. (#1)
+- **Collapsible sidebar.** New 52-px icon rail replaces the 260-px
+  engagement list when collapsed; flip with the brand-row chevron or
+  `Cmd+B` / `Ctrl+B`. State persists in `app_state.sidebar_collapsed`
+  (migration 0019) so SSR returns the right width with no hydration
+  flash. Rail keeps RadarMark home, expand button, plus/settings
+  icons. (#2)
+- **`/settings → Detected tools` panel.** Probes common install paths
+  for `searchsploit`, SecLists, dirb, dirbuster on the live host and
+  surfaces what was found with the source label (`apt`, `Docker
+  bundle`, `PATH`, …). Read-only; overrides still go through
+  `/settings/wordlists`. (#9)
+
+### Changed
+
+- **Searchsploit query validation rewritten.** Replaced the allowlist
+  regex (`[A-Za-z0-9._-\s]`) with a denylist of shell metacharacters.
+  Real banners like `Apache/2.4.49`, `OpenSSH 7.2p2`,
+  `Samba 3.0.20-Debian`, and `Server (Ubuntu)` were being rejected.
+  `spawn(argv)` is the actual injection boundary; the regex is
+  defense-in-depth. (#8)
+
+### Fixed
+
+- **Sidebar engagement list refreshes after creating a new
+  engagement.** `router.push()` alone wasn't invalidating the
+  client-side RSC cache for the layout segment, so the freshly
+  created engagement only appeared after a hard reload. Added the
+  matching `router.refresh()` to `PastePanel` and `ImportPanel`. (#7)
+
 ## [2.1.3] — 2026-05-02
 
 Patch. Settings polish: manual "Check now" button + visible current
