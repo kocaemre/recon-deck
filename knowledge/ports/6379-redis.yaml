@@ -2,42 +2,53 @@ schema_version: 1
 port: 6379
 service: redis
 protocol: tcp
-risk: high
+risk: medium
 quick_facts:
   - "Often deployed without authentication — try connecting unauthenticated"
   - "CONFIG SET dir + dbfilename can write SSH keys or webshells"
   - "Slave replication abuse yields RCE on Redis 4.x+"
+  - "Debian/Ubuntu Lua sandbox escape via MODULE LOAD (CVE-2022-0543) affects Redis 4.x and some 5.0.x backports"
 checks:
   - key: redis-no-auth
     label: "Tested unauthenticated access (PING / INFO)"
   - key: redis-version-info
     label: "Captured Redis version via INFO"
   - key: redis-config-write
-    label: "Checked write primitives via CONFIG SET dir / dbfilename"
+    label: "Tested CONFIG SET write primitive (without breaking the box)"
   - key: redis-master-slave-rce
     label: "Considered master-slave replication RCE (Redis 4.x+)"
+  - key: redis-module-load-cve
+    label: "Checked MODULE LOAD vector (CVE-2022-0543) on Debian/Ubuntu Lua builds"
 commands:
-  - label: "Connect unauthenticated"
-    template: "redis-cli -h {IP} -p {PORT}"
-  - label: "INFO + version"
+  - label: "INFO + server fingerprint"
     template: "redis-cli -h {IP} -p {PORT} INFO"
-  - label: "nmap Redis info"
-    template: "nmap -p{PORT} --script=redis-info,redis-brute {IP}"
+  - label: "CONFIG GET write path probe"
+    template: "redis-cli -h {IP} -p {PORT} CONFIG GET dir"
+  - label: "CONFIG SET dir for cron RCE foothold"
+    template: "redis-cli -h {IP} -p {PORT} CONFIG SET dir /var/spool/cron/"
+  - label: "nmap Redis NSE"
+    template: "nmap -p {PORT} --script=redis-info,redis-brute {IP}"
 default_creds:
   - username: ""
     password: ""
     notes: "Default install requires no authentication"
-  - username: ""
-    password: foobared
-    notes: "Old Redis default test password"
+  - username: default
+    password: ""
+    notes: "Older docker-compose setups use ACL user 'default' with empty password"
 known_vulns:
-  - match: "Redis 4"
-    note: "Master-slave replication module load → RCE"
-    link: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
-  - match: "Redis"
-    note: "Unauthenticated CONFIG SET dir + SSH key write for code execution"
-    link: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
+  - match: "redis_version:4."
+    note: "Redis 4.x — master-slave replication MODULE LOAD → RCE; also CVE-2022-0543 Lua sandbox escape on Debian/Ubuntu"
+    link: "https://book.hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
+  - match: "redis_version:5.0.7"
+    note: "Redis 5.0.7 Debian backport — CVE-2022-0543 Lua sandbox escape via MODULE LOAD"
+    link: "https://book.hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
+  - match: "redis_version:"
+    note: "Unauthenticated CONFIG SET dir + dbfilename write primitive — SSH key injection or webshell"
+    link: "https://book.hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
 resources:
   - title: "6379 - Pentesting Redis"
-    url: "https://hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
+    url: "https://book.hacktricks.wiki/en/network-services-pentesting/6379-pentesting-redis.html"
     author: HackTricks
+  - title: "Redis 4.x / 5.x RCE — exploit-db"
+    url: "https://www.exploit-db.com/exploits/47195"
+    author: exploit-db
