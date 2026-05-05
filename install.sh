@@ -36,8 +36,16 @@ if ! docker info >/dev/null 2>&1; then
       printf '  open -a Docker            # macOS: launch Docker Desktop, wait for the menubar whale to settle\n' >&2
       ;;
     Linux)
-      printf '  sudo systemctl start docker   # systemd\n' >&2
-      printf '  # or:  sudo service docker start\n' >&2
+      if grep -qi microsoft /proc/version 2>/dev/null; then
+        printf '  WSL: ensure Docker Desktop is running on the Windows host with WSL integration enabled.\n' >&2
+        printf '  recon-deck will not work with a WSL-internal docker daemon without that setting.\n' >&2
+      else
+        printf '  sudo systemctl start docker   # systemd\n' >&2
+        printf '  # or:  sudo service docker start\n' >&2
+      fi
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      printf '  Windows: open Docker Desktop from the Start menu, or run: start docker\n' >&2
       ;;
     *)
       printf '  (start Docker via your platforms preferred mechanism)\n' >&2
