@@ -58,11 +58,14 @@ export function OnboardingSettingsSection({
     try {
       const res = await fetch("/api/update-check?force=1");
       const data = (await res.json()) as {
+        enabled?: boolean;
+        ok?: boolean;
+        reason?: "github_unavailable" | "rate_limited" | "network_error";
         latest?: string;
         hasUpdate?: boolean;
         url?: string;
       };
-      if (data.hasUpdate && data.latest) {
+      if (data.ok && data.hasUpdate && data.latest) {
         toast(`v${data.latest} available`, {
           description:
             "Re-run the install one-liner (or git pull for local dev) to upgrade — your data stays.",
@@ -75,8 +78,12 @@ export function OnboardingSettingsSection({
               }
             : undefined,
         });
-      } else if (data.latest) {
+      } else if (data.ok && data.latest) {
         toast.success(`You're on the latest version (v${data.latest}).`);
+      } else if (data.reason === "rate_limited") {
+        toast.message("GitHub rate limit hit. Try again in an hour.");
+      } else if (data.reason === "github_unavailable") {
+        toast.message("GitHub returned an error. Try again later.");
       } else {
         toast.message(
           "Could not reach api.github.com. Check your connection or try again later.",
