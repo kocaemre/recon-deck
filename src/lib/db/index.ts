@@ -136,6 +136,7 @@ export {
 export {
   replaceForPort as replaceFingerprintsForPort,
   listForPort as listFingerprintsForPort,
+  listForPorts as listFingerprintsForPorts,
   type FingerprintInput,
   type FingerprintSource,
   type FingerprintType,

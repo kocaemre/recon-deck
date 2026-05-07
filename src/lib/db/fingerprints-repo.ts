@@ -14,7 +14,7 @@ import "server-only";
  * rescan with identical signals collapses into the same row set.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { port_fingerprints, type PortFingerprint } from "./schema";
 import type * as schema from "./schema";
@@ -84,4 +84,28 @@ export function listForPort(
     .from(port_fingerprints)
     .where(where)
     .all();
+}
+
+/**
+ * Bulk-load fingerprints for many ports in one query. Engagement page
+ * uses this to avoid an N+1 across the heatmap render. Empty input
+ * returns an empty map.
+ */
+export function listForPorts(
+  db: Db | Tx,
+  portIds: ReadonlyArray<number>,
+): Map<number, PortFingerprint[]> {
+  const out = new Map<number, PortFingerprint[]>();
+  if (portIds.length === 0) return out;
+  const rows = db
+    .select()
+    .from(port_fingerprints)
+    .where(inArray(port_fingerprints.port_id, [...portIds]))
+    .all();
+  for (const r of rows) {
+    const list = out.get(r.port_id) ?? [];
+    list.push(r);
+    out.set(r.port_id, list);
+  }
+  return out;
 }
