@@ -2,6 +2,56 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] — 2026-05-07
+
+Minor. **Context-aware checklists** ship — the headline feature of #14.
+The KB now lets each service entry declare conditional groups gated on
+fingerprints extracted from nmap and AutoRecon output, and the engagement
+page automatically surfaces those groups when the matching signal is
+present. Operators get extra checks + tweaked commands without a single
+manual configuration.
+
+### Added
+
+- **KB conditional groups.** Each service entry can declare an optional
+  `conditional[]` array. Each entry has an `id`, a `when` predicate
+  (`nmap_script_contains`, `nmap_version_matches` with semver ops + ranges,
+  `autorecon_finding`, `port_field_equals`, plus `anyOf` / `allOf` / `not`
+  combinators), `adds_checks[]`, and `modifies_commands` keyed by command
+  `id`. The schema is purely additive — every existing entry parses
+  unchanged. (#26)
+- **Lint rules** for the new shape: duplicate conditional ids, dangling
+  `modifies_commands` references, baseline-vs-conditional check key
+  collisions, plus the existing placeholder allowlist + denylist applied
+  to modified templates. Build-time errors point at the file + rule. (#26)
+- **Per-port fingerprint store.** New `port_fingerprints` table
+  (migration 0021): `(port_id, source: nmap | autorecon, type: tech | cves
+  | banners, value)`. Idempotent rescans via `UNIQUE` on the composite. (#27)
+- **nmap fingerprint extractor.** Pure-function heuristic distills tech
+  tags (apache, nginx, php, wordpress, openssh, vsftpd, mysql, …), CVE
+  references (`CVE-YYYY-NNNNN` regex), and banners from
+  `(product, version, extrainfo, NSE script bodies)`. Wired into both
+  `createFromScan` and `applyRescan` import paths. (#27)
+- **AutoRecon fingerprint extractor.** Same shape, different source —
+  pulls signals from whatweb / feroxbuster / nikto / dirb output. Adds a
+  discovery-tool extension heuristic that tags `php` / `asp.net` / `java`
+  when the per-tag URL extension count clears a threshold. Persisted with
+  `source: autorecon` so a fresh nmap rescan doesn't blow them away. (#28)
+- **Conditional resolver.** Pure functions that evaluate the `when` DSL
+  against a `ResolveContext` built from the port row, NSE scripts, and
+  fingerprint rows. Merges baseline + matched conditionals into a
+  `ResolvedEntry` carrying provenance metadata. Conflict policy locked:
+  appends in declaration order, replaces last-wins. Returns an
+  `inactive[]` payload so the page can detect orphaned check states. (#29)
+- **UI provenance badges.** Conditional-driven checks render below a
+  `CONTEXT-SPECIFIC` separator with a `+conditional-id` pill. Modified
+  commands carry the same pill next to their label. Orphan rows
+  (operator-toggled checks whose conditional has stopped matching after
+  a re-import) render at 65% opacity under their own
+  `Orphaned · signal no longer present` separator — the operator's
+  prior work is preserved instead of silently disappearing. Tested in
+  light + dark. (#30)
+
 ## [2.3.0] — 2026-05-07
 
 Minor. Light theme arrives, plus three operator-facing fixes: smarter
