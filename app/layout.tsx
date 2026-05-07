@@ -47,12 +47,29 @@ export const metadata: Metadata = {
   description: "nmap output to actionable checklist in under 30 seconds",
 };
 
+// Force dynamic rendering so the root layout reads app_state per-request
+// and never gets baked into a static prerender (which runs at build time
+// before the SQLite file or migrations exist — `/_not-found` was crashing
+// with "no such table: app_state" until this was set).
+export const dynamic = "force-dynamic";
+
+function readThemePref(): "system" | "dark" | "light" {
+  try {
+    return effectiveAppState(db).theme;
+  } catch {
+    // Build-time prerender or first boot before migrations run — fall
+    // back to "system" and let the pre-paint bootstrap script resolve
+    // via prefers-color-scheme.
+    return "system";
+  }
+}
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const themePref = effectiveAppState(db).theme;
+  const themePref = readThemePref();
   // Server-side resolution: explicit choices stamp their class. "system"
   // renders without a theme class so the inline script below can pick
   // it up from prefers-color-scheme before paint.
