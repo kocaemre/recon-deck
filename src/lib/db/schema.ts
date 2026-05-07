@@ -738,6 +738,10 @@ export const app_state = sqliteTable("app_state", {
   sidebar_collapsed: integer("sidebar_collapsed", { mode: "boolean" })
     .notNull()
     .default(false),
+  /** Tri-state — "system" follows prefers-color-scheme, "dark"/"light"
+   *  are explicit user overrides. Stored as TEXT; the repo narrows it
+   *  to the ThemeMode union. v2.3.0 #3. */
+  theme: text("theme").notNull().default("system"),
   updated_at: text("updated_at").notNull(),
 });
 

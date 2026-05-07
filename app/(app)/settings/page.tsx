@@ -20,6 +20,7 @@ import {
 import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
 import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { OnboardingSettingsSection } from "@/components/OnboardingSettingsSection";
 import { detectToolPaths } from "@/lib/tool-paths";
 import pkg from "../../../package.json";
@@ -170,6 +171,23 @@ export default function SettingsIndexPage() {
             : `${engagements.length} engagement${engagements.length === 1 ? "" : "s"} · ${totalHosts} host${totalHosts === 1 ? "" : "s"} · ${totalPorts} port${totalPorts === 1 ? "" : "s"} total. Use the inline edit on the engagement header to rename.`}
         </p>
         <EngagementSettingsList engagements={engagements} />
+      </section>
+
+      {/* v2.3.0 #3: theme tri-state toggle. */}
+      <section style={{ marginBottom: 32 }}>
+        <SectionLabel>Display</SectionLabel>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-muted)",
+            margin: "6px 0 12px",
+          }}
+        >
+          Pick how recon-deck should render. <code className="mono">System</code>{" "}
+          follows your OS preference; explicit choices override it. Print
+          stylesheet always renders light regardless.
+        </p>
+        <ThemeToggle initial={cfg.theme} />
       </section>
 
       {/* v1.4.0 #12: Editor integration toggle. */}

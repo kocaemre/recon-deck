@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import { Toaster } from "sonner";
+import { db, effectiveAppState } from "@/lib/db";
 import "./globals.css";
 
 /**
@@ -17,7 +19,13 @@ import "./globals.css";
  * fetch. Local variable fonts also stop arm64 CI builds from flaking
  * on Google Fonts ETIMEDOUT under QEMU emulation.
  *
- * Dark-mode-only (UI-06). Light theme deferred.
+ * Theme (v2.3.0 #3): app_state.theme is "system" / "dark" / "light".
+ *   - Explicit choice → class is applied server-side.
+ *   - "system" → server renders neutral, an inline pre-paint script
+ *     reads prefers-color-scheme and stamps the right class before
+ *     React hydrates. suppressHydrationWarning swallows the className
+ *     diff that produces. The script is the smallest amount of code
+ *     that prevents a flash of the wrong theme.
  */
 
 const fontUI = localFont({
@@ -44,11 +52,31 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const themePref = effectiveAppState(db).theme;
+  // Server-side resolution: explicit choices stamp their class. "system"
+  // renders without a theme class so the inline script below can pick
+  // it up from prefers-color-scheme before paint.
+  const themeClass =
+    themePref === "dark" ? "dark" : themePref === "light" ? "light" : "";
+
   return (
-    <html lang="en" className={`dark ${fontUI.variable} ${fontMono.variable}`}>
+    <html
+      lang="en"
+      className={`${themeClass} ${fontUI.variable} ${fontMono.variable}`.trim()}
+      data-theme-pref={themePref}
+      suppressHydrationWarning
+    >
+      <head>
+        {/* Static bootstrap script — reads data-theme-pref and resolves
+            "system" via prefers-color-scheme before paint to avoid a
+            theme flash on first hydration. Lives in public/ so the
+            SEC-03 ESLint guard against dangerouslySetInnerHTML stays
+            clean. */}
+        <Script src="/theme-bootstrap.js" strategy="beforeInteractive" />
+      </head>
       <body className="flex h-screen overflow-hidden bg-background text-foreground antialiased">
         {children}
-        <Toaster theme="dark" position="bottom-right" />
+        <Toaster theme={themePref === "system" ? "system" : themePref} position="bottom-right" />
         {/* v2.1.0: desktop-only fallback. CSS shows this block + hides
             everything else when the viewport is < 1280px. recon-deck's
             heatmap layout assumes desktop space — mobile/tablet would

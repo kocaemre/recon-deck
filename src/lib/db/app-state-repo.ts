@@ -40,6 +40,8 @@ export function getAppState(db: Db): AppState {
   return row;
 }
 
+export type ThemeMode = "system" | "dark" | "light";
+
 export interface AppStatePatch {
   onboarded_at?: string | null;
   local_export_dir?: string | null;
@@ -47,6 +49,7 @@ export interface AppStatePatch {
   wordlist_base?: string | null;
   update_check?: boolean;
   sidebar_collapsed?: boolean;
+  theme?: ThemeMode;
 }
 
 /** Partial UPDATE on the singleton; bumps `updated_at` automatically. */
@@ -62,6 +65,7 @@ export function setAppState(db: Db, patch: AppStatePatch): AppState {
   if (patch.update_check !== undefined) update.update_check = patch.update_check;
   if (patch.sidebar_collapsed !== undefined)
     update.sidebar_collapsed = patch.sidebar_collapsed;
+  if (patch.theme !== undefined) update.theme = patch.theme;
 
   db.update(app_state).set(update).where(eq(app_state.id, 1)).run();
   return getAppState(db);
@@ -97,7 +101,12 @@ export interface EffectiveConfig {
   wordlistBase: string | null;
   updateCheck: boolean;
   sidebarCollapsed: boolean;
+  theme: ThemeMode;
   onboardedAt: string | null;
+}
+
+function narrowTheme(raw: string): ThemeMode {
+  return raw === "dark" || raw === "light" ? raw : "system";
 }
 
 export function effectiveAppState(db: Db): EffectiveConfig {
@@ -112,6 +121,7 @@ export function effectiveAppState(db: Db): EffectiveConfig {
     wordlistBase: row.wordlist_base ?? null,
     updateCheck: row.update_check,
     sidebarCollapsed: row.sidebar_collapsed,
+    theme: narrowTheme(row.theme),
     onboardedAt: row.onboarded_at,
   };
 }

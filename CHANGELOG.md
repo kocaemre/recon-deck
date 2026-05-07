@@ -2,6 +2,45 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-05-07
+
+Minor. Light theme arrives, plus three operator-facing fixes: smarter
+searchsploit fallback, Docker-aware tool detection, and an honest
+update-check error story instead of "Could not reach api.github.com"
+on every transient blip.
+
+### Added
+
+- **Light mode.** Tri-state Display toggle in `/settings` —
+  `system` (default, follows `prefers-color-scheme`), `dark`, and
+  `light`. Tokens flip via `:root.light` overrides on the `<html>`
+  class so component code never branches. Server-side resolution +
+  pre-paint bootstrap script eliminates the theme-flash on hydration.
+  Persisted in `app_state.theme` (migration 0020). Print stylesheet
+  remains light-only regardless of choice. (#3)
+- **searchsploit auto-fallback to service-only query.** When the
+  versioned query (e.g. `vsftpd 2.3.4`) returns zero hits AND has
+  more than one token, recon-deck re-runs with just the first token
+  and surfaces matches under a "Broader matches · no version filter"
+  header. Catches version-range exploits the strict query was
+  silently dropping. (#12)
+
+### Changed
+
+- **`/api/update-check` failure modes are no longer collapsed.** The
+  route now returns `{ ok: false, reason: rate_limited |
+  github_unavailable | network_error }` so the settings "Check now"
+  toast can name the actual problem (rate limit / GitHub side issue)
+  instead of always pointing at the user's network. Failure responses
+  are no longer cached for an hour — the next call always re-attempts
+  so a transient blip can't poison the cache. (#16)
+- **`/settings → Detected tools` is Docker-aware.** Probe `/.dockerenv`
+  and surface a "Container detected" callout with a copy-pasteable
+  `-v /usr/share/wordlists:/host/wordlists:ro` snippet when running
+  inside the recon-deck image with no host mount — instead of the
+  silent all-rows-Not-found that #18 reported. SecLists / dirb /
+  dirbuster candidate lists also probe `/host/...` mount points. (#18)
+
 ## [2.2.0] — 2026-05-03
 
 Minor. Workflow ergonomics: bulk-tick the per-port checklist, collapse

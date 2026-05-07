@@ -3,7 +3,14 @@
 
 /*
  * recon-deck redesign — Modern IDE / Linear-Raycast polish, terminal-green accent.
- * Dark-mode-only (UI-06). All tokens set at :root, no theme switch.
+ *
+ * Theme model (v2.3.0 #3): tri-state — system / dark / light.
+ *   - Dark is the canonical palette and lives in `:root` (default).
+ *   - Light overrides live under `.light` on the html element.
+ *   - "system" mode resolves to .light or .dark on the server (or via the
+ *     hydration script that reads prefers-color-scheme); the actual class
+ *     written into <html> is always `.dark` or `.light` — never `.system`.
+ *
  * shadcn color aliases are remapped onto the redesign palette so existing
  * shadcn/ui primitives (Button, Card, Dialog, ...) continue to render.
  */
@@ -89,6 +96,57 @@
   /* Shared radius fallback */
   --radius: 6px;
 }
+
+/*
+ * Light-mode palette (v2.3.0 #3).
+ *
+ * Mirrors the dark token surface 1:1 so component code never branches —
+ * the same var(--bg-2) / var(--fg-muted) / var(--accent) calls light up
+ * with light-substrate values. Accent stays terminal-green (slightly
+ * dimmed for AA contrast on white). Risk hues shift toward darker tones
+ * so they read on a near-white card.
+ *
+ * Print stylesheet below already forces white/black, so the operator's
+ * theme choice never bleeds into a printed deliverable.
+ */
+:root.light {
+  /* Surfaces — soft warm whites with stair-stepped greys */
+  --bg-0: #f6f7f9;
+  --bg-1: #ffffff;
+  --bg-2: #f1f2f5;
+  --bg-3: #e6e7eb;
+  --code-surface: #f3f4f6;
+
+  /* Borders */
+  --border: #d8dadf;
+  --border-strong: #b9bcc4;
+  --border-subtle: #e5e6ea;
+
+  /* Text — near-black ramps for AA contrast on bg-1 */
+  --fg: #0f1014;
+  --fg-muted: #494c54;
+  --fg-subtle: #6c707a;
+  --fg-faint: #9da1aa;
+
+  /* Accent — slightly darker green for AA on white */
+  --accent: #15803d;
+  --accent-dim: #166534;
+  --accent-bg: rgba(21, 128, 61, 0.10);
+  --accent-border: rgba(21, 128, 61, 0.35);
+
+  /* Risk palette — deeper hues for legibility on light surfaces */
+  --risk-crit: #b91c1c;
+  --risk-high: #c2410c;
+  --risk-med:  #a16207;
+  --risk-low:  #1d4ed8;
+  --risk-info: #4b5563;
+}
+
+:root.light *::-webkit-scrollbar-thumb {
+  background: #c8cad0;
+  border: 2px solid var(--bg-0);
+}
+:root.light *::-webkit-scrollbar-thumb:hover { background: #a9acb4; }
 
 body {
   background: var(--bg-0);
