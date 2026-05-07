@@ -33,8 +33,11 @@ export interface NmapFingerprint {
  *
  * Keep this list narrow. Each entry should map to a distinct attack
  * surface that KB authors might want to gate a checklist group on.
+ *
+ * Exported as `TECH_KEYWORDS` so the AutoRecon extractor (P3) can reuse
+ * the same keyword set against whatweb / feroxbuster / nikto outputs.
  */
-const TECH_KEYWORDS: ReadonlyArray<{ tag: string; needles: string[] }> = [
+export const TECH_KEYWORDS: ReadonlyArray<{ tag: string; needles: string[] }> = [
   { tag: "wordpress", needles: ["wordpress"] },
   { tag: "drupal", needles: ["drupal"] },
   { tag: "joomla", needles: ["joomla"] },
@@ -44,7 +47,7 @@ const TECH_KEYWORDS: ReadonlyArray<{ tag: string; needles: string[] }> = [
   { tag: "weblogic", needles: ["weblogic"] },
   { tag: "iis", needles: ["microsoft-iis", "microsoft iis"] },
   { tag: "nginx", needles: ["nginx"] },
-  { tag: "apache", needles: ["apache httpd", "apache/2.", "apache/1."] },
+  { tag: "apache", needles: ["apache httpd", "apache/2.", "apache/1.", "apache["] },
   { tag: "lighttpd", needles: ["lighttpd"] },
   { tag: "openssh", needles: ["openssh"] },
   { tag: "vsftpd", needles: ["vsftpd"] },
@@ -64,14 +67,50 @@ const TECH_KEYWORDS: ReadonlyArray<{ tag: string; needles: string[] }> = [
   { tag: "smb", needles: ["microsoft-ds", "netbios-ssn"] },
   { tag: "rdp", needles: ["ms-wbt-server"] },
   // Languages — usually surface via X-Powered-By or extrainfo.
-  { tag: "php", needles: ["php/", "x-powered-by: php"] },
+  { tag: "php", needles: ["php/", "x-powered-by: php", "php["] },
   { tag: "asp.net", needles: ["asp.net", "x-powered-by: asp.net"] },
   { tag: "node.js", needles: ["node.js", "x-powered-by: express"] },
   { tag: "python", needles: ["werkzeug", "gunicorn", "uvicorn"] },
   { tag: "ruby", needles: ["puma", "passenger phusion", "thin "] },
 ];
 
-const CVE_RE = /CVE-\d{4}-\d{4,7}/gi;
+/** CVE identifier pattern. Exported so P3 reuses the same regex. */
+export const CVE_RE = /CVE-\d{4}-\d{4,7}/gi;
+
+/**
+ * Match the curated tech keyword list against a lower-cased haystack and
+ * return the deduplicated list of tags in the order they first appeared
+ * in `TECH_KEYWORDS`. Shared between the nmap and AutoRecon extractors.
+ */
+export function matchTechKeywords(haystackLower: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const { tag, needles } of TECH_KEYWORDS) {
+    if (seen.has(tag)) continue;
+    if (needles.some((n) => haystackLower.includes(n))) {
+      out.push(tag);
+      seen.add(tag);
+    }
+  }
+  return out;
+}
+
+/**
+ * Pull every CVE identifier out of a haystack, uppercased + deduplicated.
+ * Shared between nmap and AutoRecon extractors.
+ */
+export function matchCves(haystack: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const matches = haystack.match(CVE_RE) ?? [];
+  for (const raw of matches) {
+    const upper = raw.toUpperCase();
+    if (seen.has(upper)) continue;
+    out.push(upper);
+    seen.add(upper);
+  }
+  return out;
+}
 
 /**
  * Build the haystack used for tech / CVE matching from a single port row.
@@ -119,27 +158,12 @@ export function extractNmapFingerprints(port: ParsedPort): NmapFingerprint[] {
   const out: NmapFingerprint[] = [];
   const haystack = buildHaystack(port);
 
-  // --- tech ---
-  const seenTech = new Set<string>();
-  for (const { tag, needles } of TECH_KEYWORDS) {
-    if (seenTech.has(tag)) continue;
-    if (needles.some((n) => haystack.includes(n))) {
-      out.push({ type: "tech", value: tag });
-      seenTech.add(tag);
-    }
+  for (const tag of matchTechKeywords(haystack)) {
+    out.push({ type: "tech", value: tag });
   }
-
-  // --- CVEs ---
-  const seenCves = new Set<string>();
-  const cveMatches = haystack.match(CVE_RE) ?? [];
-  for (const raw of cveMatches) {
-    const upper = raw.toUpperCase();
-    if (seenCves.has(upper)) continue;
-    out.push({ type: "cves", value: upper });
-    seenCves.add(upper);
+  for (const cve of matchCves(haystack)) {
+    out.push({ type: "cves", value: cve });
   }
-
-  // --- banner ---
   const banner = extractBanner(port);
   if (banner) out.push({ type: "banners", value: banner });
 

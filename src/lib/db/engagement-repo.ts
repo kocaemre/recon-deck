@@ -34,6 +34,7 @@ import type { ParsedScan } from "../parser/types";
 import type { FullEngagement, EngagementSummary, PortWithDetails } from "./types";
 import type * as schema from "./schema";
 import { extractNmapFingerprints } from "../parser/fingerprints";
+import { extractAutoReconFingerprints } from "../parser/autorecon-fingerprints";
 import { replaceForPort as replaceFingerprintsForPort } from "./fingerprints-repo";
 
 /** Drizzle database instance type — inferred from schema for full type safety. */
@@ -246,6 +247,15 @@ export function createFromScan(
                 })
                 .run();
             }
+            // v2.4.0 P3 (#28): derive fingerprints (tech / cves) from the
+            // combined AR file payload for this port. Source is `autorecon`
+            // so a future nmap rescan won't blow these away.
+            replaceFingerprintsForPort(
+              tx,
+              port.id,
+              "autorecon",
+              extractAutoReconFingerprints(files),
+            );
           }
         }
 
