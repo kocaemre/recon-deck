@@ -71,8 +71,27 @@ interface PortDetailPaneProps {
   scripts: ScriptData[];
   checks: Array<{ check_key: string; checked: boolean }>;
   notes: { body: string } | null;
-  kbCommands: Array<{ label: string; command: string }>;
-  kbChecks: Array<{ key: string; label: string }>;
+  kbCommands: Array<{
+    label: string;
+    command: string;
+    /** v2.4.0 P5 (#30): conditional ids that modified this command's
+     *  template (append + replace contributors). Surfaces the "+detected: X"
+     *  badge next to the command label so operators understand why the
+     *  rendered template differs from the baseline KB. */
+    conditionalIds?: string[];
+  }>;
+  kbChecks: Array<{
+    key: string;
+    label: string;
+    /** v2.4.0 P5 (#30): provenance for the checklist row.
+     *  - "baseline" → from KB entry's checks[] (default when omitted)
+     *  - "conditional" → added by a fired conditional this render
+     *  - "orphan" → previously added by a conditional that's no longer
+     *    matching, but the operator's toggle state survived in the DB */
+    source?: "baseline" | "conditional" | "orphan";
+    /** Set when source ∈ {"conditional", "orphan"}. Drives the badge label. */
+    conditionalId?: string;
+  }>;
   kbResources: Array<{ title: string; url: string }>;
   arFiles?: Array<{ filename: string; content: string; encoding?: "utf8" | "base64" }>;
   arCommands?: Array<{ label: string; command: string }>;
@@ -261,7 +280,12 @@ export function PortDetailPane({
           <Section label="Commands" count={kbCommands.length}>
             <div className="flex flex-col gap-2">
               {kbCommands.map((cmd, i) => (
-                <CommandCard key={i} label={cmd.label} command={cmd.command} />
+                <CommandCard
+                  key={i}
+                  label={cmd.label}
+                  command={cmd.command}
+                  conditionalIds={cmd.conditionalIds}
+                />
               ))}
             </div>
           </Section>
@@ -386,16 +410,61 @@ export function PortDetailPane({
             }
           >
             <div className="flex flex-col" style={{ gap: 2 }}>
-              {kbChecks.map((check) => (
-                <ChecklistItem
-                  key={check.key}
-                  engagementId={engagementId}
-                  portId={portId}
-                  checkKey={check.key}
-                  initialChecked={checkMap.get(check.key) === true}
-                  label={check.label}
-                />
-              ))}
+              {(() => {
+                // v2.4.0 P5 (#30): group checks by provenance so the
+                // baseline list reads cleanly and conditional / orphan
+                // rows render below a subtle separator. Within each
+                // group rows preserve the order the resolver emitted.
+                const baseline = kbChecks.filter(
+                  (c) => !c.source || c.source === "baseline",
+                );
+                const conditional = kbChecks.filter(
+                  (c) => c.source === "conditional",
+                );
+                const orphan = kbChecks.filter((c) => c.source === "orphan");
+                return (
+                  <>
+                    {baseline.map((check) => (
+                      <ChecklistItem
+                        key={check.key}
+                        engagementId={engagementId}
+                        portId={portId}
+                        checkKey={check.key}
+                        initialChecked={checkMap.get(check.key) === true}
+                        label={check.label}
+                      />
+                    ))}
+                    {conditional.length > 0 && (
+                      <ConditionalGroupHeader label="Context-specific" />
+                    )}
+                    {conditional.map((check) => (
+                      <ConditionalChecklistRow
+                        key={check.key}
+                        engagementId={engagementId}
+                        portId={portId}
+                        check={check}
+                        initialChecked={checkMap.get(check.key) === true}
+                      />
+                    ))}
+                    {orphan.length > 0 && (
+                      <ConditionalGroupHeader
+                        label="Orphaned · signal no longer present"
+                        muted
+                      />
+                    )}
+                    {orphan.map((check) => (
+                      <ConditionalChecklistRow
+                        key={check.key}
+                        engagementId={engagementId}
+                        portId={portId}
+                        check={check}
+                        initialChecked={checkMap.get(check.key) === true}
+                        orphan
+                      />
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           </Section>
         )}
@@ -456,7 +525,15 @@ export function PortDetailPane({
   );
 }
 
-function CommandCard({ label, command }: { label: string; command: string }) {
+function CommandCard({
+  label,
+  command,
+  conditionalIds,
+}: {
+  label: string;
+  command: string;
+  conditionalIds?: string[];
+}) {
   return (
     <div
       style={{
@@ -467,7 +544,7 @@ function CommandCard({ label, command }: { label: string; command: string }) {
       }}
     >
       <div
-        className="flex items-center"
+        className="flex items-center gap-2"
         style={{
           padding: "4px 10px",
           borderBottom: "1px solid var(--border)",
@@ -475,6 +552,9 @@ function CommandCard({ label, command }: { label: string; command: string }) {
         }}
       >
         <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>{label}</span>
+        {conditionalIds && conditionalIds.length > 0 && (
+          <ProvenanceBadge ids={conditionalIds} />
+        )}
         <span className="ml-auto">
           <CopyButton text={command} label={command} />
         </span>
@@ -492,6 +572,114 @@ function CommandCard({ label, command }: { label: string; command: string }) {
         <span style={{ color: "var(--accent)" }}>$ </span>
         {command}
       </div>
+    </div>
+  );
+}
+
+/**
+ * v2.4.0 P5 (#30): pill rendered next to a check label or command
+ * label that came from a fired conditional group. The conditional ids
+ * are concatenated with `+` so multiple-rule contributions read at a
+ * glance ("+php-detected +wordpress-detected"). Hover surfaces the
+ * raw ids via the title attribute — operators inspecting "why is this
+ * here?" see exactly which rules fired.
+ *
+ * `muted` (orphan state) dims the pill so it reads as a "this used to
+ * apply" hint rather than active context.
+ */
+function ProvenanceBadge({
+  ids,
+  muted = false,
+}: {
+  ids: ReadonlyArray<string>;
+  muted?: boolean;
+}) {
+  const text = ids.map((id) => `+${id}`).join(" ");
+  return (
+    <span
+      className="mono"
+      title={`Triggered by conditional${ids.length === 1 ? "" : "s"}: ${ids.join(", ")}`}
+      style={{
+        fontSize: 9.5,
+        letterSpacing: "0.04em",
+        padding: "1px 6px",
+        borderRadius: 999,
+        background: muted ? "transparent" : "var(--accent-bg)",
+        border: `1px solid ${muted ? "var(--border)" : "var(--accent-border)"}`,
+        color: muted ? "var(--fg-faint)" : "var(--accent)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * v2.4.0 P5 (#30): subtle separator that introduces the conditional /
+ * orphan groups within the checklist section. Keeps the baseline list
+ * scannable while still grouping context-specific rows below.
+ */
+function ConditionalGroupHeader({
+  label,
+  muted = false,
+}: {
+  label: string;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className="mono uppercase tracking-[0.06em]"
+      style={{
+        fontSize: 9.5,
+        marginTop: 6,
+        paddingTop: 6,
+        paddingLeft: 4,
+        borderTop: "1px dashed var(--border-subtle)",
+        color: muted ? "var(--fg-faint)" : "var(--fg-subtle)",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+/**
+ * v2.4.0 P5 (#30): wraps a ChecklistItem with a provenance badge to
+ * its right. Orphan rows dim the label color via the badge's `muted`
+ * flag and an opacity wrapper so the operator's prior toggle state is
+ * still visible but visually deprioritised.
+ */
+function ConditionalChecklistRow({
+  engagementId,
+  portId,
+  check,
+  initialChecked,
+  orphan = false,
+}: {
+  engagementId: number;
+  portId: number;
+  check: { key: string; label: string; conditionalId?: string };
+  initialChecked: boolean;
+  orphan?: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{ opacity: orphan ? 0.65 : 1 }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <ChecklistItem
+          engagementId={engagementId}
+          portId={portId}
+          checkKey={check.key}
+          initialChecked={initialChecked}
+          label={check.label}
+        />
+      </div>
+      {check.conditionalId && (
+        <ProvenanceBadge ids={[check.conditionalId]} muted={orphan} />
+      )}
     </div>
   );
 }

@@ -282,16 +282,28 @@ export default async function EngagementPage({
     };
     const resolved = applyConditionals(kbEntry, resolveCtx);
 
-    const kbCommands = resolved.commands.map((cmd) => ({
-      label: cmd.label,
-      command: interpolateCommand(
-        cmd.template,
-        targetIp,
-        p.port,
-        targetHostname,
-        wordlistOverrides,
-      ),
-    }));
+    const kbCommands = resolved.commands.map((cmd) => {
+      // v2.4.0 P5 (#30): surface which conditionals modified this
+      // command so PortDetailPane can render the "+id" provenance pill.
+      // Replace contributors come first (the heavy hammer), appends
+      // follow in declaration order to mirror how the template was
+      // assembled.
+      const ids = [
+        ...(cmd.replacedBy ? [cmd.replacedBy] : []),
+        ...cmd.appendedBy,
+      ];
+      return {
+        label: cmd.label,
+        command: interpolateCommand(
+          cmd.template,
+          targetIp,
+          p.port,
+          targetHostname,
+          wordlistOverrides,
+        ),
+        ...(ids.length > 0 ? { conditionalIds: ids } : {}),
+      };
+    });
 
     // v2/P0-D: merge user-defined snippets that match this (service, port).
     const userMatches = matchUserCommands(db, p.service ?? null, p.port);
@@ -305,7 +317,42 @@ export default async function EngagementPage({
         wordlistOverrides,
       ),
     }));
-    const kbChecks = resolved.checks.map((c) => ({ key: c.key, label: c.label }));
+    // v2.4.0 P5 (#30): map resolved checks to wire format + reconcile
+    // orphans. A check is orphan when an inactive conditional declared
+    // its key AND the operator already toggled it (check_states row
+    // exists) — preserves UX continuity when a signal drops out (e.g.
+    // re-import lost the http-server-header line) without silently
+    // discarding the operator's prior work.
+    const checkKeysWithState = new Set(p.checks.map((c) => c.check_key));
+    const seenCheckKeys = new Set<string>();
+    const kbChecks: Array<{
+      key: string;
+      label: string;
+      source: "baseline" | "conditional" | "orphan";
+      conditionalId?: string;
+    }> = [];
+    for (const c of resolved.checks) {
+      seenCheckKeys.add(c.key);
+      kbChecks.push({
+        key: c.key,
+        label: c.label,
+        source: c.source,
+        ...(c.conditionalId ? { conditionalId: c.conditionalId } : {}),
+      });
+    }
+    for (const inactive of resolved.inactive) {
+      for (const orphanCheck of inactive.adds_checks) {
+        if (!checkKeysWithState.has(orphanCheck.key)) continue;
+        if (seenCheckKeys.has(orphanCheck.key)) continue;
+        kbChecks.push({
+          key: orphanCheck.key,
+          label: orphanCheck.label,
+          source: "orphan",
+          conditionalId: inactive.id,
+        });
+        seenCheckKeys.add(orphanCheck.key);
+      }
+    }
     const kbResources = kbEntry.resources.map((r) => ({
       title: r.title,
       url: r.url,

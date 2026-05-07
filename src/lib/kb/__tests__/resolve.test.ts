@@ -312,7 +312,9 @@ describe("applyConditionals (v2.4.0 P4 #29)", () => {
     const out = applyConditionals(entry, ctx);
     expect(out.active.map((a) => a.id)).toEqual(["php-detected"]);
     expect(out.inactive.map((i) => i.id)).toEqual(["wp-detected"]);
-    expect(out.inactive[0].checkKeys).toEqual(["wp-xmlrpc"]);
+    expect(out.inactive[0].adds_checks).toEqual([
+      { key: "wp-xmlrpc", label: "Tested xmlrpc" },
+    ]);
   });
 
   it("baseline checks are not duplicated by a colliding conditional add", () => {
