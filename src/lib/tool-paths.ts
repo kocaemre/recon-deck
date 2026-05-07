@@ -28,6 +28,17 @@ export interface ToolPathReport {
   seclists: DetectedPath | null;
   dirb: DetectedPath | null;
   dirbuster: DetectedPath | null;
+  /**
+   * True when the Next.js process is running inside a Docker container
+   * (probed via /.dockerenv). When true, host paths like
+   * /usr/share/wordlists/dirb aren't visible without a -v bind mount,
+   * so the UI surfaces a callout instead of all-rows-Not-found.
+   */
+  inDocker: boolean;
+}
+
+function isInDocker(): boolean {
+  return existsSync("/.dockerenv");
 }
 
 function fileExists(p: string): boolean {
@@ -70,8 +81,12 @@ function detectSearchsploit(): DetectedPath | null {
 function detectSecLists(): DetectedPath | null {
   const home = homedir();
   const candidates: Array<[string, string]> = [
+    ["/host/seclists", "Docker host mount"],
+    ["/host/wordlists/seclists", "Docker host mount"],
+    ["/host/wordlists/SecLists", "Docker host mount"],
     ["/usr/share/seclists", "Kali default (apt)"],
     ["/usr/share/wordlists/seclists", "wordlists/seclists"],
+    ["/usr/share/wordlists/SecLists", "wordlists/SecLists"],
     ["/opt/SecLists", "/opt"],
     [join(home, "SecLists"), "user home"],
     [join(home, "tools", "SecLists"), "user home"],
@@ -84,6 +99,8 @@ function detectSecLists(): DetectedPath | null {
 
 function detectDirb(): DetectedPath | null {
   const candidates: Array<[string, string]> = [
+    ["/host/wordlists/dirb", "Docker host mount"],
+    ["/host/dirb", "Docker host mount"],
     ["/usr/share/dirb/wordlists", "apt (Kali default)"],
     ["/usr/share/wordlists/dirb", "wordlists/dirb"],
     ["/usr/local/share/dirb/wordlists", "Homebrew / source"],
@@ -96,6 +113,8 @@ function detectDirb(): DetectedPath | null {
 
 function detectDirbuster(): DetectedPath | null {
   const candidates: Array<[string, string]> = [
+    ["/host/wordlists/dirbuster", "Docker host mount"],
+    ["/host/dirbuster", "Docker host mount"],
     ["/usr/share/dirbuster/wordlists", "apt (Kali default)"],
     ["/usr/share/wordlists/dirbuster", "wordlists/dirbuster"],
   ];
@@ -111,5 +130,6 @@ export function detectToolPaths(): ToolPathReport {
     seclists: detectSecLists(),
     dirb: detectDirb(),
     dirbuster: detectDirbuster(),
+    inDocker: isInDocker(),
   };
 }

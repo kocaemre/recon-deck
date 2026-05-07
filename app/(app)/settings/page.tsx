@@ -108,6 +108,42 @@ export default function SettingsIndexPage() {
           </Link>
           .
         </p>
+        {tools.inDocker &&
+          !tools.seclists &&
+          !tools.dirb &&
+          !tools.dirbuster && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "10px 12px",
+                borderRadius: 6,
+                border: "1px solid var(--border)",
+                background: "var(--bg-2)",
+                fontSize: 12,
+                color: "var(--fg-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: "var(--fg-subtle)",
+                  marginBottom: 6,
+                }}
+              >
+                Container detected
+              </div>
+              Host wordlist paths aren{"’"}t visible from inside the
+              recon-deck container without a bind mount. Re-run{" "}
+              <code className="mono">docker run</code> with{" "}
+              <code className="mono">
+                -v /usr/share/wordlists:/host/wordlists:ro
+              </code>{" "}
+              and the rows below will populate.
+            </div>
+          )}
         <div
           className="grid grid-cols-1 gap-2"
           style={{ fontSize: 12.5 }}
