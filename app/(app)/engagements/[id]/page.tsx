@@ -16,8 +16,9 @@ import {
   getWordlistOverridesMap,
   listScanHistory,
   effectiveAppState,
+  listFingerprintsForPorts,
 } from "@/lib/db";
-import { getKb, matchPort } from "@/lib/kb";
+import { getKb, matchPort, applyConditionals } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { EngagementHeader } from "@/components/EngagementHeader";
 import { EngagementResetExpand } from "@/components/EngagementResetExpand";
@@ -247,10 +248,41 @@ export default async function EngagementPage({
   const targetIp = activeHost?.ip ?? engagement.hosts[0].ip;
   const targetHostname = activeHost?.hostname ?? engagement.hosts[0].hostname;
 
+  // v2.4.0 P4 (#29): bulk-load fingerprints for every port up front so
+  // the resolver doesn't N+1 against port_fingerprints inside the
+  // sortedPorts.map below.
+  const fingerprintsByPort = listFingerprintsForPorts(
+    db,
+    sortedPorts.map((p) => p.id),
+  );
+
   const portData = sortedPorts.map((p) => {
     const kbEntry = matchPort(kb, p.port, p.service ?? undefined);
 
-    const kbCommands = kbEntry.commands.map((cmd) => ({
+    // v2.4.0 P4 (#29): apply context-aware conditional groups before
+    // mapping to wire-format kbCommands/kbChecks. The resolver merges
+    // matched conditionals into the baseline KB, leaving the existing
+    // template-interpolation pipeline untouched. Provenance metadata
+    // (which conditional fired, what it changed) lands in P5's UI.
+    const fingerprintRows = fingerprintsByPort.get(p.id) ?? [];
+    const resolveCtx = {
+      port: {
+        service: p.service,
+        product: p.product,
+        version: p.version,
+      },
+      scripts: p.scripts
+        .filter((s) => !s.is_host_script)
+        .map((s) => ({ id: s.script_id, output: s.output })),
+      fingerprints: fingerprintRows.map((f) => ({
+        source: f.source,
+        type: f.type,
+        value: f.value,
+      })),
+    };
+    const resolved = applyConditionals(kbEntry, resolveCtx);
+
+    const kbCommands = resolved.commands.map((cmd) => ({
       label: cmd.label,
       command: interpolateCommand(
         cmd.template,
@@ -273,7 +305,7 @@ export default async function EngagementPage({
         wordlistOverrides,
       ),
     }));
-    const kbChecks = kbEntry.checks.map((c) => ({ key: c.key, label: c.label }));
+    const kbChecks = resolved.checks.map((c) => ({ key: c.key, label: c.label }));
     const kbResources = kbEntry.resources.map((r) => ({
       title: r.title,
       url: r.url,
