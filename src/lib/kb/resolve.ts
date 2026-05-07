@@ -85,8 +85,14 @@ export interface ResolvedCommand {
 export interface InactiveConditional {
   /** Conditional `id` from the KB entry. */
   id: string;
-  /** `adds_checks[].key` values from this conditional, for orphan detection. */
-  checkKeys: string[];
+  /**
+   * `adds_checks` declared by this conditional. The page joins on
+   * `check_states.check_key` to detect orphans — operator toggled a
+   * check under a conditional that has since stopped matching. Labels
+   * are carried through so the orphan UI can render the original
+   * human-readable text instead of falling back to the bare key.
+   */
+  adds_checks: ReadonlyArray<{ key: string; label: string }>;
 }
 
 export interface ResolvedEntry {
@@ -302,7 +308,10 @@ export function applyConditionals(
     } else {
       inactive.push({
         id: cond.id,
-        checkKeys: cond.adds_checks.map((c) => c.key),
+        adds_checks: cond.adds_checks.map((c) => ({
+          key: c.key,
+          label: c.label,
+        })),
       });
     }
   }
