@@ -704,7 +704,12 @@ interface ExploitHit {
   url?: string;
 }
 
-const exploitCache = new Map<string, ExploitHit[]>();
+interface ExploitCacheEntry {
+  hits: ExploitHit[];
+  broaderHits?: ExploitHit[];
+  broaderQuery?: string;
+}
+const exploitCache = new Map<string, ExploitCacheEntry>();
 
 function ExploitsSection({
   query,
@@ -719,7 +724,13 @@ function ExploitsSection({
   // searchsploit. Cache key is the verbatim query string (already trimmed
   // by engagement page derivation).
   const cached = exploitCache.get(query) ?? null;
-  const [hits, setHits] = useState<ExploitHit[] | null>(cached);
+  const [hits, setHits] = useState<ExploitHit[] | null>(cached?.hits ?? null);
+  const [broaderHits, setBroaderHits] = useState<ExploitHit[] | null>(
+    cached?.broaderHits ?? null,
+  );
+  const [broaderQuery, setBroaderQuery] = useState<string | null>(
+    cached?.broaderQuery ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -736,16 +747,31 @@ function ExploitsSection({
       if (!res.ok) {
         setError(body.error ?? "Lookup failed.");
         setHits(null);
+        setBroaderHits(null);
+        setBroaderQuery(null);
         return;
       }
       const next = Array.isArray(body.hits)
         ? (body.hits as ExploitHit[])
         : [];
-      exploitCache.set(query, next);
+      const broader = Array.isArray(body.broaderHits)
+        ? (body.broaderHits as ExploitHit[])
+        : null;
+      const broaderQ =
+        typeof body.broaderQuery === "string" ? body.broaderQuery : null;
+      exploitCache.set(query, {
+        hits: next,
+        broaderHits: broader ?? undefined,
+        broaderQuery: broaderQ ?? undefined,
+      });
       setHits(next);
+      setBroaderHits(broader);
+      setBroaderQuery(broaderQ);
     } catch (err) {
       setError((err as Error).message ?? "Lookup failed.");
       setHits(null);
+      setBroaderHits(null);
+      setBroaderQuery(null);
     } finally {
       setLoading(false);
     }
@@ -754,7 +780,11 @@ function ExploitsSection({
   return (
     <Section
       label="Exploits"
-      count={hits === null ? undefined : hits.length}
+      count={
+        hits === null
+          ? undefined
+          : hits.length + (broaderHits?.length ?? 0)
+      }
     >
       <div className="flex flex-col gap-2">
         {hits === null && !loading && !error && (
@@ -805,15 +835,18 @@ function ExploitsSection({
           </div>
         )}
 
-        {hits !== null && hits.length === 0 && !loading && (
-          <div
-            className="mono"
-            style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-          >
-            No matches for{" "}
-            <span style={{ color: "var(--accent)" }}>{query}</span>.
-          </div>
-        )}
+        {hits !== null &&
+          hits.length === 0 &&
+          (!broaderHits || broaderHits.length === 0) &&
+          !loading && (
+            <div
+              className="mono"
+              style={{ fontSize: 11, color: "var(--fg-subtle)" }}
+            >
+              No matches for{" "}
+              <span style={{ color: "var(--accent)" }}>{query}</span>.
+            </div>
+          )}
 
         {hits !== null && hits.length > 0 && (
           <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -885,6 +918,91 @@ function ExploitsSection({
               </li>
             ))}
           </ul>
+        )}
+
+        {broaderHits && broaderHits.length > 0 && (
+          <div style={{ marginTop: hits && hits.length > 0 ? 10 : 0 }}>
+            <div
+              className="mono uppercase tracking-[0.06em]"
+              style={{
+                fontSize: 10,
+                color: "var(--fg-subtle)",
+                padding: "4px 0",
+              }}
+              title={`Fallback search ran with "${broaderQuery}" because the versioned query had no hits.`}
+            >
+              Broader matches · no version filter (
+              <span style={{ color: "var(--accent)" }}>{broaderQuery}</span>)
+            </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {broaderHits.map((h) => (
+                <li
+                  key={`broad-${h.id}`}
+                  style={{
+                    padding: "6px 8px",
+                    borderTop: "1px solid var(--border-subtle)",
+                    fontSize: 12,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="mono uppercase"
+                      style={{
+                        fontSize: 9.5,
+                        letterSpacing: "0.06em",
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: "var(--bg-3)",
+                        border: "1px solid var(--border)",
+                        color: "var(--fg-muted)",
+                      }}
+                      title={`${h.type} · ${h.platform}`}
+                    >
+                      {h.type}
+                    </span>
+                    <span
+                      style={{ color: "var(--fg)", flex: 1, minWidth: 0 }}
+                    >
+                      {h.title}
+                    </span>
+                    {h.url && (
+                      <a
+                        href={h.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: "var(--accent)",
+                          fontSize: 11,
+                          textDecoration: "none",
+                        }}
+                        title="Open exploit-db entry"
+                      >
+                        EDB-{h.id} ↗
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFindingPrefill({
+                          title: h.title,
+                          severity: "medium",
+                          cve: extractCve(h.title),
+                          description: `Exploit hit (${h.type} · ${h.platform}) for broader query "${broaderQuery}" (no version filter)\n\n${h.title}${h.url ? `\n${h.url}` : ""}`,
+                          portId,
+                        })
+                      }
+                      title="Add as finding"
+                      aria-label="Add as finding"
+                      style={addFindingBtn}
+                    >
+                      <Plus size={10} />
+                      finding
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </Section>
