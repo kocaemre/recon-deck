@@ -32,6 +32,8 @@ import {
   type ScanHistory,
 } from "./schema";
 import type { ParsedScan } from "../parser/types";
+import { extractNmapFingerprints } from "../parser/fingerprints";
+import { replaceForPort as replaceFingerprintsForPort } from "./fingerprints-repo";
 import type * as schema from "./schema";
 
 export type Db = BetterSQLite3Database<typeof schema>;
@@ -212,6 +214,15 @@ export function rescanEngagement(
               .run();
           }
 
+          // v2.4.0 P2 (#27): refresh nmap fingerprints on the existing
+          // port row. AutoRecon-derived rows (different `source`) survive.
+          replaceFingerprintsForPort(
+            tx,
+            existing.id,
+            "nmap",
+            extractNmapFingerprints(p),
+          );
+
           if (wasClosed) reopened += 1;
           else reaffirmed += 1;
         } else {
@@ -247,6 +258,13 @@ export function rescanEngagement(
               })
               .run();
           }
+          // v2.4.0 P2 (#27): brand-new port → seed its nmap fingerprints.
+          replaceFingerprintsForPort(
+            tx,
+            insertedPort.id,
+            "nmap",
+            extractNmapFingerprints(p),
+          );
           added += 1;
         }
       }

@@ -33,6 +33,8 @@ import {
 import type { ParsedScan } from "../parser/types";
 import type { FullEngagement, EngagementSummary, PortWithDetails } from "./types";
 import type * as schema from "./schema";
+import { extractNmapFingerprints } from "../parser/fingerprints";
+import { replaceForPort as replaceFingerprintsForPort } from "./fingerprints-repo";
 
 /** Drizzle database instance type — inferred from schema for full type safety. */
 export type Db = BetterSQLite3Database<typeof schema>;
@@ -217,6 +219,13 @@ export function createFromScan(
             })
             .run();
         }
+
+        // v2.4.0 P2 (#27): persist nmap-derived fingerprints (tech / cves /
+        // banners) so the resolver (P4) can match `autorecon_finding`-style
+        // predicates without re-walking the parse tree on every render.
+        // Same transaction as the port insert — partial state on bail.
+        const nmapFps = extractNmapFingerprints(p);
+        replaceFingerprintsForPort(tx, port.id, "nmap", nmapFps);
 
         // Phase 5 D-12: AutoRecon per-port service files. Only applied to
         // the primary host — AR import is single-host today.

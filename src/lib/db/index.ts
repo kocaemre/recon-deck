@@ -28,6 +28,8 @@ export {
   hosts,
   scan_history,
   app_state,
+  port_fingerprints,
+  type PortFingerprint,
   type AppState,
   type Engagement,
   type Port,
@@ -131,3 +133,10 @@ export {
   rescanEngagement,
   type RescanResult,
 } from "./scan-history-repo";
+export {
+  replaceForPort as replaceFingerprintsForPort,
+  listForPort as listFingerprintsForPort,
+  type FingerprintInput,
+  type FingerprintSource,
+  type FingerprintType,
+} from "./fingerprints-repo";

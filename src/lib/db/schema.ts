@@ -244,6 +244,38 @@ export const ports = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// port_fingerprints (v2.4.0 P2 #27 — context-aware checklists, parent #14)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-port fingerprint signals derived from scan inputs.
+ *
+ * One row per (port, source, type, value). The resolver (P4) reads these
+ * to evaluate `autorecon_finding(type, value)` predicates from KB
+ * conditional groups; nmap-side predicates (script_contains,
+ * version_matches) read raw `port_scripts` and `ports` columns directly.
+ *
+ * `source` distinguishes nmap-derived rows from AutoRecon-derived ones
+ * so a re-import on one side doesn't blow away the other. UNIQUE(...)
+ * makes the per-port replace path idempotent.
+ */
+export const port_fingerprints = sqliteTable(
+  "port_fingerprints",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    port_id: integer("port_id")
+      .notNull()
+      .references(() => ports.id, { onDelete: "cascade" }),
+    source: text("source", { enum: ["nmap", "autorecon"] }).notNull(),
+    type: text("type", { enum: ["tech", "cves", "banners"] }).notNull(),
+    value: text("value").notNull(),
+  },
+  (t) => [index("port_fingerprints_port_id_idx").on(t.port_id)],
+);
+
+export type PortFingerprint = typeof port_fingerprints.$inferSelect;
+
+// ---------------------------------------------------------------------------
 // scan_history (v2 P1-G: track every nmap re-import per engagement)
 // ---------------------------------------------------------------------------
 
