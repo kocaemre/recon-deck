@@ -26,7 +26,14 @@ import { KbEntrySchema } from "../src/lib/kb/schema.js";
 
 export interface LintFailure {
   file: string;
-  rule: "schema" | "placeholder" | "url-scheme" | "command-denylist";
+  rule:
+    | "schema"
+    | "placeholder"
+    | "url-scheme"
+    | "command-denylist"
+    | "conditional-id-collision"
+    | "conditional-modifies-unknown-command"
+    | "conditional-checks-collide-baseline";
   detail: string;
 }
 
@@ -137,6 +144,87 @@ export function lintKnowledgeBase(opts: {
           rule: "url-scheme",
           detail: `resource "${res.title}": non-http(s) URL ${res.url}`,
         });
+      }
+    }
+
+    // Rules 5-7: conditional-group integrity (v2.4.0 P1 #26).
+    //
+    // Schema already enforces shape. These rules catch cross-references
+    // between baseline and conditional that the schema can't see:
+    //   - conditional ids must be unique within an entry,
+    //   - modifies_commands keys must reference an actual commands[].id,
+    //   - adds_checks keys must not collide with baseline checks[].
+    // All checks tolerate `entry.conditional` being undefined.
+    if (entry.conditional && entry.conditional.length > 0) {
+      const baselineCommandIds = new Set(
+        entry.commands.flatMap((c) => (c.id ? [c.id] : [])),
+      );
+      const baselineCheckKeys = new Set(entry.checks.map((c) => c.key));
+      const seenConditionalIds = new Set<string>();
+
+      for (const cond of entry.conditional) {
+        if (seenConditionalIds.has(cond.id)) {
+          failures.push({
+            file,
+            rule: "conditional-id-collision",
+            detail: `conditional "${cond.id}": duplicate id within entry`,
+          });
+        } else {
+          seenConditionalIds.add(cond.id);
+        }
+
+        if (cond.modifies_commands) {
+          for (const targetId of Object.keys(cond.modifies_commands)) {
+            if (!baselineCommandIds.has(targetId)) {
+              failures.push({
+                file,
+                rule: "conditional-modifies-unknown-command",
+                detail: `conditional "${cond.id}": modifies_commands references unknown id "${targetId}" — add an \`id: ${targetId}\` to the matching command in commands[]`,
+              });
+            }
+          }
+        }
+
+        for (const c of cond.adds_checks) {
+          if (baselineCheckKeys.has(c.key)) {
+            failures.push({
+              file,
+              rule: "conditional-checks-collide-baseline",
+              detail: `conditional "${cond.id}": adds_checks key "${c.key}" collides with baseline checks[]`,
+            });
+          }
+        }
+
+        // Also lint command templates inside conditional modifies for the
+        // same placeholder + denylist rules baseline commands respect.
+        if (cond.modifies_commands) {
+          for (const [targetId, mod] of Object.entries(cond.modifies_commands)) {
+            const candidates = [mod.append, mod.replace].filter(
+              (s): s is string => typeof s === "string",
+            );
+            for (const tmpl of candidates) {
+              const tokens = tmpl.match(/\{[A-Z_]+\}/g) ?? [];
+              for (const t of tokens) {
+                if (!PLACEHOLDER_ALLOWLIST.test(t)) {
+                  failures.push({
+                    file,
+                    rule: "placeholder",
+                    detail: `conditional "${cond.id}" modifies_commands.${targetId}: unlisted placeholder ${t}`,
+                  });
+                }
+              }
+              for (const rule of COMMAND_DENYLIST) {
+                if (rule.pattern.test(tmpl)) {
+                  failures.push({
+                    file,
+                    rule: "command-denylist",
+                    detail: `conditional "${cond.id}" modifies_commands.${targetId}: hit ${rule.name} (${tmpl})`,
+                  });
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
