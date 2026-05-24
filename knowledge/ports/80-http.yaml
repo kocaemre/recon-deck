@@ -34,7 +34,11 @@ commands:
     id: gobuster-dir
     template: "gobuster dir -u http://{IP}:{PORT} -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
   - label: "ffuf with extensions"
+    id: ffuf-ext
     template: "ffuf -u http://{IP}:{PORT}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -e .php,.txt,.html"
+  - label: "WordPress scan (wpscan)"
+    id: wpscan
+    template: "wpscan --url http://{IP}:{PORT}"
   - label: "vhost discovery"
     template: "ffuf -u http://{IP}:{PORT}/ -H 'Host: FUZZ.{HOST}' -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fs 0"
 known_vulns:
@@ -74,3 +78,46 @@ conditional:
     modifies_commands:
       gobuster-dir:
         append: " -x php,html,txt"
+  - id: wordpress-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-generator
+            pattern: "WordPress"
+        - nmap_script_contains:
+            script: http-title
+            pattern: "WordPress"
+        - autorecon_finding:
+            type: tech
+            value: wordpress
+    adds_checks:
+      - key: http-wordpress-wpscan
+        label: "Ran wpscan (users/plugins/themes)"
+      - key: http-wordpress-login
+        label: "Checked wp-login.php / wp-admin for weak creds"
+    modifies_commands:
+      wpscan:
+        append: " --enumerate u,ap,at"
+  - id: aspnet-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Microsoft-IIS"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "ASP.NET"
+        - nmap_script_contains:
+            script: http-headers
+            pattern: "ASP.NET"
+        - autorecon_finding:
+            type: tech
+            value: asp.net
+    adds_checks:
+      - key: http-aspnet-trace-axd
+        label: "Checked /trace.axd and common ASP.NET debug endpoints"
+      - key: http-aspnet-viewstate
+        label: "Reviewed ViewState / event validation settings"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.aspx,.asp,.ashx"
