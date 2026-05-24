@@ -121,3 +121,86 @@ conditional:
     modifies_commands:
       ffuf-ext:
         append: ",.aspx,.asp,.ashx"
+  - id: java-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Tomcat"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Apache-Coyote"
+        - autorecon_finding:
+            type: tech
+            value: tomcat
+        - autorecon_finding:
+            type: tech
+            value: weblogic
+        - autorecon_finding:
+            type: tech
+            value: java
+    adds_checks:
+      - key: http-java-manager
+        label: "Checked /manager/html and /host-manager for default creds"
+      - key: http-java-jsp-debug
+        label: "Reviewed JSP/Servlet endpoints for debug/info leakage"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.jsp,.jspx,.do"
+  - id: python-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Werkzeug"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Gunicorn"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Uvicorn"
+        - autorecon_finding:
+            type: tech
+            value: python
+    adds_checks:
+      - key: http-python-admin-debug
+        label: "Checked framework debug/admin endpoints (Flask/Django/FastAPI)"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.py"
+  - id: ruby-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Phusion Passenger"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Puma"
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "Thin"
+        - autorecon_finding:
+            type: tech
+            value: ruby
+    adds_checks:
+      - key: http-ruby-admin-debug
+        label: "Checked Rails/Sidekiq/ActiveAdmin endpoints for exposure"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.rb"
+  - id: cgi-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-headers
+            pattern: "CGI"
+        - autorecon_finding:
+            type: tech
+            value: cgi
+    adds_checks:
+      - key: http-cgi-bin
+        label: "Reviewed /cgi-bin/ scripts for legacy CGI exposure"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.cgi"
