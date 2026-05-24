@@ -31,6 +31,7 @@ commands:
   - label: "nikto baseline scan"
     template: "nikto -h http://{IP}:{PORT}"
   - label: "gobuster directory brute force"
+    id: gobuster-dir
     template: "gobuster dir -u http://{IP}:{PORT} -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
   - label: "ffuf with extensions"
     template: "ffuf -u http://{IP}:{PORT}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -e .php,.txt,.html"
@@ -50,3 +51,26 @@ resources:
   - title: "SecLists Web-Content"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Discovery/Web-Content"
     author: SecLists
+conditional:
+  - id: php-detected
+    when:
+      anyOf:
+        - nmap_script_contains:
+            script: http-server-header
+            pattern: "PHP"
+        - nmap_script_contains:
+            script: http-php-version
+            pattern: "PHP"
+        - autorecon_finding:
+            type: tech
+            value: php
+    adds_checks:
+      - key: http-php-info-pages
+        label: "Tested phpinfo.php / info.php / test.php"
+      - key: http-php-cve-check
+        label: "Checked common PHP CVEs against detected version"
+      - key: http-php-lfi
+        label: "Tested LFI on common PHP entry points"
+    modifies_commands:
+      gobuster-dir:
+        append: " -x php,html,txt"
