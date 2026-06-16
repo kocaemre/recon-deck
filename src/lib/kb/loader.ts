@@ -57,12 +57,28 @@ export function loadKnowledgeBase(opts: {
   }
 
   // 3. User entries — soft failure per file (T-06), missing dir non-fatal (T-05)
+  //
+  // Defense in depth (SEC): the user dir is operator-configurable, so never
+  // follow a symlink out of it. A symlink named `*.yaml` that points at an
+  // arbitrary file (e.g. `/etc/passwd`) would otherwise be opened and read
+  // into memory before schema validation rejects it. We skip symlinked
+  // entries and any entry whose resolved path escapes the dir.
   const user: KbEntry[] = [];
   if (opts.userDir && fs.existsSync(opts.userDir)) {
+    const baseReal = fs.realpathSync(opts.userDir);
     for (const file of fs.readdirSync(opts.userDir)) {
       if (!file.endsWith(".yaml")) continue;
-      const fp = path.join(opts.userDir, file);
+      const fp = path.join(baseReal, file);
       try {
+        if (fs.lstatSync(fp).isSymbolicLink()) {
+          console.warn(`[kb] skipping symlinked user file ${fp}`);
+          continue;
+        }
+        const real = fs.realpathSync(fp);
+        if (real !== fp && !real.startsWith(baseReal + path.sep)) {
+          console.warn(`[kb] skipping out-of-dir user file ${fp}`);
+          continue;
+        }
         user.push(KbEntrySchema.parse(readYamlFile(fp)));
       } catch (err) {
         console.warn(`[kb] skipping invalid user file ${fp}: ${String(err)}`);
