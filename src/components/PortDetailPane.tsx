@@ -24,6 +24,7 @@ import { ExternalLink, Plus, Search as SearchIcon } from "lucide-react";
 import type { ScriptElem, ScriptTable } from "@/lib/parser/types";
 import type { PortEvidence } from "@/lib/db/schema";
 import { useUIStore } from "@/lib/store";
+import { isAllowedUrl } from "@/lib/security/validate-url";
 
 type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -220,7 +221,7 @@ export function PortDetailPane({
                       {v.note}
                     </span>
                     <a
-                      href={v.link}
+                      href={safeHref(v.link)}
                       target="_blank"
                       rel="noreferrer"
                       style={{
@@ -491,7 +492,7 @@ export function PortDetailPane({
               {kbResources.map((r, i) => (
                 <a
                   key={i}
-                  href={r.url}
+                  href={safeHref(r.url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5"
@@ -733,6 +734,17 @@ function safeHostname(url: string): string {
   } catch {
     return "";
   }
+}
+
+/**
+ * Render-time scheme guard (SEC, defense in depth). KB links are scheme-gated
+ * at ingest by the Zod `httpUrl` validator, but render must not trust ingest:
+ * if any future ingest path skips that check, a `javascript:` URL must still
+ * never reach an `<a href>`. Returns `undefined` for disallowed schemes so the
+ * anchor renders without an href (no navigable link), mirroring ResourceLink.
+ */
+function safeHref(url: string): string | undefined {
+  return isAllowedUrl(url) ? url : undefined;
 }
 
 /**
@@ -1068,7 +1080,7 @@ function ExploitsSection({
                   </span>
                   {h.url && (
                     <a
-                      href={h.url}
+                      href={safeHref(h.url)}
                       target="_blank"
                       rel="noreferrer"
                       style={{
@@ -1155,7 +1167,7 @@ function ExploitsSection({
                     </span>
                     {h.url && (
                       <a
-                        href={h.url}
+                        href={safeHref(h.url)}
                         target="_blank"
                         rel="noreferrer"
                         style={{

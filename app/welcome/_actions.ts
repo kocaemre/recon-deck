@@ -33,6 +33,25 @@ function sanitize(value: string): string | null {
 }
 
 /**
+ * Server-side path validation for the operator-supplied directories
+ * (SEC: was client-only via `validatePath`, the on-blur ✓/✗ chip).
+ *
+ * The persisted `kb_user_dir` is later enumerated and read by the KB
+ * loader, so the write path must enforce the same `isAbsolute` invariant
+ * the UI shows — never trust the client to have run the check. Relative
+ * inputs (resolved against cwd) and other non-absolute strings are
+ * rejected here so they can never reach the loader.
+ */
+function sanitizePath(value: string, label: string): string | null {
+  const trimmed = sanitize(value);
+  if (trimmed === null) return null;
+  if (!path.isAbsolute(trimmed)) {
+    throw new Error(`${label} must be an absolute path.`);
+  }
+  return trimmed;
+}
+
+/**
  * Path validation backing the on-blur ✓/✗ chip on Step 3. Only checks
  * `R_OK` so a read-only mount (or an SecLists symlinked from another
  * volume) still passes. Empty input → `empty`.
@@ -58,9 +77,9 @@ async function persist(
   payload: OnboardingPayload,
 ): Promise<ActionResult> {
   try {
-    const localExportDir = sanitize(payload.localExportDir);
-    const kbUserDir = sanitize(payload.kbUserDir);
-    const wordlistBase = sanitize(payload.wordlistBase);
+    const localExportDir = sanitizePath(payload.localExportDir, "Export directory");
+    const kbUserDir = sanitizePath(payload.kbUserDir, "KB directory");
+    const wordlistBase = sanitizePath(payload.wordlistBase, "Wordlist base");
 
     markOnboarded(db, {
       local_export_dir: localExportDir,
