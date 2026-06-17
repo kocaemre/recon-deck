@@ -2,6 +2,20 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.3] — 2026-06-17
+
+Third beta. Adds the second AI feature on top of beta.2's Explain.
+
+### Added
+
+- **"Suggest commands" (AI, KB-grounded).** On a port's NSE output, the
+  assistant proposes recon commands tailored to the scan — grounded in the
+  port's vetted KB commands so it adapts proven commands instead of inventing
+  them. Returns a validated JSON list rendered as copyable cards with a
+  safe/intrusive risk badge; suggest-only, nothing is executed. Same opt-in
+  gate, server-built prompt, untrusted-output fencing, and Exam Mode hiding as
+  Explain.
+
 ## [2.5.0-beta.2] — 2026-06-17
 
 Second beta. The **optional AI co-pilot** lands (opt-in, local-first) along
