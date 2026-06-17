@@ -26,6 +26,7 @@ import type { PortEvidence } from "@/lib/db/schema";
 import { useUIStore } from "@/lib/store";
 import { isAllowedUrl } from "@/lib/security/validate-url";
 import { ExplainButton } from "@/components/ExplainButton";
+import { SuggestButton } from "@/components/SuggestButton";
 
 type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -303,13 +304,31 @@ export function PortDetailPane({
                 .map((s) => `# ${s.script_id}\n${s.output}`)
                 .join("\n\n");
               return (
-                <div style={{ marginBottom: 8 }}>
+                <div
+                  style={{
+                    marginBottom: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
                   <ExplainButton
                     port={portNum}
                     protocol={proto ?? null}
                     service={serviceName ?? null}
                     version={exploitQuery ?? null}
                     scanOutput={scanOutput}
+                  />
+                  <SuggestButton
+                    port={portNum}
+                    protocol={proto ?? null}
+                    service={serviceName ?? null}
+                    version={exploitQuery ?? null}
+                    scanOutput={scanOutput}
+                    kbCommands={kbCommands.map((c) => ({
+                      label: c.label,
+                      command: c.command,
+                    }))}
                   />
                 </div>
               );
