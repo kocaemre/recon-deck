@@ -137,6 +137,40 @@ export async function chatCompletion(
 }
 
 /**
+ * List available model ids from an OpenAI-compatible `GET /models`. Used by the
+ * settings UI to populate a model picker. OpenAI, OpenRouter, Ollama and
+ * LM Studio all expose this. Returns the de-duped, sorted id list.
+ */
+export async function listModels(
+  cfg: StreamClientConfig,
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<string[]> {
+  const signal = combineSignals(opts.timeoutMs ?? 15_000, opts.signal);
+  const headers: Record<string, string> = {};
+  if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/models`, {
+    headers,
+    signal,
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.text()).slice(0, 200);
+    } catch {
+      /* ignore */
+    }
+    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+  }
+  const json = (await res.json()) as { data?: Array<{ id?: unknown }> };
+  const ids = (json?.data ?? [])
+    .map((m) => m?.id)
+    .filter((x): x is string => typeof x === "string" && x.length > 0);
+  return Array.from(new Set(ids)).sort();
+}
+
+/**
  * Transform an OpenAI-style SSE byte stream into a plain UTF-8 text stream of
  * just the assistant deltas. Buffers across chunk boundaries; tolerates
  * keepalive comments and the terminal `[DONE]` sentinel.
