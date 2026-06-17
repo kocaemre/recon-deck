@@ -774,6 +774,20 @@ export const app_state = sqliteTable("app_state", {
    *  are explicit user overrides. Stored as TEXT; the repo narrows it
    *  to the ThemeMode union. v2.3.0 #3. */
   theme: text("theme").notNull().default("system"),
+  /** Optional AI co-pilot (v2.5.0). All opt-in; default OFF. When enabled,
+   *  defaults to a local provider so no scan data leaves the host unless the
+   *  operator points at a cloud provider. `ai_api_key` is server-only and is
+   *  never returned to the client. */
+  ai_enabled: integer("ai_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  ai_provider: text("ai_provider").notNull().default("ollama"),
+  ai_base_url: text("ai_base_url"),
+  ai_model: text("ai_model"),
+  ai_api_key: text("ai_api_key"),
+  /** Exam Mode (v2.5.0): hard override that forces the AI assistant off
+   *  (OSCP-style exams forbid AI). Does not affect any other feature. */
+  exam_mode: integer("exam_mode", { mode: "boolean" }).notNull().default(false),
   updated_at: text("updated_at").notNull(),
 });
 

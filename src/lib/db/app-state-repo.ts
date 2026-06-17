@@ -50,6 +50,12 @@ export interface AppStatePatch {
   update_check?: boolean;
   sidebar_collapsed?: boolean;
   theme?: ThemeMode;
+  ai_enabled?: boolean;
+  ai_provider?: string;
+  ai_base_url?: string | null;
+  ai_model?: string | null;
+  ai_api_key?: string | null;
+  exam_mode?: boolean;
 }
 
 /** Partial UPDATE on the singleton; bumps `updated_at` automatically. */
@@ -66,6 +72,12 @@ export function setAppState(db: Db, patch: AppStatePatch): AppState {
   if (patch.sidebar_collapsed !== undefined)
     update.sidebar_collapsed = patch.sidebar_collapsed;
   if (patch.theme !== undefined) update.theme = patch.theme;
+  if (patch.ai_enabled !== undefined) update.ai_enabled = patch.ai_enabled;
+  if (patch.ai_provider !== undefined) update.ai_provider = patch.ai_provider;
+  if (patch.ai_base_url !== undefined) update.ai_base_url = patch.ai_base_url;
+  if (patch.ai_model !== undefined) update.ai_model = patch.ai_model;
+  if (patch.ai_api_key !== undefined) update.ai_api_key = patch.ai_api_key;
+  if (patch.exam_mode !== undefined) update.exam_mode = patch.exam_mode;
 
   db.update(app_state).set(update).where(eq(app_state.id, 1)).run();
   return getAppState(db);
@@ -103,6 +115,15 @@ export interface EffectiveConfig {
   sidebarCollapsed: boolean;
   theme: ThemeMode;
   onboardedAt: string | null;
+  /** Raw AI config (DB value, env fallback). The exam-mode override and
+   *  provider defaults are applied in `src/lib/ai/config.ts`, not here. */
+  aiEnabled: boolean;
+  aiProvider: string;
+  aiBaseUrl: string | null;
+  aiModel: string | null;
+  /** Server-only — never include this in a client payload. */
+  aiApiKey: string | null;
+  examMode: boolean;
 }
 
 function narrowTheme(raw: string): ThemeMode {
@@ -123,5 +144,14 @@ export function effectiveAppState(db: Db): EffectiveConfig {
     sidebarCollapsed: row.sidebar_collapsed,
     theme: narrowTheme(row.theme),
     onboardedAt: row.onboarded_at,
+    // AI: env fallback for the nullable fields + the enable/exam booleans so
+    // an operator can configure via env without onboarding. The DB value wins
+    // whenever it's set.
+    aiEnabled: row.ai_enabled || process.env.RECON_AI_ENABLED === "1",
+    aiProvider: row.ai_provider,
+    aiBaseUrl: row.ai_base_url ?? process.env.RECON_AI_BASE_URL ?? null,
+    aiModel: row.ai_model ?? process.env.RECON_AI_MODEL ?? null,
+    aiApiKey: row.ai_api_key ?? process.env.RECON_AI_API_KEY ?? null,
+    examMode: row.exam_mode || process.env.RECON_EXAM_MODE === "1",
   };
 }
