@@ -42,17 +42,22 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
-          # Semver-driven tags from the git tag. Given v1.2.3:
-          #   → ghcr.io/kocaemre/recon-deck:1.2.3
-          #   → ghcr.io/kocaemre/recon-deck:1.2
-          #   → ghcr.io/kocaemre/recon-deck:1
-          #   → ghcr.io/kocaemre/recon-deck:latest
+          # `latest=auto` only attaches :latest to a STABLE semver tag — a
+          # pre-release tag (v1.2.3-beta.1) never moves :latest. This is what
+          # keeps the beta channel from clobbering what stable users pull.
+          flavor: |
+            latest=auto
+          # Semver-driven tags from the git tag.
+          #   Stable  v1.2.3        → :1.2.3  :1.2  :1  :latest
+          #   Beta    v1.2.3-beta.1 → :1.2.3-beta.1  :beta   (NO :latest, NO :1.2/:1)
+          # The moving short tags (:1.2, :1) and :latest are reserved for stable
+          # so a beta can never shadow a stable image at a coarse tag.
           # For v0.x.x: major-version tag is disabled to avoid an unstable "0".
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref, '-') }}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') && !contains(github.ref, '-') }}
+            type=raw,value=beta,enable=${{ contains(github.ref, '-') }}
 
       # ─── Build WITHOUT push first, load locally, smoke test ───
       - name: Build (amd64) for smoke test
@@ -103,3 +108,8 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: false
+          # Tags with a pre-release suffix (v2.5.0-beta.1) are published as
+          # GitHub pre-releases. GitHub's /releases/latest endpoint excludes
+          # pre-releases, so the in-app update toast never nudges stable users
+          # toward a beta — only opted-in beta clients see them.
+          prerelease: ${{ contains(github.ref_name, '-') }}

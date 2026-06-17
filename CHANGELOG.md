@@ -2,6 +2,23 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Beta release channel.** New features now ship to a pre-release channel
+  before promotion to stable, so `main`/stable stays clean:
+  - The release workflow publishes pre-release tags (`vX.Y.Z-beta.N`) to a
+    moving `:beta` Docker tag plus the pinned `:X.Y.Z-beta.N`, and marks the
+    GitHub release as a pre-release. Stable's `:latest` / `:X.Y` / `:X` tags
+    are never moved by a beta build.
+  - `install.sh --beta` (and `--stable`) selects the channel; default stays
+    stable.
+  - The in-app update check honors `RECON_UPDATE_CHANNEL=beta` to track the
+    newest pre-release. The default stable check uses GitHub's
+    `/releases/latest`, which excludes pre-releases, so stable installs are
+    never nudged toward a beta. Version comparison is now pre-release aware.
+
 ## [2.4.1] — 2026-06-16
 
 Patch. **Security hardening** of the operator-configurable KB directory and
