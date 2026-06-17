@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   streamChatCompletion,
   chatCompletion,
+  listModels,
   AiUpstreamError,
 } from "../client.js";
 
@@ -128,5 +129,49 @@ describe("ai/client chatCompletion (non-streaming)", () => {
       vi.fn().mockResolvedValue(new Response("bad", { status: 500 })),
     );
     await expect(chatCompletion(cfg, [])).rejects.toBeInstanceOf(AiUpstreamError);
+  });
+});
+
+describe("ai/client listModels", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("parses, de-dupes and sorts model ids from /models", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: [
+              { id: "gpt-4o-mini" },
+              { id: "gpt-4o" },
+              { id: "gpt-4o-mini" },
+              { not_an_id: true },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const out = await listModels(cfg);
+    expect(out).toEqual(["gpt-4o", "gpt-4o-mini"]);
+  });
+
+  it("hits the /models endpoint with the auth header when keyed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listModels({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "sk-or", model: "x" });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://openrouter.ai/api/v1/models");
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer sk-or");
+  });
+
+  it("throws AiUpstreamError on non-2xx", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("nope", { status: 401 })),
+    );
+    await expect(listModels(cfg)).rejects.toBeInstanceOf(AiUpstreamError);
   });
 });

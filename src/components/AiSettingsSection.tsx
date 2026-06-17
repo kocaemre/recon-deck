@@ -69,6 +69,31 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
   const [clearKey, setClearKey] = useState(false);
   const [pending, startTransition] = useTransition();
   const [examPending, startExamTransition] = useTransition();
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsMsg, setModelsMsg] = useState<string | null>(null);
+
+  async function loadModels() {
+    setModelsLoading(true);
+    setModelsMsg(null);
+    try {
+      const res = await fetch("/api/ai/models", { cache: "no-store" });
+      const json = (await res.json().catch(() => ({}))) as {
+        models?: string[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
+      const list = Array.isArray(json.models) ? json.models : [];
+      setModels(list);
+      setModelsMsg(
+        list.length ? `${list.length} models loaded` : "No models returned",
+      );
+    } catch (e) {
+      setModelsMsg(e instanceof Error ? e.message : "Could not load models");
+    } finally {
+      setModelsLoading(false);
+    }
+  }
 
   const preset = AI_PROVIDERS[provider];
 
@@ -182,7 +207,11 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setProvider(p)}
+                  onClick={() => {
+                    setProvider(p);
+                    setModels([]);
+                    setModelsMsg(null);
+                  }}
                   disabled={pending}
                   style={{
                     padding: "8px 6px",
@@ -244,15 +273,54 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
           {/* Model */}
           <label style={{ display: "block", marginBottom: 12 }}>
             <span style={labelStyle}>MODEL</span>
-            <input
-              type="text"
-              value={model}
-              placeholder={preset.defaultModel}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={pending}
-              spellCheck={false}
-              style={inputStyle}
-            />
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+              <input
+                type="text"
+                list="ai-model-list"
+                value={model}
+                placeholder={preset.defaultModel}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={pending}
+                spellCheck={false}
+                style={{ ...inputStyle, marginTop: 0, flex: 1 }}
+              />
+              <datalist id="ai-model-list">
+                {models.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+              <button
+                type="button"
+                onClick={loadModels}
+                disabled={modelsLoading || pending}
+                title="Fetch the provider's model list (uses the saved config)"
+                style={{
+                  flexShrink: 0,
+                  padding: "0 12px",
+                  borderRadius: 5,
+                  border: "1px solid var(--border)",
+                  background: "var(--bg-1)",
+                  color: "var(--fg-muted)",
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: modelsLoading ? "wait" : "pointer",
+                }}
+              >
+                {modelsLoading ? "Loading…" : "Load models"}
+              </button>
+            </div>
+            {modelsMsg && (
+              <div
+                style={{
+                  marginTop: 5,
+                  fontSize: 10.5,
+                  color: "var(--fg-subtle)",
+                }}
+              >
+                {modelsMsg} · pick from the list or type a model id. Save the
+                provider + key first if the list is empty.
+              </div>
+            )}
           </label>
 
           {/* API key */}
