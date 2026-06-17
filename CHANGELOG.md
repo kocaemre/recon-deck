@@ -2,6 +2,32 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.2] — 2026-06-17
+
+Second beta. The **optional AI co-pilot** lands (opt-in, local-first) along
+with **Exam Mode**. Off by default — the offline experience is unchanged
+unless you enable it.
+
+### Added
+
+- **AI co-pilot (opt-in, OFF by default).** Configure under Settings → AI
+  assistant: provider (local **Ollama** default, or **OpenAI** / **OpenRouter**),
+  base URL, model, and a write-only API key. When enabled it defaults to a
+  local model, so scan data stays on your machine unless you pick a cloud
+  provider (which shows an explicit egress warning). The API key never leaves
+  the server.
+  - **"Explain this"** on a port's NSE output — streams a plain-language
+    summary of the scan. Suggest-only: the model has no tools and never runs
+    anything; output carries a "verify" disclaimer.
+  - Server-proxied (`/api/ai`) so the browser never talks to the provider
+    directly; the system prompt is built server-side and scan output is fenced
+    as untrusted data with forged-delimiter defanging (prompt-injection
+    hardening). Inherits the per-IP rate limit.
+- **Exam Mode.** One toggle hard-disables the AI assistant (for exams that
+  forbid AI, e.g. OSCP) and shows an app-wide "EXAM MODE · AI OFF" badge.
+  Internet research / HackTricks / searchsploit are untouched — only the AI is
+  turned off.
+
 ## [2.5.0-beta.1] — 2026-06-17
 
 First build on the new beta channel. Infrastructure only so far — the 2.5.0
