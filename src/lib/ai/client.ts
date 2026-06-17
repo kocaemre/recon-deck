@@ -91,6 +91,52 @@ export async function streamChatCompletion(
 }
 
 /**
+ * Non-streaming completion — returns the full assistant message text. Used for
+ * structured tasks (e.g. command suggestions) where we need the whole JSON
+ * before validating it, not a token stream.
+ */
+export async function chatCompletion(
+  cfg: StreamClientConfig,
+  messages: ChatMessage[],
+  opts: StreamOptions = {},
+): Promise<string> {
+  const signal = combineSignals(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: cfg.model,
+      messages,
+      stream: false,
+      max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
+      temperature: 0.2,
+    }),
+    signal,
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.text()).slice(0, 200);
+    } catch {
+      /* ignore */
+    }
+    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return json?.choices?.[0]?.message?.content ?? "";
+}
+
+/**
  * Transform an OpenAI-style SSE byte stream into a plain UTF-8 text stream of
  * just the assistant deltas. Buffers across chunk boundaries; tolerates
  * keepalive comments and the terminal `[DONE]` sentinel.
