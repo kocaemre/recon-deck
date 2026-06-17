@@ -25,6 +25,7 @@ import type { ScriptElem, ScriptTable } from "@/lib/parser/types";
 import type { PortEvidence } from "@/lib/db/schema";
 import { useUIStore } from "@/lib/store";
 import { isAllowedUrl } from "@/lib/security/validate-url";
+import { ExplainButton } from "@/components/ExplainButton";
 
 type FindingSeverity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -294,6 +295,25 @@ export function PortDetailPane({
 
         {scripts.length > 0 && (
           <Section label="NSE Script Output" count={scripts.length}>
+            {(() => {
+              const [portStr, proto] = (servicePortLabel ?? "").split("/");
+              const portNum = parseInt(portStr ?? "", 10);
+              if (!Number.isInteger(portNum)) return null;
+              const scanOutput = scripts
+                .map((s) => `# ${s.script_id}\n${s.output}`)
+                .join("\n\n");
+              return (
+                <div style={{ marginBottom: 8 }}>
+                  <ExplainButton
+                    port={portNum}
+                    protocol={proto ?? null}
+                    service={serviceName ?? null}
+                    version={exploitQuery ?? null}
+                    scanOutput={scanOutput}
+                  />
+                </div>
+              );
+            })()}
             <div className="flex flex-col gap-2">
               {scripts.map((s) => (
                 <div
