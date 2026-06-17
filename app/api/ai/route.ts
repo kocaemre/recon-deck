@@ -25,8 +25,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { readJsonBody } from "@/lib/api/body";
 import { effectiveAiConfig } from "@/lib/ai/config";
-import { buildExplainMessages } from "@/lib/ai/prompts";
-import { streamChatCompletion, AiUpstreamError } from "@/lib/ai/client";
+import {
+  buildExplainMessages,
+  buildSuggestMessages,
+  parseSuggestions,
+} from "@/lib/ai/prompts";
+import {
+  streamChatCompletion,
+  chatCompletion,
+  AiUpstreamError,
+} from "@/lib/ai/client";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +46,24 @@ interface AiRequestBody {
     service?: unknown;
     version?: unknown;
     scanOutput?: unknown;
+    kbCommands?: unknown;
   };
 }
 
 const asStr = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+
+/** Coerce the client-sent baseline KB commands into a clean {label, command}[]. */
+function asKbCommands(v: unknown): Array<{ label: string; command: string }> {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((c) => ({
+      label: asStr((c as { label?: unknown })?.label) ?? "",
+      command: asStr((c as { command?: unknown })?.command) ?? "",
+    }))
+    .filter((c) => c.command)
+    .slice(0, 30);
+}
 
 export async function POST(request: NextRequest) {
   const cfg = effectiveAiConfig(db);
@@ -59,7 +80,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response;
 
   const { task, context } = parsed.body;
-  if (task !== "explain") {
+  if (task !== "explain" && task !== "suggest_commands") {
     return NextResponse.json({ error: "Unknown task." }, { status: 400 });
   }
   const port = Number(context?.port);
@@ -71,18 +92,44 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const messages = buildExplainMessages({
+  const clientCfg = {
+    baseUrl: cfg.baseUrl,
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+  };
+  const common = {
     port,
     protocol: asStr(context?.protocol) ?? null,
     service: asStr(context?.service) ?? null,
     version: asStr(context?.version) ?? null,
     scanOutput,
-  });
+  };
 
   try {
+    // Structured task: full JSON, validated server-side before returning.
+    if (task === "suggest_commands") {
+      const text = await chatCompletion(
+        clientCfg,
+        buildSuggestMessages({
+          ...common,
+          kbCommands: asKbCommands(context?.kbCommands),
+        }),
+        { signal: request.signal },
+      );
+      const suggestions = parseSuggestions(text);
+      if (suggestions.length === 0) {
+        return NextResponse.json(
+          { error: "The model returned no usable suggestions." },
+          { status: 502 },
+        );
+      }
+      return NextResponse.json({ suggestions });
+    }
+
+    // Streaming task: explain.
     const stream = await streamChatCompletion(
-      { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model },
-      messages,
+      clientCfg,
+      buildExplainMessages(common),
       { signal: request.signal },
     );
     return new Response(stream, {

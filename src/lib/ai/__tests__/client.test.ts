@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { streamChatCompletion, AiUpstreamError } from "../client.js";
+import {
+  streamChatCompletion,
+  chatCompletion,
+  AiUpstreamError,
+} from "../client.js";
 
 function sseStream(frames: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
@@ -84,5 +88,45 @@ describe("ai/client streamChatCompletion", () => {
     );
     const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer sk-abc");
+  });
+});
+
+describe("ai/client chatCompletion (non-streaming)", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("returns the assistant message content", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ choices: [{ message: { content: '[{"command":"x"}]' } }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    const out = await chatCompletion(cfg, []);
+    expect(out).toBe('[{"command":"x"}]');
+  });
+
+  it("sends stream:false", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ choices: [{ message: { content: "" } }] }), {
+          status: 200,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    await chatCompletion(cfg, []);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.stream).toBe(false);
+  });
+
+  it("throws AiUpstreamError on a non-2xx response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("bad", { status: 500 })),
+    );
+    await expect(chatCompletion(cfg, [])).rejects.toBeInstanceOf(AiUpstreamError);
   });
 });

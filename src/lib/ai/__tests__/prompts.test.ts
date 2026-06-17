@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildExplainMessages,
+  buildSuggestMessages,
+  parseSuggestions,
   fenceUntrusted,
   MAX_SCAN_CHARS,
 } from "../prompts.js";
@@ -61,5 +63,54 @@ describe("ai/prompts (injection hardening)", () => {
     expect(msgs[1].content).toContain("Port: 22/tcp");
     expect(msgs[1].content).not.toContain("Service:");
     expect(msgs[1].content).not.toContain("Version:");
+  });
+});
+
+describe("ai/prompts — suggest commands", () => {
+  it("grounds the prompt in the baseline KB commands and fences scan data", () => {
+    const msgs = buildSuggestMessages({
+      port: 80,
+      service: "http",
+      scanOutput: "Server: Apache",
+      kbCommands: [{ label: "dirb", command: "feroxbuster -u http://10.0.0.1" }],
+    });
+    expect(msgs[0].content).toMatch(/ONLY a JSON array/i);
+    expect(msgs[1].content).toContain("feroxbuster -u http://10.0.0.1");
+    expect(msgs[1].content).toContain("<untrusted_scan_output>");
+  });
+
+  it("handles a service with no baseline commands", () => {
+    const msgs = buildSuggestMessages({
+      port: 1234,
+      service: "weird",
+      scanOutput: "banner",
+      kbCommands: [],
+    });
+    expect(msgs[1].content).toContain("no baseline commands");
+  });
+
+  it("parseSuggestions reads a clean JSON array", () => {
+    const out = parseSuggestions(
+      '[{"command":"nmap -sV -p80 10.0.0.1","why":"version scan","risk":"safe"}]',
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].command).toBe("nmap -sV -p80 10.0.0.1");
+    expect(out[0].risk).toBe("safe");
+  });
+
+  it("parseSuggestions extracts an array wrapped in prose / code fences", () => {
+    const raw =
+      'Sure! Here you go:\n```json\n[{"command":"whatweb 10.0.0.1","why":"fingerprint"}]\n```\nHope that helps.';
+    const out = parseSuggestions(raw);
+    expect(out).toHaveLength(1);
+    expect(out[0].command).toBe("whatweb 10.0.0.1");
+    // default risk applies when omitted
+    expect(out[0].risk).toBe("intrusive");
+  });
+
+  it("parseSuggestions returns [] on garbage / non-conforming data", () => {
+    expect(parseSuggestions("not json at all")).toEqual([]);
+    expect(parseSuggestions('{"not":"an array"}')).toEqual([]);
+    expect(parseSuggestions('[{"no_command_field":true}]')).toEqual([]);
   });
 });
