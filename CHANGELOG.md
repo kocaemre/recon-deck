@@ -2,7 +2,10 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0-beta.1] — 2026-06-17
+
+First build on the new beta channel. Infrastructure only so far — the 2.5.0
+feature work (AI co-pilot, Exam Mode, …) will land in subsequent betas.
 
 ### Added
 
