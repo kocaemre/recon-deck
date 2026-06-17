@@ -188,9 +188,9 @@ Image tags: `:latest` and `:X.Y.Z` are stable; `:beta` always points at the newe
 
 ## What it is / What it is NOT
 
-**For OSCP/HTB students and solo pentesters.** Offline. No LLM. Does not run scans — it complements AutoRecon and HackTricks. Think of it as the OSCP-flavored Obsidian for recon: same category as Obsidian, focused on post-scan workflow.
+**For OSCP/HTB students and solo pentesters.** Offline by default. Does not run scans — it complements AutoRecon and HackTricks. Think of it as the OSCP-flavored Obsidian for recon: same category as Obsidian, focused on post-scan workflow. An **optional, off-by-default AI co-pilot** (local-first via Ollama; OpenAI/OpenRouter only if you opt in) can explain scan output and suggest commands — with it disabled (the default) nothing leaves your machine, and **Exam Mode** turns it off with one switch for exams that forbid AI.
 
-**It is NOT** a reporting platform, a team tool, a scanner, an AI assistant, or a mobile app. The intent is deliberate and narrow — see [ROADMAP.md](ROADMAP.md) for the out-of-scope list.
+**It is NOT** a reporting platform, a team tool, a scanner, or a mobile app — and it never runs commands for you (the AI co-pilot only *suggests*; you run things yourself). The intent is deliberate and narrow — see [ROADMAP.md](ROADMAP.md) for the out-of-scope list.
 
 ---
 

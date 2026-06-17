@@ -54,11 +54,10 @@ the maintainer is aware of the request and has a view on it.
 
 | Direction                                            | What it might look like                                                                                                                                                                                                                                                                                                                                       | Constraints that must hold                                                                                                                                                                          |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local-LLM-assisted enrichment (opt-in, offline)       | A small, user-supplied local model (Ollama, llama.cpp, or a self-hosted endpoint the user explicitly configures) suggesting commands, summarising NSE script output, or proposing checklist items derived from the existing KB entries. Default off. Surfaced only when the user enables it and points the app at a model endpoint they control. | Must preserve OPS-03 (no outbound HTTP from the recon-deck process — model lives on user's machine or LAN). Must not bundle a model into the Docker image. Must surface clearly when an inference is AI-derived vs. KB-derived. Must not auto-execute suggestions. |
+| ~~Local-LLM-assisted enrichment (opt-in, offline)~~ **— SHIPPED in 2.5.0** | Delivered as the AI co-pilot: opt-in (OFF by default), local-first via a user-supplied Ollama endpoint, with "Explain" (NSE summary) and KB-grounded "Suggest commands". AI-derived output is labelled and never auto-executed. | Held the constraints, with one deliberate extension: cloud providers (OpenAI/OpenRouter) are an **explicit per-operator opt-in** shown with an egress warning — the default (local) config still satisfies OPS-03, and no model is bundled into the image. |
 
-If a clean, bounded design for this emerges (small local model, opt-in,
-offline, well-labelled outputs), it becomes a real v2 candidate. Until then
-this is a direction, not a plan.
+The local-LLM direction above shipped in 2.5.0. The remaining horizon items
+(if any) stay directions, not plans, until a clean bounded design emerges.
 
 ---
 
@@ -73,7 +72,7 @@ stays shippable.
 | Running scans (nmap, gobuster, etc.)     | **Won't add.**          | recon-deck is post-scan workflow only. It competes with nothing, complements AutoRecon/HackTricks. Running scans would duplicate AutoRecon's job, expand the threat model, and force long-running background processes into a tool designed around synchronous render. |
 | Multi-user / team collaboration          | **Won't add.**          | Single-user self-hosted tool by design. Multi-user requires auth, RBAC, per-user state scoping, share links, conflict resolution — every one of those items expands the maintenance surface 10x and violates the "runs locally in a container" core posture. |
 | Authentication / login / users           | **Won't add.**          | Local tool. Auth adds friction and threat surface for no benefit. If you need multi-user, run multiple containers behind a reverse proxy you control. |
-| AI / LLM / exploit suggestions           | **Not in v2.x today.** Direction noted — see [v2.x Future Considerations](#v2x-future-considerations). | The product is deterministic and offline on purpose. A future path may exist via a user-supplied local model (Ollama / self-hosted endpoint), opt-in, with AI-derived output clearly labelled — but this is a design problem, not a backlog item. |
+| AI / LLM assistant                       | **Shipped in 2.5.0** — opt-in, OFF by default. | Delivered as a local-first co-pilot: defaults to a user-supplied local model (Ollama), with "Explain" (summarise NSE output) and KB-grounded "Suggest commands". Every output is labelled AI-derived and never auto-executed (suggest-only). Cloud providers (OpenAI/OpenRouter) are an explicit per-operator opt-in shown with an egress warning; the default config still satisfies OPS-03. Exam Mode hard-disables it. Autonomous / agentic auto-exploitation remains out of scope. |
 | Mobile app / mobile-first UI             | **Won't add.**          | Pentesting happens on laptops. Mobile recon is rare, the UI wouldn't fit, and the browsers-in-scope targeting (Chromium + Firefox last 2 majors) excludes mobile Safari anyway. |
 | Cloud-hosted / SaaS version              | **Won't add.**          | Self-hosted is the entire distribution model. A hosted offering would require auth, billing, multi-tenant isolation, and a separate threat model — an entirely different project. |
 | PostgreSQL or non-SQLite DB              | **Won't add.**          | Would kill self-host simplicity. SQLite is the whole reason the Docker image is one file, one process, one volume. |
@@ -117,23 +116,24 @@ server because there is no central-server design.
 
 ### "Can you add AI / LLM / exploit suggestions?"
 
-**Not in v1.x — but on the v2 horizon.** recon-deck v1 is deterministic and
-fully offline by design: the server process makes zero outbound HTTP requests
-(see OPS-03 in [`SECURITY.md`](SECURITY.md)). For v1.x, that posture is firm.
+**Shipped in 2.5.0 — opt-in, OFF by default.** The AI co-pilot is local-first:
+you supply your own model endpoint (Ollama by default), and with it disabled
+(the default) the server still makes zero outbound HTTP requests, so OPS-03
+holds for the default config. Two features today: **"Explain"** (summarise a
+port's NSE output) and **"Suggest commands"** (recon commands grounded in the
+port's existing KB entries). Every output is labelled AI-derived and is
+**suggest-only — nothing is ever auto-executed**, and no model is bundled into
+the Docker image.
 
-For v2.x, the direction is open under strict constraints. A viable design
-looks like this: the user supplies their own local model (Ollama, llama.cpp,
-or a self-hosted endpoint they configure), opt-in by default, with every
-AI-derived suggestion clearly labelled and never auto-executed. The recon-deck
-process itself never reaches a third-party API and never bundles a model into
-the Docker image — the offline guarantee survives. See
-[v2.x Future Considerations](#v2x-future-considerations) for the constraint
-list this design would have to satisfy.
+Cloud providers (OpenAI / OpenRouter) are supported as an **explicit
+per-operator opt-in**, shown with an egress warning, for users who accept
+sending scan data off-box. Prefer a local model on NDA-bound engagements.
+**Exam Mode** hard-disables the whole assistant with one toggle (for exams that
+forbid AI, e.g. OSCP). Autonomous / agentic "auto-exploit" is still out of scope.
 
-If you want to influence what this looks like, open a discussion issue with a
-concrete workflow you'd want enriched (e.g. "summarise NSE script output for
-this port", "propose checklist items for this service banner") rather than a
-generic "add AI" request.
+If you want to influence where this goes next, open a discussion issue with a
+concrete workflow you'd want enriched (e.g. "draft a finding from these notes")
+rather than a generic "add AI" request.
 
 ### "Is there a mobile version / mobile app?"
 
