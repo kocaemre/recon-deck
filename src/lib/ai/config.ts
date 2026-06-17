@@ -21,51 +21,21 @@ import "server-only";
  */
 
 import { effectiveAppState, type Db } from "@/lib/db/app-state-repo";
+import {
+  AI_PROVIDERS,
+  normalizeProvider,
+  type AiProvider,
+} from "./providers";
 
-export type AiProvider = "ollama" | "openai" | "openrouter";
-
-export interface ProviderPreset {
-  label: string;
-  defaultBaseUrl: string;
-  defaultModel: string;
-  /** Cloud providers require an API key; local ones do not. */
-  needsKey: boolean;
-  /** True when requests leave the host (privacy-relevant for scan data). */
-  cloud: boolean;
-}
-
-export const AI_PROVIDERS: Record<AiProvider, ProviderPreset> = {
-  ollama: {
-    label: "Ollama (local)",
-    defaultBaseUrl: "http://127.0.0.1:11434/v1",
-    defaultModel: "llama3.1",
-    needsKey: false,
-    cloud: false,
-  },
-  openai: {
-    label: "OpenAI",
-    defaultBaseUrl: "https://api.openai.com/v1",
-    defaultModel: "gpt-4.1-mini",
-    needsKey: true,
-    cloud: true,
-  },
-  openrouter: {
-    label: "OpenRouter",
-    defaultBaseUrl: "https://openrouter.ai/api/v1",
-    defaultModel: "openai/gpt-4.1-mini",
-    needsKey: true,
-    cloud: true,
-  },
-};
-
-export function isAiProvider(v: string): v is AiProvider {
-  return v === "ollama" || v === "openai" || v === "openrouter";
-}
-
-/** Unknown/garbage provider values fall back to the local default. */
-export function normalizeProvider(raw: string): AiProvider {
-  return isAiProvider(raw) ? raw : "ollama";
-}
+// Re-export the client-safe presets/helpers so existing importers of this
+// module (and tests) keep working unchanged.
+export {
+  AI_PROVIDERS,
+  AI_PROVIDER_ORDER,
+  isAiProvider,
+  normalizeProvider,
+} from "./providers";
+export type { AiProvider, ProviderPreset } from "./providers";
 
 export type AiDisabledReason = "exam_mode" | "disabled" | "missing_key" | null;
 
