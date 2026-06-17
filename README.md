@@ -170,6 +170,20 @@ docker run -d --name recon-deck -p 127.0.0.1:13337:13337 \
 
 Open <http://localhost:13337>, paste nmap output, see cards. The `-p 127.0.0.1:13337:13337` host-side prefix keeps the app loopback-only — see [Exposing to LAN](#exposing-to-lan) for LAN reachability.
 
+### Beta channel (early builds)
+
+Stable is the default. To try the newest pre-release build (new features land here first; may be unstable):
+
+```bash
+# One-liner
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta
+
+# or pull the beta image directly
+docker pull ghcr.io/kocaemre/recon-deck:beta
+```
+
+Image tags: `:latest` and `:X.Y.Z` are stable; `:beta` always points at the newest pre-release, and each beta is also pinned at `:X.Y.Z-beta.N`. Switch back to stable any time with `--stable` (or pull `:latest`). To have the in-app update toast track betas, set `RECON_UPDATE_CHANNEL=beta` (otherwise it only ever surfaces stable releases).
+
 ---
 
 ## What it is / What it is NOT

@@ -3,11 +3,16 @@
 # recon-deck — one-liner Docker installer.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+#   Stable: curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+#   Beta:   curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta
+#
+# Channels:
+#   (default)  pulls :latest — the stable release.
+#   --beta     pulls :beta   — the newest pre-release build (may be unstable).
 #
 # What it does:
 #   1. Verifies docker + docker daemon are reachable.
-#   2. Pulls the latest ghcr.io/kocaemre/recon-deck image.
+#   2. Pulls the selected ghcr.io/kocaemre/recon-deck image (stable or beta).
 #   3. Creates persistent named volumes for the SQLite DB + user KB.
 #   4. Runs the container detached on 127.0.0.1:13337 (loopback only — solo
 #      pentest tool, never exposed to LAN by default). Port 13337 was picked
@@ -18,7 +23,24 @@
 
 set -euo pipefail
 
-IMAGE="ghcr.io/kocaemre/recon-deck:latest"
+# Channel selection — default stable (:latest), opt into pre-releases with --beta.
+CHANNEL_TAG="latest"
+for arg in "$@"; do
+  case "$arg" in
+    --beta|--channel=beta)     CHANNEL_TAG="beta" ;;
+    --stable|--channel=stable) CHANNEL_TAG="latest" ;;
+    -h|--help)
+      printf 'Usage: install.sh [--beta]\n  --beta   install the newest pre-release build (default: stable)\n'
+      exit 0
+      ;;
+    *)
+      printf 'Unknown option: %s (use --beta or --stable)\n' "$arg" >&2
+      exit 1
+      ;;
+  esac
+done
+
+IMAGE="ghcr.io/kocaemre/recon-deck:${CHANNEL_TAG}"
 CONTAINER_NAME="recon-deck"
 PORT="13337"
 URL="http://localhost:${PORT}"
