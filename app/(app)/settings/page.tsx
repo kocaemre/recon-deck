@@ -16,7 +16,10 @@ import {
   listSummaries,
   listDeletedSummaries,
   effectiveAppState,
+  getAppState,
 } from "@/lib/db";
+import { normalizeProvider } from "@/lib/ai/providers";
+import { AiSettingsSection } from "@/components/AiSettingsSection";
 import { EngagementSettingsList } from "@/components/EngagementSettingsList";
 import { RecycleBinList } from "@/components/RecycleBinList";
 import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
@@ -31,6 +34,7 @@ export default function SettingsIndexPage() {
   const engagements = listSummaries(db);
   const deleted = listDeletedSummaries(db);
   const cfg = effectiveAppState(db);
+  const aiRaw = getAppState(db);
   const tools = detectToolPaths();
   const totalHosts = engagements.reduce((acc, e) => acc + e.host_count, 0);
   const totalPorts = engagements.reduce((acc, e) => acc + e.port_count, 0);
@@ -204,6 +208,32 @@ export default function SettingsIndexPage() {
           Off by default — opt in here per browser.
         </p>
         <EditorIntegrationToggle />
+      </section>
+
+      {/* v2.5.0: optional AI co-pilot + Exam Mode. */}
+      <section style={{ marginBottom: 32 }}>
+        <SectionLabel>AI assistant</SectionLabel>
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fg-muted)",
+            margin: "6px 0 12px",
+          }}
+        >
+          Optional, off by default. Defaults to a local model (Ollama) so scan
+          data stays on your machine unless you pick a cloud provider. Exam Mode
+          hard-disables it for exams that forbid AI.
+        </p>
+        <AiSettingsSection
+          initial={{
+            enabled: aiRaw.ai_enabled,
+            provider: normalizeProvider(aiRaw.ai_provider),
+            baseUrl: aiRaw.ai_base_url ?? "",
+            model: aiRaw.ai_model ?? "",
+            hasKey: !!aiRaw.ai_api_key,
+            examMode: aiRaw.exam_mode,
+          }}
+        />
       </section>
 
       {/* v1.9.0: first-run / onboarding controls. */}
