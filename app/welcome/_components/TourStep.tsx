@@ -58,7 +58,7 @@ export function TourStep() {
           className="mono uppercase tracking-[0.08em] font-medium"
           style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 14 }}
         >
-          STEP 02 / 04 · TOUR
+          STEP 02 / 05 · TOUR
         </div>
         <h1
           className="font-semibold"
@@ -438,7 +438,7 @@ function MiniHeatmap() {
 function MiniSettings() {
   const rows: Array<[string, string]> = [
     ["KB editor", "33 entries · YAML"],
-    ["Recycle bin", "3 deleted · empty in 30d"],
+    ["AI assistant", "opt-in · local-first"],
     ["Editor integration", "vscode://file/…"],
     ["Wordlists", "/usr/share/seclists"],
   ];

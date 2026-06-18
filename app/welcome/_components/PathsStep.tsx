@@ -82,7 +82,7 @@ export function PathsStep({
           className="mono uppercase tracking-[0.08em] font-medium"
           style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 14 }}
         >
-          STEP 03 / 04 · LOCAL PATHS
+          STEP 03 / 05 · LOCAL PATHS
         </div>
         <h1
           className="font-semibold"
