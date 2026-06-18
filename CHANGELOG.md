@@ -2,6 +2,24 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.5] — 2026-06-18
+
+Fifth beta. Onboarding now introduces the AI co-pilot.
+
+### Added
+
+- **Onboarding "AI assistant" step.** First-run onboarding grew from four steps
+  to five (`Scope → Tour → Paths → AI assistant → Updates`) so new operators
+  actually discover the v2.5.0 co-pilot and Exam Mode. The step is **off by
+  default** and local-first: skipping it (or leaving the toggle unchecked) ships
+  with no AI, identical to prior behaviour. Enabling it reveals provider choice
+  (Ollama local / OpenAI / OpenRouter), endpoint, model, and a write-only API
+  key for cloud providers — with an explicit egress warning when scan output
+  would leave the host, and a note pointing OSCP candidates at Exam Mode (which
+  hard-disables only the AI, not the internet or HackTricks). The tour's Settings
+  preview now lists the AI assistant. All settings remain editable later in
+  Settings → AI assistant.
+
 ## [2.5.0-beta.4] — 2026-06-18
 
 Fourth beta. Polishes the AI model selection.
