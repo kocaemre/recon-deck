@@ -26,6 +26,7 @@ import { EditorIntegrationToggle } from "@/components/EditorIntegrationToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OnboardingSettingsSection } from "@/components/OnboardingSettingsSection";
 import { detectToolPaths } from "@/lib/tool-paths";
+import { CopyCommand, SECLISTS_INSTALL } from "@/components/CopyCommand";
 import pkg from "../../../package.json";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +150,62 @@ export default function SettingsIndexPage() {
               and the rows below will populate.
             </div>
           )}
+        {!tools.seclists && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "12px 14px",
+              borderRadius: 6,
+              border: "1px solid var(--accent-border)",
+              background: "var(--accent-bg)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                color: "var(--fg-subtle)",
+                marginBottom: 6,
+              }}
+            >
+              SecLists not detected
+            </div>
+            <p
+              style={{
+                fontSize: 12.5,
+                color: "var(--fg-muted)",
+                margin: "0 0 4px",
+                lineHeight: 1.55,
+              }}
+            >
+              Many KB commands (gobuster, ffuf, smtp-user-enum…) point at
+              SecLists. Install it on the box where you run those commands:
+            </p>
+            <CopyCommand label="Kali / Debian" command={SECLISTS_INSTALL.apt} />
+            <CopyCommand label="Any OS — git clone" command={SECLISTS_INSTALL.git} />
+            <p
+              style={{
+                fontSize: 11.5,
+                color: "var(--fg-subtle)",
+                margin: "10px 0 0",
+                lineHeight: 1.5,
+              }}
+            >
+              {tools.inDocker
+                ? "Running in Docker: install on the host and bind-mount it (-v /usr/share/wordlists:/host/wordlists:ro), or "
+                : "Installed somewhere non-standard? "}
+              point individual paths at it under{" "}
+              <Link
+                href="/settings/wordlists"
+                style={{ color: "var(--accent)", textDecoration: "underline" }}
+              >
+                Wordlists
+              </Link>
+              .
+            </p>
+          </div>
+        )}
         <div
           className="grid grid-cols-1 gap-2"
           style={{ fontSize: 12.5 }}

@@ -13,7 +13,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronRight, Copy, HelpCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
+import { CopyCommand, SECLISTS_INSTALL } from "@/components/CopyCommand";
 
 export function PastePanel() {
   const [input, setInput] = useState("");
@@ -278,11 +279,11 @@ function HowToScan({
             output here.
           </p>
 
-          <CommandRow
+          <CopyCommand
             label="Full — all ports, versions + default scripts (recommended)"
             command="nmap -sCV -p- --min-rate 1000 -oN nmap.txt <TARGET>"
           />
-          <CommandRow
+          <CopyCommand
             label="Fast — top 1000 ports, same depth"
             command="nmap -sCV --top-ports 1000 -oN nmap.txt <TARGET>"
           />
@@ -309,82 +310,23 @@ function HowToScan({
             </span>{" "}
             on the Import panel.
           </p>
+
+          <p
+            style={{
+              fontSize: 11.5,
+              color: "var(--fg-subtle)",
+              margin: "12px 0 0",
+              lineHeight: 1.55,
+            }}
+          >
+            The <span className="mono" style={{ color: "var(--fg-muted)" }}>ffuf</span>/
+            <span className="mono" style={{ color: "var(--fg-muted)" }}>gobuster</span>{" "}
+            commands recon-deck suggests use SecLists. Don&apos;t have it on your
+            box?
+          </p>
+          <CopyCommand command={SECLISTS_INSTALL.apt} />
         </div>
       )}
-    </div>
-  );
-}
-
-function CommandRow({
-  label,
-  command,
-}: {
-  label: string;
-  command: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked — the command is selectable in the field regardless */
-    }
-  }
-
-  return (
-    <div className="mt-2 first:mt-0">
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--fg-subtle)",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        className="flex items-center gap-2"
-        style={{
-          padding: "7px 8px 7px 12px",
-          borderRadius: 5,
-          background: "var(--code, var(--bg-2))",
-          border: "1px solid var(--border)",
-        }}
-      >
-        <code
-          className="mono"
-          style={{
-            flex: 1,
-            fontSize: 12,
-            color: "var(--fg)",
-            overflowX: "auto",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {command}
-        </code>
-        <button
-          type="button"
-          onClick={copy}
-          aria-label="Copy command"
-          className="inline-flex items-center gap-1 shrink-0"
-          style={{
-            padding: "3px 8px",
-            borderRadius: 4,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
-            color: copied ? "var(--accent)" : "var(--fg-muted)",
-            fontSize: 11,
-            cursor: "pointer",
-          }}
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
     </div>
   );
 }
