@@ -8,6 +8,14 @@
 // supports this), but that requires per-request nonce generation and propagation
 // through the RSC render tree. Deferred to a future hardening phase.
 import bundleAnalyzer from "@next/bundle-analyzer";
+import { createRequire } from "node:module";
+
+// Single source of truth for the app version: package.json (bumped per release,
+// committed before the image builds). Inlined into both server + client bundles
+// via `env` below so the health endpoint and UI report the real version instead
+// of relying on npm_package_version, which `node server.js` doesn't set.
+const require = createRequire(import.meta.url);
+const { version: appVersion } = require("./package.json");
 
 const isDev = process.env.NODE_ENV === "development";
 const cspHeader = [
@@ -26,6 +34,11 @@ const cspHeader = [
 const nextConfig = {
   output: "standalone",
   serverExternalPackages: ["better-sqlite3"],
+  // Build-time constant — available as process.env.APP_VERSION in server route
+  // handlers and client components alike.
+  env: {
+    APP_VERSION: appVersion,
+  },
   async headers() {
     return [
       {

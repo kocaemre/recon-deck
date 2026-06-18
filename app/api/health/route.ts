@@ -13,10 +13,10 @@
  * Note: route handlers run server-side by default — no `import "server-only"`
  * directive needed (only `src/lib/**` modules use that guard).
  *
- * `version` provenance: `npm_package_version` is normally set by `npm start`,
- * NOT by raw `node server.js`. Inside the production container we fall back to
- * "unknown" — harmless for liveness; CI smoke tests only assert `ok: true`.
- * (Assumption A8 in 08-RESEARCH.md.)
+ * `version` provenance: `APP_VERSION` is inlined from package.json at build
+ * time via next.config (`env`), so it's correct inside the container where
+ * `node server.js` would otherwise leave `npm_package_version` unset. The
+ * remaining fallbacks keep dev/CI sane.
  */
 
 import { NextResponse } from "next/server";
@@ -29,7 +29,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    version: process.env.npm_package_version ?? "unknown",
+    version:
+      process.env.APP_VERSION ?? process.env.npm_package_version ?? "unknown",
     ts: new Date().toISOString(),
   });
 }

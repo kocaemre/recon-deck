@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # recon-deck — one-liner Docker installer.
 #
@@ -16,12 +16,16 @@
 #   3. Creates persistent named volumes for the SQLite DB + user KB.
 #   4. Runs the container detached on 127.0.0.1:13337 (loopback only — solo
 #      pentest tool, never exposed to LAN by default). Port 13337 was picked
-#      to dodge the dev-server crowd that lives on 3000/8080.
+#      to dodge the dev-server crowd that lives on 3000/8080. Override with
+#      RECON_DECK_PORT=13338 if 13337 is taken.
 #   5. Tries to open the browser (Linux: xdg-open, macOS: open).
 #
 # To uninstall: `docker rm -f recon-deck && docker volume rm recondeck-data recondeck-kb`.
 
-set -euo pipefail
+# POSIX sh — no bashisms — so the documented `curl ... | sh` works under dash
+# (Debian/Ubuntu /bin/sh). `pipefail` is bash-only and would abort dash with
+# "Illegal option -o pipefail" the moment the script is piped to sh.
+set -eu
 
 # Channel selection — default stable (:latest), opt into pre-releases with --beta.
 CHANNEL_TAG="latest"
@@ -42,7 +46,9 @@ done
 
 IMAGE="ghcr.io/kocaemre/recon-deck:${CHANNEL_TAG}"
 CONTAINER_NAME="recon-deck"
-PORT="13337"
+# Host port — override with RECON_DECK_PORT if 13337 is already taken. The
+# container always listens on 13337 internally; only the host side moves.
+PORT="${RECON_DECK_PORT:-13337}"
 URL="http://localhost:${PORT}"
 
 # 1. Pre-flight — docker reachable?
@@ -86,15 +92,35 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
   docker rm -f "$CONTAINER_NAME" >/dev/null
 fi
 
-# 4. Run.
-docker run -d \
+# 4. Run. Capture stderr (stdout = container id, discarded) so a port clash
+#    gives an actionable hint instead of a raw docker traceback.
+run_failed=0
+run_err="$(docker run -d \
   --name "$CONTAINER_NAME" \
   --restart unless-stopped \
   -p "127.0.0.1:${PORT}:13337" \
   -v recondeck-data:/data \
   -v recondeck-kb:/kb \
   -e HOSTNAME=0.0.0.0 \
-  "$IMAGE" >/dev/null
+  "$IMAGE" 2>&1 >/dev/null)" || run_failed=1
+
+if [ "$run_failed" -ne 0 ]; then
+  # A failed run can leave a "Created" container holding the name — clear it so
+  # a re-run with a different port isn't blocked by the stale name.
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  case "$run_err" in
+    *"already allocated"* | *"address already in use"* | *"port is already"*)
+      printf 'Port %s is already in use.\n' "$PORT" >&2
+      printf 'Re-run on a different port, e.g.:\n' >&2
+      printf '  RECON_DECK_PORT=13338 curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta\n' >&2
+      printf 'Or find what holds it:  docker ps --filter "publish=%s"\n' "$PORT" >&2
+      ;;
+    *)
+      printf 'docker run failed:\n%s\n' "$run_err" >&2
+      ;;
+  esac
+  exit 1
+fi
 
 printf '\nrecon-deck is up at %s\n' "$URL"
 printf 'Stop  : docker stop %s\n' "$CONTAINER_NAME"

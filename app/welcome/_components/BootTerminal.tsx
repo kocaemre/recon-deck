@@ -17,9 +17,13 @@ interface Line {
   style: "cmd" | "info" | "ok" | "warn" | "ready";
 }
 
+// Inlined from package.json at build time via next.config `env`. Falls back to
+// "dev" under `npm run dev`, where the build constant isn't substituted.
+const APP_VERSION = process.env.APP_VERSION ?? "dev";
+
 const BOOT_LINES: Line[] = [
   { glyph: "$", text: "rd init", style: "cmd" },
-  { glyph: "→", text: "loading recon-deck v2.0.1", style: "info" },
+  { glyph: "→", text: `loading recon-deck v${APP_VERSION}`, style: "info" },
   { glyph: "✓", text: "local sqlite · /data/recon.db", style: "ok" },
   { glyph: "✓", text: "knowledge base · 33 entries loaded", style: "ok" },
   { glyph: "✓", text: "kb editor · /knowledge/*.yaml", style: "ok" },
