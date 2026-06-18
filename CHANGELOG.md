@@ -2,6 +2,21 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.8] — 2026-06-18
+
+Eighth beta. Nudges operators to install SecLists when it's missing.
+
+### Added
+
+- **SecLists install nudge.** recon-deck's gobuster/ffuf/smtp-user-enum
+  commands point at SecLists, so a box without it just hits "wordlist not
+  found". A concrete, copyable install nudge now appears in three places:
+  Settings → Detected tools (a callout shown only when SecLists isn't
+  detected, with `apt install` + `git clone` and a pointer to the Docker
+  bind-mount / Wordlists override), the onboarding Local-paths step, and the
+  paste panel's "how to scan" helper. Backed by a shared `CopyCommand`
+  component so every command pill copies identically.
+
 ## [2.5.0-beta.7] — 2026-06-18
 
 Seventh beta. Version-gated conditionals + a scan-quality nudge on the paste panel.
