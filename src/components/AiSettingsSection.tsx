@@ -381,6 +381,7 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                       const active = m.id === model;
                       const inM = pricePerMillion(m.promptPrice);
                       const outM = pricePerMillion(m.completionPrice);
+                      const isFree = inM === 0 && outM === 0;
                       const price =
                         inM !== undefined && outM !== undefined
                           ? `$${inM.toFixed(2)}/$${outM.toFixed(2)}`
@@ -395,7 +396,11 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                           }}
                           title={
                             (m.name ? m.name + " · " : "") +
-                            (price ? price + " per 1M (in/out)" : "price n/a") +
+                            (isFree
+                              ? "free ($0)"
+                              : price
+                                ? price + " per 1M (in/out)"
+                                : "price n/a") +
                             (m.contextLength ? ` · ctx ${m.contextLength}` : "")
                           }
                           style={{
@@ -418,10 +423,27 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                             {star && <span style={{ color: "var(--accent)" }}>★ </span>}
                             {m.id}
                           </span>
-                          {price && (
-                            <span style={{ flexShrink: 0, fontSize: 10, color: "var(--fg-subtle)" }}>
-                              {price}
+                          {isFree ? (
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                fontSize: 9,
+                                fontWeight: 700,
+                                letterSpacing: "0.04em",
+                                color: "var(--accent)",
+                                border: "1px solid var(--accent-border)",
+                                borderRadius: 3,
+                                padding: "0 5px",
+                              }}
+                            >
+                              FREE
                             </span>
+                          ) : (
+                            price && (
+                              <span style={{ flexShrink: 0, fontSize: 10, color: "var(--fg-subtle)" }}>
+                                {price}
+                              </span>
+                            )
                           )}
                         </button>
                       );

@@ -46,17 +46,27 @@ export const AI_PROVIDER_ORDER: AiProvider[] = ["ollama", "openai", "openrouter"
 
 /**
  * Curated models that work well for recon-deck's explain/suggest tasks —
- * cheap, strong instruction-following, reliable JSON. Surfaced as
- * "Recommended" at the top of the picker when present in the provider list.
- * (OpenRouter ids; a `:free` variant is included where one commonly exists.)
+ * strong instruction-following, reliable structured/JSON output, and neutral
+ * enough not to refuse a pentest context. Surfaced as "Recommended" at the top
+ * of the picker, and only when the provider actually lists the id (so the free
+ * OpenRouter ids simply don't appear for OpenAI/Ollama users).
+ *
+ * The `:free` entries are OpenRouter's zero-cost tier (rate-limited but $0) —
+ * good enough for explain/suggest on a budget. Free slugs churn; treat this as
+ * a best-effort default, not a guarantee. Verified against OpenRouter's free
+ * collection, 2026-06.
  */
 export const RECOMMENDED_MODEL_IDS: string[] = [
+  // Paid — cheap, dependable JSON, fast.
   "openai/gpt-4o-mini",
   "anthropic/claude-3.5-haiku",
-  "google/gemini-2.0-flash-001",
   "deepseek/deepseek-chat",
-  "meta-llama/llama-3.3-70b-instruct",
-  "qwen/qwen-2.5-72b-instruct",
+  // Free ($0) — strong at command generation + structured output for "Suggest",
+  // and steerable for security work. Hermes 3 in particular stays neutral on
+  // offensive-security prompts instead of refusing.
+  "qwen/qwen3-coder:free",
+  "openai/gpt-oss-120b:free",
+  "nousresearch/hermes-3-llama-3.1-405b:free",
   "meta-llama/llama-3.3-70b-instruct:free",
 ];
 
