@@ -2,6 +2,34 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.7] — 2026-06-18
+
+Seventh beta. Version-gated conditionals + a scan-quality nudge on the paste panel.
+
+### Added
+
+- **Version-gated KB conditionals on ports 21 / 445 / 22 / 3306.** Using the
+  resolver's `nmap_version_matches` predicate, the KB now flags build-specific
+  vulnerabilities the moment nmap pins the version: vsftpd 2.3.4 backdoor
+  (CVE-2011-2523) and ProFTPD 1.3.5 mod_copy (CVE-2015-3306) on FTP; Samba
+  usermap_script (CVE-2007-2447) and SambaCry (CVE-2017-7494, which also appends
+  `smb-vuln-cve-2017-7494` to the nmap scan) on SMB; OpenSSH username enum
+  (CVE-2018-15473) and regreSSHion (CVE-2024-6387) on SSH; and the MySQL 5.5
+  memcmp() auth bypass (CVE-2012-2122).
+- **"Which nmap scan should I paste?" helper** on the paste panel. A collapsible
+  hint recommends a versioned, scripted scan (`nmap -sCV -p- -oN nmap.txt`) with
+  one-click copy, explaining that `-sV` versions feed the CVE overlays and `-sC`
+  scripts feed the web-stack overlays — then nudges the operator to run it and
+  paste the result back. Closes the loop on the conditional KB: the overlays only
+  fire on fingerprinted scans, so the paste surface now steers toward producing one.
+
+### Fixed
+
+- **Version comparison no longer drops suffixed minors.** `compareVersions` now
+  reduces each segment to its leading integer, so an OpenSSH `"7.7p1"` banner
+  parses as `[7, 7]` instead of `[7, 0]` — without this the SSH version ranges
+  above mis-fired on 7.7/7.8/7.9.
+
 ## [2.5.0-beta.6] — 2026-06-18
 
 Sixth beta. The conditional KB finally ships content.
