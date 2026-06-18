@@ -18,8 +18,19 @@ import { AlertTriangle, Lock } from "lucide-react";
 import {
   AI_PROVIDERS,
   AI_PROVIDER_ORDER,
+  RECOMMENDED_MODEL_IDS,
+  estimateTargetCostUSD,
+  pricePerMillion,
   type AiProvider,
 } from "@/lib/ai/providers";
+
+interface ModelInfo {
+  id: string;
+  name?: string;
+  promptPrice?: number;
+  completionPrice?: number;
+  contextLength?: number;
+}
 import {
   setAiSettingsAction,
   setExamModeAction,
@@ -69,7 +80,8 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
   const [clearKey, setClearKey] = useState(false);
   const [pending, startTransition] = useTransition();
   const [examPending, startExamTransition] = useTransition();
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelQuery, setModelQuery] = useState("");
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsMsg, setModelsMsg] = useState<string | null>(null);
 
@@ -79,7 +91,7 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
     try {
       const res = await fetch("/api/ai/models", { cache: "no-store" });
       const json = (await res.json().catch(() => ({}))) as {
-        models?: string[];
+        models?: ModelInfo[];
         error?: string;
       };
       if (!res.ok) throw new Error(json.error || `Failed (${res.status})`);
@@ -271,12 +283,11 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
           </label>
 
           {/* Model */}
-          <label style={{ display: "block", marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }}>
             <span style={labelStyle}>MODEL</span>
             <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
               <input
                 type="text"
-                list="ai-model-list"
                 value={model}
                 placeholder={preset.defaultModel}
                 onChange={(e) => setModel(e.target.value)}
@@ -284,11 +295,6 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                 spellCheck={false}
                 style={{ ...inputStyle, marginTop: 0, flex: 1 }}
               />
-              <datalist id="ai-model-list">
-                {models.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
               <button
                 type="button"
                 onClick={loadModels}
@@ -309,19 +315,138 @@ export function AiSettingsSection({ initial }: { initial: AiSettingsInitial }) {
                 {modelsLoading ? "Loading…" : "Load models"}
               </button>
             </div>
+
+            {/* cost estimate for the selected model */}
+            {(() => {
+              const sel = models.find((m) => m.id === model);
+              const cost = sel
+                ? estimateTargetCostUSD(sel.promptPrice, sel.completionPrice)
+                : null;
+              if (!sel || cost === null) return null;
+              return (
+                <div style={{ marginTop: 5, fontSize: 10.5, color: "var(--fg-subtle)" }}>
+                  ≈ <strong style={{ color: "var(--fg-muted)" }}>${cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)}</strong>{" "}
+                  for a typical target (~15 explain/suggest calls) · in $
+                  {pricePerMillion(sel.promptPrice)?.toFixed(2)} / out $
+                  {pricePerMillion(sel.completionPrice)?.toFixed(2)} per 1M tokens
+                </div>
+              );
+            })()}
+
             {modelsMsg && (
-              <div
-                style={{
-                  marginTop: 5,
-                  fontSize: 10.5,
-                  color: "var(--fg-subtle)",
-                }}
-              >
-                {modelsMsg} · pick from the list or type a model id. Save the
-                provider + key first if the list is empty.
+              <div style={{ marginTop: 5, fontSize: 10.5, color: "var(--fg-subtle)" }}>
+                {modelsMsg}
               </div>
             )}
-          </label>
+
+            {/* searchable model list */}
+            {models.length > 0 && (
+              <div
+                style={{
+                  marginTop: 8,
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  background: "var(--bg-1)",
+                  overflow: "hidden",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search models…"
+                  value={modelQuery}
+                  onChange={(e) => setModelQuery(e.target.value)}
+                  spellCheck={false}
+                  style={{
+                    width: "100%",
+                    padding: "7px 9px",
+                    border: "none",
+                    borderBottom: "1px solid var(--border)",
+                    background: "var(--bg-2)",
+                    color: "var(--fg)",
+                    fontSize: 12,
+                  }}
+                />
+                <div style={{ maxHeight: 210, overflowY: "auto" }}>
+                  {(() => {
+                    const q = modelQuery.trim().toLowerCase();
+                    const match = (m: ModelInfo) =>
+                      !q ||
+                      m.id.toLowerCase().includes(q) ||
+                      (m.name ?? "").toLowerCase().includes(q);
+                    const filtered = models.filter(match);
+                    const rec = new Set(RECOMMENDED_MODEL_IDS);
+                    const recommended = filtered.filter((m) => rec.has(m.id));
+                    const rest = filtered.filter((m) => !rec.has(m.id));
+                    const row = (m: ModelInfo, star: boolean) => {
+                      const active = m.id === model;
+                      const inM = pricePerMillion(m.promptPrice);
+                      const outM = pricePerMillion(m.completionPrice);
+                      const price =
+                        inM !== undefined && outM !== undefined
+                          ? `$${inM.toFixed(2)}/$${outM.toFixed(2)}`
+                          : "";
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setModel(m.id);
+                            setModelQuery("");
+                          }}
+                          title={
+                            (m.name ? m.name + " · " : "") +
+                            (price ? price + " per 1M (in/out)" : "price n/a") +
+                            (m.contextLength ? ` · ctx ${m.contextLength}` : "")
+                          }
+                          style={{
+                            display: "flex",
+                            width: "100%",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            padding: "6px 9px",
+                            border: "none",
+                            borderBottom: "1px solid var(--border)",
+                            background: active ? "var(--accent-bg)" : "transparent",
+                            color: active ? "var(--accent)" : "var(--fg-muted)",
+                            cursor: "pointer",
+                            fontSize: 11.5,
+                            textAlign: "left",
+                          }}
+                        >
+                          <span className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {star && <span style={{ color: "var(--accent)" }}>★ </span>}
+                            {m.id}
+                          </span>
+                          {price && (
+                            <span style={{ flexShrink: 0, fontSize: 10, color: "var(--fg-subtle)" }}>
+                              {price}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    };
+                    return (
+                      <>
+                        {recommended.length > 0 && (
+                          <div style={{ padding: "4px 9px", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", color: "var(--fg-subtle)", background: "var(--bg-2)" }}>
+                            RECOMMENDED
+                          </div>
+                        )}
+                        {recommended.map((m) => row(m, true))}
+                        {rest.map((m) => row(m, false))}
+                        {filtered.length === 0 && (
+                          <div style={{ padding: "8px 9px", fontSize: 11.5, color: "var(--fg-subtle)" }}>
+                            No models match “{modelQuery}”.
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* API key */}
           <label style={{ display: "block", marginBottom: 8 }}>

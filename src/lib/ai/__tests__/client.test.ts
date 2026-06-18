@@ -5,6 +5,11 @@ import {
   listModels,
   AiUpstreamError,
 } from "../client.js";
+import {
+  estimateTargetCostUSD,
+  pricePerMillion,
+  RECOMMENDED_MODEL_IDS,
+} from "../providers.js";
 
 function sseStream(frames: string[]): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
@@ -135,16 +140,21 @@ describe("ai/client chatCompletion (non-streaming)", () => {
 describe("ai/client listModels", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("parses, de-dupes and sorts model ids from /models", async () => {
+  it("parses, de-dupes and sorts models + pricing from /models", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({
             data: [
-              { id: "gpt-4o-mini" },
-              { id: "gpt-4o" },
-              { id: "gpt-4o-mini" },
+              {
+                id: "openai/gpt-4o-mini",
+                name: "GPT-4o mini",
+                context_length: 128000,
+                pricing: { prompt: "0.0000006", completion: "0.0000024" },
+              },
+              { id: "openai/gpt-4o" },
+              { id: "openai/gpt-4o-mini" },
               { not_an_id: true },
             ],
           }),
@@ -153,7 +163,12 @@ describe("ai/client listModels", () => {
       ),
     );
     const out = await listModels(cfg);
-    expect(out).toEqual(["gpt-4o", "gpt-4o-mini"]);
+    expect(out.map((m) => m.id)).toEqual(["openai/gpt-4o", "openai/gpt-4o-mini"]);
+    const mini = out.find((m) => m.id === "openai/gpt-4o-mini")!;
+    expect(mini.promptPrice).toBe(0.0000006);
+    expect(mini.completionPrice).toBe(0.0000024);
+    expect(mini.contextLength).toBe(128000);
+    expect(out.find((m) => m.id === "openai/gpt-4o")!.promptPrice).toBeUndefined();
   });
 
   it("hits the /models endpoint with the auth header when keyed", async () => {
@@ -173,5 +188,25 @@ describe("ai/client listModels", () => {
       vi.fn().mockResolvedValue(new Response("nope", { status: 401 })),
     );
     await expect(listModels(cfg)).rejects.toBeInstanceOf(AiUpstreamError);
+  });
+});
+
+describe("ai/providers cost estimate", () => {
+  it("estimates target cost from per-token prices", () => {
+    // 15 ops * (1500*p + 350*c)
+    const cost = estimateTargetCostUSD(0.0000006, 0.0000024)!;
+    // 15*(1500*6e-7 + 350*2.4e-6) = 15*(9e-4 + 8.4e-4) = 15*1.74e-3 = 0.0261
+    expect(cost).toBeCloseTo(0.0261, 4);
+  });
+  it("returns null when pricing is unknown (local providers)", () => {
+    expect(estimateTargetCostUSD(undefined, undefined)).toBeNull();
+    expect(estimateTargetCostUSD(0.0000006, undefined)).toBeNull();
+  });
+  it("pricePerMillion converts $/token to $/1M", () => {
+    expect(pricePerMillion(0.0000006)).toBeCloseTo(0.6, 6);
+    expect(pricePerMillion(undefined)).toBeUndefined();
+  });
+  it("has a non-empty recommended model list", () => {
+    expect(RECOMMENDED_MODEL_IDS.length).toBeGreaterThan(3);
   });
 });
