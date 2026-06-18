@@ -12,6 +12,7 @@
  */
 
 import { ArrowLeft, ArrowRight, CornerDownLeft } from "lucide-react";
+import type { StepId } from "./steps";
 
 export function StepFooter({
   step,
@@ -24,7 +25,7 @@ export function StepFooter({
   pending = false,
   nextDisabled = false,
 }: {
-  step: 1 | 2 | 3 | 4;
+  step: StepId;
   onBack?: () => void;
   onNext: () => void;
   onSkip: () => void;

@@ -19,8 +19,11 @@ import { StepFooter } from "./StepFooter";
 import { ScopeStep } from "./ScopeStep";
 import { TourStep } from "./TourStep";
 import { PathsStep } from "./PathsStep";
+import { AiStep } from "./AiStep";
 import { UpdatesStep } from "./UpdatesStep";
 import { SkipDialog } from "./SkipDialog";
+import type { StepId } from "./steps";
+import type { AiProvider } from "@/lib/ai/providers";
 import { completeOnboarding, skipOnboarding } from "../_actions";
 
 export interface OnboardingForm {
@@ -28,6 +31,11 @@ export interface OnboardingForm {
   kbUserDir: string;
   wordlistBase: string;
   updateCheck: boolean;
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKey: string;
 }
 
 const INITIAL_FORM: OnboardingForm = {
@@ -35,20 +43,25 @@ const INITIAL_FORM: OnboardingForm = {
   kbUserDir: "",
   wordlistBase: "",
   updateCheck: false,
+  aiEnabled: false,
+  aiProvider: "ollama",
+  aiBaseUrl: "",
+  aiModel: "",
+  aiApiKey: "",
 };
 
 export function WelcomeFlow() {
   const router = useRouter();
-  const [current, setCurrent] = useState<1 | 2 | 3 | 4>(1);
+  const [current, setCurrent] = useState<StepId>(1);
   const [form, setForm] = useState<OnboardingForm>(INITIAL_FORM);
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
   function next() {
-    if (current < 4) setCurrent((current + 1) as 1 | 2 | 3 | 4);
+    if (current < 5) setCurrent((current + 1) as StepId);
   }
   function back() {
-    if (current > 1) setCurrent((current - 1) as 1 | 2 | 3 | 4);
+    if (current > 1) setCurrent((current - 1) as StepId);
   }
 
   async function finish() {
@@ -109,7 +122,7 @@ export function WelcomeFlow() {
       if (current === 1) {
         ev.preventDefault();
         next();
-      } else if (current === 4) {
+      } else if (current === 5) {
         ev.preventDefault();
         void finish();
       }
@@ -202,6 +215,12 @@ export function WelcomeFlow() {
           />
         )}
         {current === 4 && (
+          <AiStep
+            value={form}
+            onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+          />
+        )}
+        {current === 5 && (
           <UpdatesStep
             checked={form.updateCheck}
             onChange={(updateCheck) =>
@@ -215,7 +234,7 @@ export function WelcomeFlow() {
       <StepFooter
         step={current}
         onBack={back}
-        onNext={current === 4 ? () => void finish() : next}
+        onNext={current === 5 ? () => void finish() : next}
         onSkip={handleSkip}
         nextLabel={stepInfo.nextLabel}
         skipLabel={stepInfo.skipLabel}
@@ -236,7 +255,7 @@ export function WelcomeFlow() {
 }
 
 const STEP_FOOTER_CONFIG: Record<
-  1 | 2 | 3 | 4,
+  StepId,
   { nextLabel: string; skipLabel: string; primary: boolean }
 > = {
   1: {
@@ -250,7 +269,8 @@ const STEP_FOOTER_CONFIG: Record<
     skipLabel: "Skip configuration…",
     primary: false,
   },
-  4: {
+  4: { nextLabel: "Continue", skipLabel: "Skip onboarding", primary: false },
+  5: {
     nextLabel: "Land on first engagement",
     skipLabel: "Skip onboarding",
     primary: true,

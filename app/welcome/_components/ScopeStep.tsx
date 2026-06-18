@@ -25,7 +25,7 @@ export function ScopeStep() {
           className="mono uppercase tracking-[0.08em] font-medium"
           style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 14 }}
         >
-          STEP 01 / 04 · SCOPE
+          STEP 01 / 05 · SCOPE
         </div>
         <h1
           className="font-semibold"

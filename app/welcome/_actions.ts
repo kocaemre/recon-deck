@@ -7,6 +7,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { db, markOnboarded } from "@/lib/db";
+import type { AppStatePatch } from "@/lib/db/app-state-repo";
+import { isAiProvider } from "@/lib/ai/providers";
 import { revalidatePath } from "next/cache";
 
 export interface OnboardingPayload {
@@ -14,6 +16,12 @@ export interface OnboardingPayload {
   kbUserDir: string;
   wordlistBase: string;
   updateCheck: boolean;
+  /** AI co-pilot opt-in from Step 4 (defaults to a fully-disabled config). */
+  aiEnabled: boolean;
+  aiProvider: string;
+  aiBaseUrl: string;
+  aiModel: string;
+  aiApiKey: string;
 }
 
 interface ActionResult {
@@ -73,6 +81,36 @@ export async function validatePath(
   }
 }
 
+/**
+ * Validate + shape the AI co-pilot fields from Step 4 into an app_state patch.
+ * Mirrors `setAiSettingsAction`: provider must be allowlisted, base URL must
+ * carry an http(s) scheme, blank endpoint/model fall back to the preset
+ * default (null), and the key is only written when non-empty. When the master
+ * toggle is off we still persist `ai_enabled: false` so the config is explicit.
+ */
+function aiPatch(payload: OnboardingPayload): AppStatePatch {
+  const enabled = !!payload.aiEnabled;
+  if (!enabled) return { ai_enabled: false };
+
+  if (!isAiProvider(payload.aiProvider)) {
+    throw new Error("Invalid AI provider.");
+  }
+  const baseUrl = (payload.aiBaseUrl ?? "").trim();
+  if (baseUrl && !/^https?:\/\//i.test(baseUrl)) {
+    throw new Error("AI base URL must start with http:// or https://");
+  }
+  const model = (payload.aiModel ?? "").trim();
+  const apiKey = (payload.aiApiKey ?? "").trim();
+
+  return {
+    ai_enabled: true,
+    ai_provider: payload.aiProvider,
+    ai_base_url: baseUrl || null,
+    ai_model: model || null,
+    ai_api_key: apiKey || null,
+  };
+}
+
 async function persist(
   payload: OnboardingPayload,
 ): Promise<ActionResult> {
@@ -86,6 +124,7 @@ async function persist(
       kb_user_dir: kbUserDir,
       wordlist_base: wordlistBase,
       update_check: !!payload.updateCheck,
+      ...aiPatch(payload),
     });
     revalidatePath("/", "layout");
     return { ok: true };

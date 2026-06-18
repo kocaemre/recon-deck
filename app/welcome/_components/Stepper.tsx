@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Stepper — horizontal 4-step progress + jump-back-to-done (v1.9.0).
+ * Stepper — horizontal 5-step progress + jump-back-to-done (v2.5.0).
  *
  * Spec from design_handoff_onboarding/README.md:
  *   - done   (id < current): accent-bg square with check icon, accent border
@@ -12,9 +12,10 @@
  */
 
 import { Check } from "lucide-react";
+import type { StepId } from "./steps";
 
 export interface StepDef {
-  id: 1 | 2 | 3 | 4;
+  id: StepId;
   label: string;
 }
 
@@ -22,15 +23,16 @@ export const STEPS: StepDef[] = [
   { id: 1, label: "Scope" },
   { id: 2, label: "Tour" },
   { id: 3, label: "Paths" },
-  { id: 4, label: "Updates" },
+  { id: 4, label: "AI" },
+  { id: 5, label: "Updates" },
 ];
 
 export function Stepper({
   current,
   onJump,
 }: {
-  current: 1 | 2 | 3 | 4;
-  onJump?: (id: 1 | 2 | 3 | 4) => void;
+  current: StepId;
+  onJump?: (id: StepId) => void;
 }) {
   return (
     <div className="flex items-center" style={{ gap: 0 }}>
