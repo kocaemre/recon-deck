@@ -111,8 +111,9 @@ if [ "$run_failed" -ne 0 ]; then
   case "$run_err" in
     *"already allocated"* | *"address already in use"* | *"port is already"*)
       printf 'Port %s is already in use.\n' "$PORT" >&2
-      printf 'Re-run on a different port, e.g.:\n' >&2
-      printf '  RECON_DECK_PORT=13338 curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta\n' >&2
+      printf 'Re-run on a different port — note RECON_DECK_PORT goes on the sh\n' >&2
+      printf 'side of the pipe, not curl (env only reaches the process it prefixes):\n' >&2
+      printf '  curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | RECON_DECK_PORT=13338 sh -s -- --beta\n' >&2
       printf 'Or find what holds it:  docker ps --filter "publish=%s"\n' "$PORT" >&2
       ;;
     *)

@@ -9,7 +9,10 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { getAllowedHosts } from "../src/lib/security/host-validation.js";
+import {
+  getAllowedHosts,
+  isHostAllowed,
+} from "../src/lib/security/host-validation.js";
 
 describe("Host-header validation (SEC-01)", () => {
   const originalTrustedHosts = process.env.RECON_DECK_TRUSTED_HOSTS;
@@ -99,5 +102,52 @@ describe("Host-header validation (SEC-01)", () => {
     expect(hosts.has("localhost:13337")).toBe(true);
     expect(hosts.has("127.0.0.1:13337")).toBe(true);
     expect(hosts.has("[::1]:13337")).toBe(true);
+  });
+});
+
+describe("isHostAllowed — loopback on any port (custom host-port mapping)", () => {
+  const originalTrustedHosts = process.env.RECON_DECK_TRUSTED_HOSTS;
+  const originalPort = process.env.PORT;
+
+  afterEach(() => {
+    if (originalTrustedHosts === undefined) {
+      delete process.env.RECON_DECK_TRUSTED_HOSTS;
+    } else {
+      process.env.RECON_DECK_TRUSTED_HOSTS = originalTrustedHosts;
+    }
+    if (originalPort === undefined) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = originalPort;
+    }
+  });
+
+  it("allows loopback hosts on a non-default port (RECON_DECK_PORT=13339 → 421 fix)", () => {
+    delete process.env.RECON_DECK_TRUSTED_HOSTS;
+    delete process.env.PORT; // container's internal PORT stays 13337
+    expect(isHostAllowed("localhost:13339")).toBe(true);
+    expect(isHostAllowed("127.0.0.1:13339")).toBe(true);
+    expect(isHostAllowed("[::1]:13339")).toBe(true);
+  });
+
+  it("allows a bare loopback host with no port", () => {
+    expect(isHostAllowed("localhost")).toBe(true);
+    expect(isHostAllowed("127.0.0.1")).toBe(true);
+  });
+
+  it("still rejects non-loopback hosts on any port (rebinding stays blocked)", () => {
+    delete process.env.RECON_DECK_TRUSTED_HOSTS;
+    expect(isHostAllowed("evil.com:13339")).toBe(false);
+    expect(isHostAllowed("evil.com")).toBe(false);
+    // no prefix/suffix bypass of the loopback names
+    expect(isHostAllowed("localhost.evil.com:13339")).toBe(false);
+    expect(isHostAllowed("notlocalhost:13339")).toBe(false);
+  });
+
+  it("still honours an exact RECON_DECK_TRUSTED_HOSTS match", () => {
+    process.env.RECON_DECK_TRUSTED_HOSTS = "mybox.local:13337";
+    expect(isHostAllowed("mybox.local:13337")).toBe(true);
+    // but not that LAN host on a different port (exact match only for non-loopback)
+    expect(isHostAllowed("mybox.local:9999")).toBe(false);
   });
 });
