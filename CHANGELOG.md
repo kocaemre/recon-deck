@@ -2,6 +2,23 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.6] — 2026-06-18
+
+Sixth beta. The conditional KB finally ships content.
+
+### Added
+
+- **Stack-aware web conditionals on ports 80 / 443 / 8080.** The conditional
+  resolver shipped in 2.4.0 but no KB carried any overlay — every port had an
+  empty conditional block. This lands the first real content across all three
+  web surfaces: each detects the running stack from nmap NSE output (server
+  header / title / generator) or AutoRecon `tech` fingerprints and overlays
+  focused checks plus a broadened brute-force extension list for **PHP,
+  WordPress, ASP.NET, Java/Tomcat, Python, and Ruby**. Port 8080 leads with
+  Java/Tomcat/Jenkins (including a Groovy-console RCE check) since it usually
+  fronts a Java app server. Baseline checklists are untouched when nothing
+  matches. (Supersedes #42; closes the conditional-content gap from #14.)
+
 ## [2.5.0-beta.5] — 2026-06-18
 
 Fifth beta. Onboarding now introduces the AI co-pilot.
