@@ -2,6 +2,20 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.4] — 2026-06-18
+
+Fourth beta. Polishes the AI model selection.
+
+### Added
+
+- **Searchable model picker** in Settings → AI assistant: a search box over the
+  provider's full model list, a **Recommended** section pinned on top (curated
+  cheap/strong models for explain + suggest, including a free option), per-model
+  input/output price shown inline and on hover (with context length), and a live
+  **"≈ $X for a typical target"** cost estimate for the selected model. Powered
+  by OpenRouter's per-model pricing from `/models`; local providers (no pricing)
+  simply omit the figures. Free-text model entry still works.
+
 ## [2.5.0-beta.3] — 2026-06-17
 
 Third beta. Adds the second AI feature on top of beta.2's Explain.
