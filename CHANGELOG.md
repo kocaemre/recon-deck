@@ -2,6 +2,23 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.10] — 2026-06-18
+
+Tenth beta. Free-model recommendations for the AI co-pilot.
+
+### Added
+
+- **Free OpenRouter models in the recommended set.** The model picker now
+  pins current zero-cost OpenRouter tiers that suit recon-deck's tasks —
+  command generation + structured output, and neutral on offensive-security
+  prompts rather than refusing: `qwen/qwen3-coder:free`,
+  `openai/gpt-oss-120b:free`, `nousresearch/hermes-3-llama-3.1-405b:free`, and
+  `meta-llama/llama-3.3-70b-instruct:free`. Surfaced only when the provider
+  actually lists the id, so OpenAI/Ollama users are unaffected.
+- **FREE badge in the model picker.** Any $0 model (prompt + completion price
+  both 0) now shows a green FREE badge instead of "$0.00/$0.00", so budget
+  options stand out — including uncensored free models you find via search.
+
 ## [2.5.0-beta.9] — 2026-06-18
 
 Ninth beta. Installer + version-reporting fixes from the beta-image QA pass.
