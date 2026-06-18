@@ -46,3 +46,11 @@ resources:
   - title: "MySQL Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
     author: SecLists
+# Version-gated overlay for the classic MySQL 5.5 auth bypass.
+conditional:
+  - id: mysql-cve-2012-2122
+    when:
+      nmap_version_matches: { product: MySQL, version: ">= 5.1.0 < 5.5.24" }
+    adds_checks:
+      - key: mysql-auth-bypass-2122
+        label: "Tested the memcmp() auth bypass — repeating the login with a wrong password (~300×) eventually authenticates (CVE-2012-2122)"

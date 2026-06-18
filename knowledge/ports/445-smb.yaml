@@ -37,6 +37,7 @@ commands:
   - label: "Enumerate shares (null session)"
     template: "smbclient -L //{IP}/ -N"
   - label: "nmap SMB scripts"
+    id: smb-nmap
     template: "nmap -p{PORT} --script=smb-os-discovery,smb-enum-shares,smb-enum-users,smb-vuln-ms17-010 {IP}"
   - label: "enum4linux-ng"
     template: "enum4linux-ng -A {IP}"
@@ -89,3 +90,21 @@ resources:
   - title: "NetBIOS / SMB Cheatsheet"
     url: "https://hacktricks.wiki/en/network-services-pentesting/137-138-139-pentesting-netbios.html"
     author: HackTricks
+# Version-gated Samba RCE overlays. nmap emits product "Samba smbd" so the
+# `Samba` substring matches; the version ranges bracket the affected builds.
+conditional:
+  - id: samba-usermap-rce
+    when:
+      nmap_version_matches: { product: Samba, version: ">= 3.0.0 < 3.0.26" }
+    adds_checks:
+      - key: smb-samba-usermap-rce
+        label: "Exploited Samba 'username map script' command injection — unauthenticated RCE via a crafted username (CVE-2007-2447)"
+  - id: sambacry-rce
+    when:
+      nmap_version_matches: { product: Samba, version: ">= 3.5.0 < 4.6.4" }
+    adds_checks:
+      - key: smb-sambacry-rce
+        label: "Tested SambaCry / EternalRed — RCE by loading a shared object from a writable share (CVE-2017-7494)"
+    modifies_commands:
+      smb-nmap:
+        append: ",smb-vuln-cve-2017-7494"
