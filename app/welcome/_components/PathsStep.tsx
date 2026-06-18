@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { validatePath } from "../_actions";
+import { CopyCommand, SECLISTS_INSTALL } from "@/components/CopyCommand";
 import type { OnboardingForm } from "./WelcomeFlow";
 
 type Status = "ok" | "miss" | "empty" | "checking";
@@ -123,6 +124,21 @@ export function PathsStep({
               onBlur={(v) => handleBlur(f.key, v)}
             />
           ))}
+        </div>
+
+        <div style={{ marginTop: 18, maxWidth: 560 }}>
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--fg-muted)",
+              lineHeight: 1.55,
+              marginBottom: 2,
+            }}
+          >
+            Don&apos;t have SecLists yet? recon-deck&apos;s gobuster/ffuf
+            commands rely on it — install it on your attack box:
+          </div>
+          <CopyCommand command={SECLISTS_INSTALL.apt} />
         </div>
       </div>
 
