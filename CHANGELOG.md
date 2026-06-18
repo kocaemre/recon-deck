@@ -2,6 +2,29 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.9] — 2026-06-18
+
+Ninth beta. Installer + version-reporting fixes from the beta-image QA pass.
+
+### Fixed
+
+- **Installer aborted under `sh`.** `install.sh` shipped `set -euo pipefail`,
+  but the documented one-liner pipes to `sh` (dash on Debian/Ubuntu), which
+  died with `set: Illegal option -o pipefail` before doing anything. The script
+  is now POSIX (`#!/bin/sh` + `set -eu`, no other bashisms), so the documented
+  `curl … | sh -s -- --beta` works unchanged.
+- **`/api/health` reported `"version":"unknown"`.** `npm_package_version` isn't
+  set under `node server.js`; the version is now inlined from package.json at
+  build via next.config (`APP_VERSION`), so health reports the real release.
+- **Onboarding boot mockup showed a stale `v2.0.1`.** It now tracks the real
+  version from the same build-time constant.
+
+### Added
+
+- **`RECON_DECK_PORT` env override in the installer.** Run on a different host
+  port when 13337 is taken (`RECON_DECK_PORT=13338 curl … | sh -s -- --beta`),
+  with an actionable hint on a port clash instead of a raw docker error.
+
 ## [2.5.0-beta.8] — 2026-06-18
 
 Eighth beta. Nudges operators to install SecLists when it's missing.
