@@ -46,3 +46,18 @@ resources:
   - title: "SSH Default Credentials"
     url: "https://github.com/danielmiessler/SecLists/tree/master/Passwords/Default-Credentials"
     author: SecLists
+# Version-gated OpenSSH overlays. The banner's `pN` portable suffix is parsed
+# down to its leading digit, so these minor-version ranges bracket correctly.
+conditional:
+  - id: openssh-username-enum
+    when:
+      nmap_version_matches: { product: OpenSSH, version: "< 7.7" }
+    adds_checks:
+      - key: ssh-openssh-username-enum
+        label: "Ran username enumeration against OpenSSH < 7.7 via auth_request timing (CVE-2018-15473)"
+  - id: openssh-regresshion
+    when:
+      nmap_version_matches: { product: OpenSSH, version: ">= 8.5 < 9.8" }
+    adds_checks:
+      - key: ssh-openssh-regresshion
+        label: "Assessed OpenSSH 8.5–9.7 for the regreSSHion pre-auth RCE (CVE-2024-6387)"

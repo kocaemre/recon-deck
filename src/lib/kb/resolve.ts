@@ -110,13 +110,16 @@ export interface ResolvedEntry {
 
 /**
  * Compare two dotted-numeric versions. Returns -1 / 0 / 1 like a usual
- * comparator. Non-numeric segments are coerced to 0 so an exotic build
- * suffix doesn't poison the comparison; KB authors who need exotic
- * matching should use a different predicate.
+ * comparator. Each segment is reduced to its leading integer, so a build
+ * suffix attached to a number is preserved at that position rather than
+ * zeroed — `"7.7p1"` parses as `[7, 7]`, not `[7, 0]`. This matters for
+ * services whose banner always carries a portable suffix (OpenSSH `pN`,
+ * Samba/MySQL distro tags). A segment with no leading digit (e.g. a bare
+ * "Ubuntu" token from a multi-word banner) still collapses to 0.
  */
 function compareVersions(a: string, b: string): number {
-  const pa = a.replace(/^v/i, "").split(/[.\s]/).map((n) => Number(n) || 0);
-  const pb = b.replace(/^v/i, "").split(/[.\s]/).map((n) => Number(n) || 0);
+  const pa = a.replace(/^v/i, "").split(/[.\s]/).map((n) => parseInt(n, 10) || 0);
+  const pb = b.replace(/^v/i, "").split(/[.\s]/).map((n) => parseInt(n, 10) || 0);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const da = pa[i] ?? 0;
