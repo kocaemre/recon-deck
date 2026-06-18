@@ -137,14 +137,28 @@ export async function chatCompletion(
 }
 
 /**
- * List available model ids from an OpenAI-compatible `GET /models`. Used by the
- * settings UI to populate a model picker. OpenAI, OpenRouter, Ollama and
- * LM Studio all expose this. Returns the de-duped, sorted id list.
+ * One model from an OpenAI-compatible `/models` listing. OpenRouter also
+ * returns per-token `pricing` + `context_length`; OpenAI/Ollama omit pricing
+ * (fields stay undefined). Prices are USD per token (as OpenRouter reports).
+ */
+export interface ModelInfo {
+  id: string;
+  name?: string;
+  promptPrice?: number;
+  completionPrice?: number;
+  contextLength?: number;
+}
+
+/**
+ * List available models from an OpenAI-compatible `GET /models`. Used by the
+ * settings model picker. OpenAI, OpenRouter, Ollama and LM Studio all expose
+ * this; OpenRouter additionally carries pricing/context metadata which we
+ * surface for the price + cost-estimate UI. De-duped, sorted by id.
  */
 export async function listModels(
   cfg: StreamClientConfig,
   opts: { timeoutMs?: number; signal?: AbortSignal } = {},
-): Promise<string[]> {
+): Promise<ModelInfo[]> {
   const signal = combineSignals(opts.timeoutMs ?? 15_000, opts.signal);
   const headers: Record<string, string> = {};
   if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
@@ -163,11 +177,36 @@ export async function listModels(
     }
     throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
   }
-  const json = (await res.json()) as { data?: Array<{ id?: unknown }> };
-  const ids = (json?.data ?? [])
-    .map((m) => m?.id)
-    .filter((x): x is string => typeof x === "string" && x.length > 0);
-  return Array.from(new Set(ids)).sort();
+  const json = (await res.json()) as {
+    data?: Array<{
+      id?: unknown;
+      name?: unknown;
+      context_length?: unknown;
+      pricing?: { prompt?: unknown; completion?: unknown };
+    }>;
+  };
+  const num = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return typeof v === "string" || typeof v === "number"
+      ? Number.isFinite(n)
+        ? n
+        : undefined
+      : undefined;
+  };
+  const seen = new Set<string>();
+  const out: ModelInfo[] = [];
+  for (const m of json?.data ?? []) {
+    if (typeof m?.id !== "string" || !m.id || seen.has(m.id)) continue;
+    seen.add(m.id);
+    out.push({
+      id: m.id,
+      name: typeof m.name === "string" ? m.name : undefined,
+      promptPrice: num(m.pricing?.prompt),
+      completionPrice: num(m.pricing?.completion),
+      contextLength: num(m.context_length),
+    });
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /**
