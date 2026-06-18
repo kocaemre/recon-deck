@@ -2,6 +2,23 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.11] — 2026-06-18
+
+Eleventh beta. Custom host-port actually works now.
+
+### Fixed
+
+- **`421 Misdirected Request` on a custom host-port.** The SEC-01 host-header
+  allowlist was built from the container's internal port (13337), so accessing
+  a custom mapping (`RECON_DECK_PORT=13339` → `-p 13339:13337`) sent
+  `Host: localhost:13339` and got rejected. Loopback hostnames (localhost /
+  127.0.0.1 / [::1]) are now accepted on any port — safe, since DNS-rebinding
+  turns on the hostname, not the port; non-loopback hosts still need an exact
+  `RECON_DECK_TRUSTED_HOSTS` match.
+- **Wrong `RECON_DECK_PORT` hint in the installer.** It put the env on `curl`
+  instead of the piped `sh` (where the script reads it); corrected to
+  `curl … | RECON_DECK_PORT=13338 sh -s -- --beta`.
+
 ## [2.5.0-beta.10] — 2026-06-18
 
 Tenth beta. Free-model recommendations for the AI co-pilot.
