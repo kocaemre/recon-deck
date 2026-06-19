@@ -2,6 +2,25 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.12] — 2026-06-19
+
+Twelfth beta. Findings make it into the shareable reports.
+
+### Fixed
+
+- **Findings were dropped from the Markdown / JSON / HTML exports.** They
+  rendered in CSV / SysReptor / PwnDoc but vanished from the three formats
+  operators actually share — a finding added in the UI silently disappeared
+  from the report. All three now carry a severity-sorted Findings section with
+  the affected host/port resolved (markdown `## Findings`, an HTML
+  `<section class="findings">`, and a top-level `findings[]` in JSON that's
+  always present for a stable schema). Engagements with no findings keep the
+  prior layout byte-for-byte.
+- **Exports stamped `recon_deck_version: "0.0.0-dev"`.** Same root cause as the
+  earlier health-endpoint fix — `npm_package_version` is unset under
+  `node server.js`. Exports now carry the real `APP_VERSION` (inlined from
+  package.json at build).
+
 ## [2.5.0-beta.11] — 2026-06-18
 
 Eleventh beta. Custom host-port actually works now.
