@@ -2,6 +2,24 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.13] — 2026-06-19
+
+Thirteenth beta. Export-alias + test-robustness loose ends.
+
+### Added
+
+- **`findings-csv` export alias.** The csv export is the findings CSV (the menu
+  labels it "Findings CSV"), so `/api/engagements/:id/export/findings-csv` now
+  works as an alias for `/export/csv` — same generator, same `.csv` file. The
+  `csv` route is unchanged.
+
+### Fixed
+
+- **probe tests gave false failures under root.** The read-only-directory cases
+  rely on a `0o444` chmod denying writes, but root bypasses permission bits, so
+  they failed when the suite ran as root (CI containers / Docker). They now skip
+  under root (`process.getuid() === 0`); non-root dev/CI exercises them fully.
+
 ## [2.5.0-beta.12] — 2026-06-19
 
 Twelfth beta. Findings make it into the shareable reports.
