@@ -368,11 +368,12 @@ export function loadEngagementForExport(
   const coverage =
     totalChecks === 0 ? 0 : Math.round((doneChecks / totalChecks) * 100);
 
-  // 5. recon_deck_version — npm injects package.json `version` into
-  //    process.env.npm_package_version when running `npm run` / `npm test`.
-  //    In bundled production Next.js, next.config may surface it via env — for
-  //    now fall back to a placeholder so exports never emit `"undefined"`.
-  const recon_deck_version = process.env.npm_package_version ?? "0.0.0-dev";
+  // 5. recon_deck_version — APP_VERSION is inlined from package.json at build
+  //    time via next.config (`env`), so exports carry the real release inside
+  //    the container where `node server.js` leaves npm_package_version unset.
+  //    The fallbacks keep dev/test sane (npm sets npm_package_version there).
+  const recon_deck_version =
+    process.env.APP_VERSION ?? process.env.npm_package_version ?? "0.0.0-dev";
 
   // 6. P1-F PR 3: group ports by host. engagement.hosts is already sorted
   //    primary-first then by IP (engagement-repo.getById invariant). For each

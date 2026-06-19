@@ -41,6 +41,7 @@ import "server-only";
  */
 
 import type { EngagementViewModel, PortViewModel } from "./view-model";
+import { enrichFindings } from "./findings-shared";
 
 // -----------------------------------------------------------------------------
 // Internal helpers
@@ -291,6 +292,26 @@ export function generateJson(vm: EngagementViewModel): string {
   //    are not broken until they explicitly opt into v2 by sending a
   //    multi-host scan.
   const schemaVersion = vm.hosts.length > 1 ? "2.0" : "1.0";
+  // 5b. Findings — severity-sorted, affected host/port resolved. Always present
+  //     (empty array when none) so downstream consumers get a stable schema.
+  const findings = enrichFindings(vm).map((f) => ({
+    id: f.id,
+    severity: f.severity,
+    title: f.title,
+    description: f.description,
+    cve: f.cve,
+    created_at: f.createdAt,
+    affected:
+      f.host != null
+        ? {
+            host: f.host,
+            port: f.port,
+            protocol: f.protocol,
+            service: f.service,
+          }
+        : null,
+  }));
+
   const output = {
     schema_version: schemaVersion as "1.0" | "2.0",
     recon_deck_version: vm.recon_deck_version,
@@ -298,6 +319,7 @@ export function generateJson(vm: EngagementViewModel): string {
     scan,
     checklist,
     notes,
+    findings,
   };
 
   // 7. Pretty-print with 2-space indent — small footprint, diffable in PRs.
