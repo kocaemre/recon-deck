@@ -4,6 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { checkWritability } from "../probe.js";
 
+// The read-only-directory tests rely on a 0o444 chmod actually denying writes.
+// Root bypasses permission bits, so under root (common in CI containers / the
+// QA Docker box) the probe succeeds and the expected process.exit never fires.
+// Skip those two cases when running as root rather than report a false failure.
+const isRoot =
+  typeof process.getuid === "function" && process.getuid() === 0;
+
 describe("checkWritability (Plan 02)", () => {
   const dirs: string[] = [];
 
@@ -46,7 +53,7 @@ describe("checkWritability (Plan 02)", () => {
     expect(fs.existsSync(subdir)).toBe(true);
   });
 
-  it("PERSIST-06: calls process.exit(1) on read-only directory", () => {
+  it.skipIf(isRoot)("PERSIST-06: calls process.exit(1) on read-only directory", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "probe-ro-"));
     dirs.push(dir);
 
@@ -76,7 +83,7 @@ describe("checkWritability (Plan 02)", () => {
     fs.chmodSync(dir, 0o755);
   });
 
-  it("PERSIST-06: includes the directory path in error message", () => {
+  it.skipIf(isRoot)("PERSIST-06: includes the directory path in error message", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "probe-path-"));
     dirs.push(dir);
 
