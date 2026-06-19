@@ -36,6 +36,7 @@ import type {
 } from "./view-model";
 import type { PortScript } from "@/lib/db/schema";
 import { escapeHtml } from "./escape";
+import { enrichFindings } from "./findings-shared";
 
 // -----------------------------------------------------------------------------
 // Inline CSS (D-14 palette; D-18 page-break rule)
@@ -114,6 +115,11 @@ function generateBody(vm: EngagementViewModel): string {
   const parts: string[] = [];
   parts.push(renderHeader(vm));
 
+  // Findings — right after the header so the report payload is up top. Omitted
+  // when empty so the golden HTML fixture stays byte-stable.
+  const findingsSection = renderFindingsSection(vm);
+  if (findingsSection) parts.push(findingsSection);
+
   // P1-F PR 3: multi-host engagements wrap their port grids inside per-host
   // <section class="host-block"> wrappers, mirroring the markdown layout.
   // Single-host engagements emit the legacy flat layout (golden HTML fixture
@@ -138,6 +144,43 @@ function generateBody(vm: EngagementViewModel): string {
   const extra = renderExtraSections(vm);
   if (extra) parts.push(extra);
   return parts.join("\n");
+}
+
+/**
+ * Render the Findings section, severity-sorted. Returns null when there are no
+ * findings so the section (and the golden fixture) stays byte-stable.
+ */
+function renderFindingsSection(vm: EngagementViewModel): string | null {
+  const findings = enrichFindings(vm);
+  if (findings.length === 0) return null;
+
+  const items = findings
+    .map((f) => {
+      const sev = f.severity.charAt(0).toUpperCase() + f.severity.slice(1);
+      const meta: string[] = [];
+      if (f.host) {
+        const portPart =
+          f.port != null
+            ? ` · ${f.port}/${escapeHtml(f.protocol ?? "")}${
+                f.service ? ` ${escapeHtml(f.service)}` : ""
+              }`
+            : "";
+        meta.push(`Affected: ${escapeHtml(f.host)}${portPart}`);
+      }
+      if (f.cve) meta.push(escapeHtml(f.cve));
+      const metaLine =
+        meta.length > 0
+          ? `<p class="finding-meta"><em>${meta.join(" · ")}</em></p>\n`
+          : "";
+      const desc =
+        f.description && f.description.trim()
+          ? `<p>${escapeHtml(f.description.trim())}</p>\n`
+          : "";
+      return `<div class="finding finding-${escapeHtml(f.severity)}">\n<h3>[${escapeHtml(sev)}] ${escapeHtml(f.title)}</h3>\n${metaLine}${desc}</div>`;
+    })
+    .join("\n");
+
+  return `<section class="findings">\n<h2>Findings</h2>\n${items}\n</section>`;
 }
 
 /**

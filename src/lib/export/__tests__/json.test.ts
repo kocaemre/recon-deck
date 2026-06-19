@@ -39,6 +39,7 @@ describe("generateJson — Contract (EXPORT-03)", () => {
       "scan",
       "checklist",
       "notes",
+      "findings",
     ]);
   });
 
