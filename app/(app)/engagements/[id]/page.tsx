@@ -18,7 +18,7 @@ import {
   effectiveAppState,
   listFingerprintsForPorts,
 } from "@/lib/db";
-import { getKb, matchPort, applyConditionals } from "@/lib/kb";
+import { getKb, matchPort, applyConditionals, matchKnownVulns } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { EngagementHeader } from "@/components/EngagementHeader";
 import { EngagementResetExpand } from "@/components/EngagementResetExpand";
@@ -364,16 +364,14 @@ export default async function EngagementPage({
     // substring of the port's product+version line — substrings without a
     // strong anchor ("Apache" alone) would over-match, so the KB authors
     // are expected to scope their `match` strings tightly.
-    const productVersion = [p.product, p.version]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const knownVulns = (kbEntry.known_vulns ?? [])
-      .filter((v) =>
-        productVersion.length > 0 &&
-        productVersion.includes(v.match.toLowerCase()),
-      )
-      .map((v) => ({ match: v.match, note: v.note, link: v.link }));
+    // Range-aware matcher (beta-test B-5): entries may carry a `version`
+    // expression so a ranged CVE no longer needs one brittle substring per
+    // build; entries without it keep the legacy substring-only behaviour.
+    const knownVulns = matchKnownVulns(
+      kbEntry.known_vulns ?? [],
+      p.product,
+      p.version,
+    ).map((v) => ({ match: v.match, note: v.note, link: v.link }));
 
     // v1.4.0 #10: surface KB-declared default credentials so the
     // operator can drop straight into a hydra brute attempt without
