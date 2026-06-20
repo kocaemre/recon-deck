@@ -2,6 +2,20 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.17] — 2026-06-20
+
+Seventeenth beta. Rebuild of beta.16 (its multi-arch build was cancelled on a
+stuck arm64 emulation step) plus documentation. Same app changes as beta.16
+(cross-host AI summary, installer Start/Uninstall hints).
+
+### Documentation
+
+- **README — release-channel mechanics.** The Upgrading section now maps each
+  channel to its Docker tags, explains the channel is chosen per `install.sh`
+  run (not baked into the image), and adds an explicit forward-only-migration
+  downgrade caveat (back up the volume before going back a channel across a
+  schema bump).
+
 ## [2.5.0-beta.16] — 2026-06-20
 
 Sixteenth beta. Cross-host AI summary + container-management ergonomics.
