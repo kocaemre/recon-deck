@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
+import { AiContextPreview } from "@/components/ai/AiContextPreview";
 
 export interface ExplainContext {
   port: number;
@@ -177,6 +178,16 @@ export function ExplainButton(props: ExplainContext) {
                 the scan; it does not run anything.
               </div>
             )}
+            <AiContextPreview
+              context={{
+                port: props.port,
+                protocol: props.protocol ?? null,
+                service: props.service ?? null,
+                version: props.version ?? null,
+                scanOutput: props.scanOutput,
+              }}
+              cloud={status.cloud}
+            />
           </div>
         </div>
       )}
