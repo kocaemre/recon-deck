@@ -48,6 +48,8 @@ interface AiRequestBody {
   engagementId?: unknown;
   engagementLabel?: unknown;
   host?: unknown;
+  /** Opt-in web-augmented AI (OpenRouter `:online`); explicit per call. */
+  web?: unknown;
   context?: {
     port?: unknown;
     protocol?: unknown;
@@ -135,10 +137,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unknown task." }, { status: 400 });
   }
 
+  // Opt-in web-augmented AI: OpenRouter runs a web search when the model id
+  // carries a `:online` suffix. Gated to OpenRouter (the only provider that
+  // understands it) and to an explicit per-call `web: true` from the client —
+  // this sends search queries derived from scan data off-host, so it is never
+  // ambient. The `:online` model is recorded verbatim in the usage ledger, so
+  // its extra cost shows up distinctly in /settings/usage.
+  const webRequested = parsed.body.web === true;
+  const useWeb = webRequested && cfg.provider === "openrouter";
+  const effectiveModel =
+    useWeb && !cfg.model.endsWith(":online") ? `${cfg.model}:online` : cfg.model;
+
   const clientCfg = {
     baseUrl: cfg.baseUrl,
     apiKey: cfg.apiKey,
-    model: cfg.model,
+    model: effectiveModel,
   };
 
   // Best-effort usage ledger (analytics only — never breaks the AI response).
@@ -157,7 +170,7 @@ export async function POST(request: NextRequest) {
         host: asStr(parsed.body.host) ?? null,
         task: ledgerTask,
         provider: cfg.provider,
-        model: cfg.model,
+        model: effectiveModel,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         costUsd: usage.costUsd,

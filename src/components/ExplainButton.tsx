@@ -12,7 +12,7 @@
  */
 
 import { useState } from "react";
-import { Sparkles, Loader2, X } from "lucide-react";
+import { Sparkles, Loader2, X, Globe } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
 import { AiContextPreview } from "@/components/ai/AiContextPreview";
 import { AiErrorActions } from "@/components/ai/AiErrorActions";
@@ -35,14 +35,20 @@ export function ExplainButton(props: ExplainContext) {
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [open, setOpen] = useState(false);
+  // Whether the last/active run used the web-augmented (:online) path.
+  const [webMode, setWebMode] = useState(false);
 
   // Hidden entirely unless the assistant is usable right now.
   if (!status || !status.enabled) return null;
 
-  async function run() {
+  // Web search only works on OpenRouter (the `:online` suffix); hide elsewhere.
+  const canWeb = status.provider === "openrouter";
+
+  async function run(web = false) {
     setOpen(true);
     setText("");
     setError(null);
+    setWebMode(web);
     setStreaming(true);
     try {
       const res = await fetch("/api/ai", {
@@ -52,6 +58,7 @@ export function ExplainButton(props: ExplainContext) {
           task: "explain",
           engagementId: props.engagementId,
           host: props.host ?? null,
+          web,
           context: {
             port: props.port,
             protocol: props.protocol ?? null,
@@ -82,32 +89,65 @@ export function ExplainButton(props: ExplainContext) {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={run}
-        disabled={streaming}
-        title={`Explain with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          padding: "4px 9px",
-          borderRadius: 5,
-          border: "1px solid var(--accent-border)",
-          background: "var(--accent-bg)",
-          color: "var(--accent)",
-          fontSize: 11.5,
-          fontWeight: 600,
-          cursor: streaming ? "wait" : "pointer",
-        }}
-      >
-        {streaming ? (
-          <Loader2 size={12} className="animate-spin" />
-        ) : (
-          <Sparkles size={12} />
+      <div style={{ display: "inline-flex", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => run(false)}
+          disabled={streaming}
+          title={`Explain with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 9px",
+            borderRadius: 5,
+            border: "1px solid var(--accent-border)",
+            background: "var(--accent-bg)",
+            color: "var(--accent)",
+            fontSize: 11.5,
+            fontWeight: 600,
+            cursor: streaming ? "wait" : "pointer",
+          }}
+        >
+          {streaming && !webMode ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Sparkles size={12} />
+          )}
+          {streaming && !webMode ? "Explaining…" : "Explain"}
+        </button>
+        {/* Opt-in web-augmented explain (OpenRouter :online) — sends search
+            queries derived from scan data off-host, so it's a deliberate,
+            separate click, never the default. */}
+        {canWeb && (
+          <button
+            type="button"
+            onClick={() => run(true)}
+            disabled={streaming}
+            title="Web-augmented explain: also runs a live web search for current CVEs/exploits via OpenRouter (:online). Sends scan-derived queries off-host; costs extra."
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: 5,
+              border: "1px solid var(--border-strong)",
+              background: "var(--bg-2)",
+              color: "var(--fg-muted)",
+              fontSize: 11.5,
+              fontWeight: 600,
+              cursor: streaming ? "wait" : "pointer",
+            }}
+          >
+            {streaming && webMode ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Globe size={12} />
+            )}
+            {streaming && webMode ? "Searching…" : "Search web"}
+          </button>
         )}
-        {streaming ? "Explaining…" : "Explain"}
-      </button>
+      </div>
 
       {open && (
         <div
@@ -135,7 +175,9 @@ export function ExplainButton(props: ExplainContext) {
           >
             <span>
               AI EXPLANATION · {status.model}
+              {webMode ? ":online" : ""}
               {status.cloud ? " · cloud" : " · local"}
+              {webMode ? " · 🌐 web" : ""}
             </span>
             <button
               type="button"
@@ -154,7 +196,7 @@ export function ExplainButton(props: ExplainContext) {
           </div>
           <div style={{ padding: 10 }}>
             {error ? (
-              <AiErrorActions error={error} onRetry={run} />
+              <AiErrorActions error={error} onRetry={() => run(webMode)} />
             ) : (
               <div>
                 <Markdown text={text} />
@@ -172,6 +214,9 @@ export function ExplainButton(props: ExplainContext) {
               >
                 AI-generated — verify before acting. The model only describes
                 the scan; it does not run anything.
+                {webMode
+                  ? " Web-augmented: a live web search ran for this; treat sources critically."
+                  : ""}
               </div>
             )}
             <AiContextPreview

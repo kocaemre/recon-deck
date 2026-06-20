@@ -15,6 +15,7 @@ import { useAiStatus } from "@/components/ai/useAiStatus";
 import { CopyButton } from "@/components/CopyButton";
 import { AiContextPreview } from "@/components/ai/AiContextPreview";
 import { AiErrorActions } from "@/components/ai/AiErrorActions";
+import { Markdown } from "@/components/ai/Markdown";
 
 interface Suggestion {
   command: string;
@@ -237,7 +238,7 @@ export function SuggestButton(props: SuggestContext) {
                           lineHeight: 1.5,
                         }}
                       >
-                        {s.why}
+                        <Markdown text={s.why} />
                       </div>
                     )}
                   </div>
