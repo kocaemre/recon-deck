@@ -18,6 +18,9 @@ next-env.d.ts
 # Local notes (untracked drafts)
 prd.md
 
+# Local SAST scan output (security-skill artifacts, not for release)
+/sast/
+
 # Local demo video bundle (not for release)
 /demo/
 
