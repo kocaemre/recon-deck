@@ -487,7 +487,11 @@ function PortTile({
           background: RISK_VAR[data.risk] ?? "var(--risk-info)",
         }}
       />
-      {(data.isClosed || data.isNew || data.isFiltered) && (
+      {/* Corner chip is for scan-lifecycle (new/closed) only. The `filtered`
+          STATE is shown inline on the risk row below — "filtered" is too wide
+          for this cramped corner and overlapped the port header (beta-test
+          B-1 follow-up). */}
+      {(data.isClosed || data.isNew) && (
         <span
           className="mono uppercase"
           style={{
@@ -500,19 +504,12 @@ function PortTile({
             borderRadius: 3,
             border: data.isClosed
               ? "1px solid var(--risk-crit)"
-              : data.isFiltered
-                ? "1px solid var(--fg-subtle)"
-                : "1px solid var(--accent)",
-            color: data.isClosed
-              ? "var(--risk-crit)"
-              : data.isFiltered
-                ? "var(--fg-subtle)"
-                : "var(--accent)",
+              : "1px solid var(--accent)",
+            color: data.isClosed ? "var(--risk-crit)" : "var(--accent)",
             background: "var(--bg-2)",
           }}
-          // closed lifecycle wins over filtered state wins over new.
         >
-          {data.isClosed ? "closed" : data.isFiltered ? "filtered" : "new"}
+          {data.isClosed ? "closed" : "new"}
         </span>
       )}
       {/* v1.2.0 #11: star toggle. Always rendered so a starred tile is
@@ -584,6 +581,23 @@ function PortTile({
         <span style={{ color: riskColor(data.risk) }}>
           {RISK_LABEL[data.risk] ?? data.risk}
         </span>
+        {data.isFiltered && (
+          <span
+            className="mono uppercase"
+            title="nmap reported this port as filtered — on the attack surface but not confirmed open"
+            style={{
+              marginLeft: 6,
+              fontSize: 8.5,
+              letterSpacing: "0.06em",
+              padding: "0 4px",
+              borderRadius: 3,
+              border: "1px solid var(--border-strong)",
+              color: "var(--fg-subtle)",
+            }}
+          >
+            filtered
+          </span>
+        )}
         <span className="mono ml-auto">
           {data.done}/{data.total}
         </span>
