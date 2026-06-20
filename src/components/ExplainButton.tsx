@@ -15,6 +15,7 @@ import { useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
 import { AiContextPreview } from "@/components/ai/AiContextPreview";
+import { AiErrorActions } from "@/components/ai/AiErrorActions";
 
 export interface ExplainContext {
   port: number;
@@ -147,9 +148,7 @@ export function ExplainButton(props: ExplainContext) {
           </div>
           <div style={{ padding: 10 }}>
             {error ? (
-              <div style={{ fontSize: 12, color: "var(--danger, #dc2626)" }}>
-                {error}
-              </div>
+              <AiErrorActions error={error} onRetry={run} />
             ) : (
               <div
                 style={{
