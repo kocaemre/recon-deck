@@ -457,6 +457,10 @@ export default async function EngagementPage({
       // once (hasMultipleScans). Single-scan engagements report `null`
       // so the heatmap renders the legacy chip-free tile.
       isClosed: p.closed_at_scan_id != null,
+      // nmap `filtered` ports are part of the attack surface but are NOT
+      // confirmed open — surface them distinctly so the count/label don't
+      // overstate "open". `open|filtered` stays counted as open (ambiguous).
+      isFiltered: p.state === "filtered",
       isNew:
         hasMultipleScans &&
         latestScanId !== null &&

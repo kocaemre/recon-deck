@@ -173,8 +173,15 @@ function versionExpressionMatches(expr: string, observed: string): boolean {
     return observed.toLowerCase().startsWith(exact.toLowerCase());
   }
 
+  // Real nmap banners can carry a leading non-numeric token in the version
+  // field — Samba parses as product "Samba", version "smbd 3.0.20-Debian"
+  // (beta-test B-4). For the ORDERED comparisons, anchor on the first
+  // dotted-numeric run so that leading word doesn't collapse the major version
+  // to 0 (which made every SMB version-gated conditional silently miss). The
+  // exact/substring escape-hatch below still matches the raw observed string.
+  const observedNumeric = observed.match(/\d+(?:\.\d+)*/)?.[0] ?? observed;
   for (const { op, ver } of ops) {
-    const cmp = compareVersions(observed, ver);
+    const cmp = compareVersions(observedNumeric, ver);
     switch (op) {
       case "<=": if (cmp > 0) return false; break;
       case "<":  if (cmp >= 0) return false; break;

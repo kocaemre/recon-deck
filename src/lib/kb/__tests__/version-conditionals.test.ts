@@ -72,6 +72,21 @@ describe("version conditionals — 445 smb", () => {
     const r = applyConditionals(entry, ctx("Samba smbd", "4.16.0", "smb"));
     expect(r.active).toEqual([]);
   });
+
+  // Regression (beta-test B-4): the real nmap text parser splits
+  // "445/tcp open netbios-ssn Samba smbd 3.0.20-Debian" into
+  // product="Samba", version="smbd 3.0.20-Debian" — a leading non-numeric
+  // token. Before the fix the ordered comparison parsed "smbd" as 0, so
+  // ">= 3.0.0" failed and usermap-rce silently never fired on a real Samba box.
+  it("real parser shape: product=Samba, version='smbd 3.0.20-Debian' → usermap RCE", () => {
+    const r = applyConditionals(entry, ctx("Samba", "smbd 3.0.20-Debian", "netbios-ssn"));
+    expect(r.active).toEqual([{ id: "samba-usermap-rce" }]);
+  });
+
+  it("real parser shape: product=Samba, version='smbd 4.3.11-Ubuntu' → SambaCry", () => {
+    const r = applyConditionals(entry, ctx("Samba", "smbd 4.3.11-Ubuntu", "netbios-ssn"));
+    expect(r.active).toEqual([{ id: "sambacry-rce" }]);
+  });
 });
 
 describe("version conditionals — 22 ssh (pN suffix handling)", () => {

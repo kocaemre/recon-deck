@@ -32,6 +32,42 @@ export class AiUpstreamError extends Error {
   }
 }
 
+/**
+ * Turn a non-2xx provider response into a clean, user-facing AiUpstreamError.
+ *
+ * Beta-test B-2: a raw `Provider returned 429: {"error":{...upstream json...}}`
+ * is noise to the operator — and rate-limits are common on the free models the
+ * picker recommends. Map the statuses worth distinguishing to plain guidance;
+ * everything else keeps the generic "Provider returned N" shape (with the
+ * upstream detail, which is useful for the long tail of 4xx/5xx).
+ */
+export function upstreamError(
+  status: number,
+  detail: string,
+  surfaceStatus: number = status,
+): AiUpstreamError {
+  const trimmed = detail.trim();
+  if (status === 429) {
+    return new AiUpstreamError(
+      "The AI provider is rate-limiting requests (429). Free models hit this " +
+        "often — wait a few seconds and retry, or pick another model in " +
+        "Settings → AI assistant.",
+      surfaceStatus,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new AiUpstreamError(
+      `The AI provider rejected the request (${status}) — check your API key ` +
+        "and model access in Settings → AI assistant.",
+      surfaceStatus,
+    );
+  }
+  return new AiUpstreamError(
+    `Provider returned ${status}${trimmed ? `: ${trimmed}` : ""}`,
+    surfaceStatus,
+  );
+}
+
 export interface StreamClientConfig {
   baseUrl: string;
   apiKey: string | null;
@@ -81,10 +117,7 @@ export async function streamChatCompletion(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(
-      `Provider returned ${res.status}${detail ? `: ${detail}` : ""}`,
-      res.ok ? 502 : res.status,
-    );
+    throw upstreamError(res.status, detail, res.ok ? 502 : res.status);
   }
 
   return parseSseToText(res.body);
@@ -127,7 +160,7 @@ export async function chatCompletion(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+    throw upstreamError(res.status, detail);
   }
 
   const json = (await res.json()) as {
@@ -175,7 +208,7 @@ export async function listModels(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+    throw upstreamError(res.status, detail);
   }
   const json = (await res.json()) as {
     data?: Array<{

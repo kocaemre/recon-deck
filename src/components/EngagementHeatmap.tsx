@@ -55,6 +55,8 @@ interface PortTileData {
   cpe?: string[];
   /** P1-G PR 2: port lifecycle vs latest scan. */
   isClosed?: boolean;
+  /** nmap `filtered` state — on the attack surface but not confirmed open. */
+  isFiltered?: boolean;
   isNew?: boolean;
   /** v1.2.0 #11: operator-flagged port. Lifts to top of host group + ★ icon. */
   starred?: boolean;
@@ -121,6 +123,11 @@ export function EngagementHeatmap({
   // stays focused on the live attack surface; the toolbar surfaces a
   // "Show N closed" button when applicable.
   const closedCount = ports.filter((p) => p.isClosed).length;
+  // Split the live (non-closed) surface into confirmed-open vs filtered so the
+  // header count is accurate (beta-test B-1: a `filtered` port isn't "open").
+  const liveSurface = ports.filter((p) => !p.isClosed);
+  const filteredCount = liveSurface.filter((p) => p.isFiltered).length;
+  const openCount = liveSurface.length - filteredCount;
   const [showClosed, setShowClosed] = useState(false);
   const filtered = showClosed ? ports : ports.filter((p) => !p.isClosed);
   // v1.2.0 #11: starred ports float to the top inside the visible set.
@@ -181,8 +188,11 @@ export function EngagementHeatmap({
             className="uppercase tracking-[0.08em] font-medium"
             style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
           >
-            Attack Surface · {visiblePorts.length} open port
-            {visiblePorts.length === 1 ? "" : "s"}
+            {/* Count truly-open ports separately from `filtered` ones so the
+                label doesn't claim a filtered port is open (beta-test B-1). */}
+            Attack Surface · {openCount} open port
+            {openCount === 1 ? "" : "s"}
+            {filteredCount > 0 ? ` · ${filteredCount} filtered` : ""}
           </span>
           {/* v1.4.0 user-feedback: surface OS up-top so the operator
               can shape their attack plan (Windows vs Linux) without
@@ -477,7 +487,7 @@ function PortTile({
           background: RISK_VAR[data.risk] ?? "var(--risk-info)",
         }}
       />
-      {(data.isClosed || data.isNew) && (
+      {(data.isClosed || data.isNew || data.isFiltered) && (
         <span
           className="mono uppercase"
           style={{
@@ -490,12 +500,19 @@ function PortTile({
             borderRadius: 3,
             border: data.isClosed
               ? "1px solid var(--risk-crit)"
-              : "1px solid var(--accent)",
-            color: data.isClosed ? "var(--risk-crit)" : "var(--accent)",
+              : data.isFiltered
+                ? "1px solid var(--fg-subtle)"
+                : "1px solid var(--accent)",
+            color: data.isClosed
+              ? "var(--risk-crit)"
+              : data.isFiltered
+                ? "var(--fg-subtle)"
+                : "var(--accent)",
             background: "var(--bg-2)",
           }}
+          // closed lifecycle wins over filtered state wins over new.
         >
-          {data.isClosed ? "closed" : "new"}
+          {data.isClosed ? "closed" : data.isFiltered ? "filtered" : "new"}
         </span>
       )}
       {/* v1.2.0 #11: star toggle. Always rendered so a starred tile is
