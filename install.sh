@@ -124,9 +124,11 @@ if [ "$run_failed" -ne 0 ]; then
 fi
 
 printf '\nrecon-deck is up at %s\n' "$URL"
-printf 'Stop  : docker stop %s\n' "$CONTAINER_NAME"
-printf 'Logs  : docker logs -f %s\n' "$CONTAINER_NAME"
-printf 'Update: re-run this script (volumes are preserved).\n'
+printf 'Stop      : docker stop %s\n' "$CONTAINER_NAME"
+printf 'Start     : docker start %s\n' "$CONTAINER_NAME"
+printf 'Logs      : docker logs -f %s\n' "$CONTAINER_NAME"
+printf 'Update    : re-run this script (volumes are preserved)\n'
+printf 'Uninstall : docker rm -f %s   (add: docker volume rm recondeck-data recondeck-kb  to wipe data)\n' "$CONTAINER_NAME"
 
 # 5. Try to open the browser. Failures are non-fatal — the URL above is
 #    the operator-visible source of truth.
