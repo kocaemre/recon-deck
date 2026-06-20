@@ -29,8 +29,10 @@ import {
   buildExplainMessages,
   buildSuggestMessages,
   buildSummaryMessages,
+  buildAllHostsSummaryMessages,
   parseSuggestions,
   type SummaryPortInput,
+  type HostSummaryInput,
 } from "@/lib/ai/prompts";
 import {
   streamChatCompletion,
@@ -56,6 +58,8 @@ interface AiRequestBody {
     /** summarize_engagement: the host's open ports. */
     ports?: unknown;
     target?: unknown;
+    /** summarize_all_hosts: every host with its open ports. */
+    hosts?: unknown;
   };
 }
 
@@ -92,6 +96,21 @@ function asSummaryPorts(v: unknown): SummaryPortInput[] {
     .slice(0, 60);
 }
 
+/** Coerce the client-sent multi-host structure for the whole-engagement summary. */
+function asSummaryHosts(v: unknown): HostSummaryInput[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((h) => {
+      const o = h as Record<string, unknown>;
+      return {
+        target: asStr(o?.target) ?? null,
+        ports: asSummaryPorts(o?.ports),
+      };
+    })
+    .filter((h) => h.ports.length > 0)
+    .slice(0, 20);
+}
+
 export async function POST(request: NextRequest) {
   const cfg = effectiveAiConfig(db);
   if (!cfg.enabled) {
@@ -110,7 +129,8 @@ export async function POST(request: NextRequest) {
   if (
     task !== "explain" &&
     task !== "suggest_commands" &&
-    task !== "summarize_engagement"
+    task !== "summarize_engagement" &&
+    task !== "summarize_all_hosts"
   ) {
     return NextResponse.json({ error: "Unknown task." }, { status: 400 });
   }
@@ -164,6 +184,36 @@ export async function POST(request: NextRequest) {
           signal: request.signal,
           // Whole-host summary is the heaviest prompt — give reasoning models
           // extra headroom so reasoning doesn't crowd out the answer.
+          maxTokens: 2048,
+          onUsage: (u) => ledger("summary", u),
+        },
+      );
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    // Whole-engagement summary: a prioritized plan ACROSS all hosts.
+    if (task === "summarize_all_hosts") {
+      const hosts = asSummaryHosts(context?.hosts);
+      if (hosts.length === 0) {
+        return NextResponse.json(
+          { error: "No hosts to summarize." },
+          { status: 400 },
+        );
+      }
+      const stream = await streamChatCompletion(
+        clientCfg,
+        buildAllHostsSummaryMessages({ hosts }),
+        {
+          signal: request.signal,
+          // Multi-host is the heaviest prompt of all — give reasoning models
+          // the same headroom as the single-host summary.
           maxTokens: 2048,
           onUsage: (u) => ledger("summary", u),
         },
