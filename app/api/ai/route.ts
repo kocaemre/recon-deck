@@ -28,7 +28,9 @@ import { effectiveAiConfig } from "@/lib/ai/config";
 import {
   buildExplainMessages,
   buildSuggestMessages,
+  buildSummaryMessages,
   parseSuggestions,
+  type SummaryPortInput,
 } from "@/lib/ai/prompts";
 import {
   streamChatCompletion,
@@ -51,6 +53,9 @@ interface AiRequestBody {
     version?: unknown;
     scanOutput?: unknown;
     kbCommands?: unknown;
+    /** summarize_engagement: the host's open ports. */
+    ports?: unknown;
+    target?: unknown;
   };
 }
 
@@ -69,6 +74,24 @@ function asKbCommands(v: unknown): Array<{ label: string; command: string }> {
     .slice(0, 30);
 }
 
+/** Coerce the client-sent open-ports list for the engagement summary. */
+function asSummaryPorts(v: unknown): SummaryPortInput[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((p) => {
+      const o = p as Record<string, unknown>;
+      return {
+        port: Number(o?.port),
+        protocol: asStr(o?.protocol) ?? null,
+        service: asStr(o?.service) ?? null,
+        version: asStr(o?.version) ?? null,
+        scanOutput: asStr(o?.scanOutput) ?? null,
+      };
+    })
+    .filter((p) => Number.isInteger(p.port))
+    .slice(0, 60);
+}
+
 export async function POST(request: NextRequest) {
   const cfg = effectiveAiConfig(db);
   if (!cfg.enabled) {
@@ -84,16 +107,12 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response;
 
   const { task, context } = parsed.body;
-  if (task !== "explain" && task !== "suggest_commands") {
+  if (
+    task !== "explain" &&
+    task !== "suggest_commands" &&
+    task !== "summarize_engagement"
+  ) {
     return NextResponse.json({ error: "Unknown task." }, { status: 400 });
-  }
-  const port = Number(context?.port);
-  const scanOutput = asStr(context?.scanOutput) ?? "";
-  if (!Number.isInteger(port) || !scanOutput.trim()) {
-    return NextResponse.json(
-      { error: "Missing port or scan output." },
-      { status: 400 },
-    );
   }
 
   const clientCfg = {
@@ -107,7 +126,7 @@ export async function POST(request: NextRequest) {
     ? Number(parsed.body.engagementId)
     : null;
   const ledger = (
-    ledgerTask: "explain" | "suggest",
+    ledgerTask: "explain" | "suggest" | "summary",
     usage: { promptTokens: number; completionTokens: number; costUsd: number | null } | null,
   ) => {
     if (!usage) return;
@@ -128,15 +147,54 @@ export async function POST(request: NextRequest) {
     }
   };
 
-  const common = {
-    port,
-    protocol: asStr(context?.protocol) ?? null,
-    service: asStr(context?.service) ?? null,
-    version: asStr(context?.version) ?? null,
-    scanOutput,
-  };
-
   try {
+    // Engagement-level summary: a prioritized plan over ALL open ports.
+    if (task === "summarize_engagement") {
+      const ports = asSummaryPorts(context?.ports);
+      if (ports.length === 0) {
+        return NextResponse.json(
+          { error: "No ports to summarize." },
+          { status: 400 },
+        );
+      }
+      const stream = await streamChatCompletion(
+        clientCfg,
+        buildSummaryMessages({ target: asStr(context?.target) ?? null, ports }),
+        {
+          signal: request.signal,
+          // Whole-host summary is the heaviest prompt — give reasoning models
+          // extra headroom so reasoning doesn't crowd out the answer.
+          maxTokens: 2048,
+          onUsage: (u) => ledger("summary", u),
+        },
+      );
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    // explain / suggest are single-port: validate the port + scan output here.
+    const port = Number(context?.port);
+    const scanOutput = asStr(context?.scanOutput) ?? "";
+    if (!Number.isInteger(port) || !scanOutput.trim()) {
+      return NextResponse.json(
+        { error: "Missing port or scan output." },
+        { status: 400 },
+      );
+    }
+    const common = {
+      port,
+      protocol: asStr(context?.protocol) ?? null,
+      service: asStr(context?.service) ?? null,
+      version: asStr(context?.version) ?? null,
+      scanOutput,
+    };
+
     // Structured task: full JSON, validated server-side before returning.
     if (task === "suggest_commands") {
       const { text, usage } = await chatCompletion(

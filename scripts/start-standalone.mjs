@@ -42,8 +42,13 @@ for (const [from, to] of [
 }
 
 const port = process.env.PORT ?? process.env.RECON_DECK_PORT ?? "13337";
+// Bind loopback-only by default (match `next start` and the app's offline-first
+// posture). The standalone server.js otherwise inherits the OS HOSTNAME and can
+// bind a LAN IP unexpectedly. Honor only the documented HOSTNAME=0.0.0.0 LAN
+// override; anything else (incl. the machine name) falls back to loopback.
+const hostname = process.env.HOSTNAME === "0.0.0.0" ? "0.0.0.0" : "127.0.0.1";
 const child = spawn(process.execPath, [join(standalone, "server.js")], {
   stdio: "inherit",
-  env: { ...process.env, PORT: port },
+  env: { ...process.env, PORT: port, HOSTNAME: hostname },
 });
 child.on("exit", (code) => process.exit(code ?? 0));

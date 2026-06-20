@@ -100,7 +100,11 @@ export interface StreamClientConfig {
   model: string;
 }
 
-const DEFAULT_MAX_TOKENS = 700;
+// Reasoning models (gpt-5*, o-series) count their hidden reasoning against this
+// budget — at 700 a heavy prompt spent it all on reasoning and streamed ZERO
+// content (beta-test). 1500 leaves room for reasoning + a real answer; plain
+// models still stop when done, so it doesn't inflate their output.
+const DEFAULT_MAX_TOKENS = 1500;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Combine the caller's signal (if any) with a timeout signal. */
