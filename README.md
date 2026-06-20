@@ -6,8 +6,8 @@
 Offline. Self-hosted. Every engagement export-ready as Markdown.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.5.0--beta.14-orange)](CHANGELOG.md)
-[![Schema](https://img.shields.io/badge/schema-0022-orange)](src/lib/db/migrations/)
+[![Version](https://img.shields.io/badge/version-2.5.0--beta.15-orange)](CHANGELOG.md)
+[![Schema](https://img.shields.io/badge/schema-0023-orange)](src/lib/db/migrations/)
 [![GHCR](https://img.shields.io/badge/ghcr.io-kocaemre%2Frecon--deck-2496ED?logo=docker&logoColor=white)](https://github.com/kocaemre/recon-deck/pkgs/container/recon-deck)
 [![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js)](https://nextjs.org)
 [![Offline-first](https://img.shields.io/badge/network-offline_by_default-success)](SECURITY.md)

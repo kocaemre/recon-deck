@@ -2,6 +2,57 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.15] — 2026-06-20
+
+Fifteenth beta. Findings from a hands-on beta.14 test against real scan data
+(live nmap/AutoRecon + published CTF banners), plus AI usage analytics.
+
+### Added
+
+- **AI usage & cost analytics** at `/settings/usage`. A new `ai_usage` ledger
+  (migration `0023`) records one row per AI call — model, token counts, and the
+  OpenRouter-reported cost — tagged with engagement/host. The page shows totals,
+  spend by model / target / task, and a recent-calls table. All local SQLite;
+  cost shows only when the provider reports it.
+- **Engagement-level "summarize attack surface"** — an opt-in
+  `summarize_engagement` task that produces one prioritized plan across all open
+  ports of the active host. Each port's scan output is injection-fenced
+  (per-port clip + 40-port cap) and it streams like Explain.
+- **One-click "Switch model & retry"** on an AI provider error. On OpenRouter
+  the Explain/Suggest panels offer the first curated recommended model that
+  isn't current — explicit (button + target model in the label), never an
+  automatic paid swap.
+- **`npm run start:standalone`** — a cross-platform local launcher for the
+  `output: "standalone"` build (copies `public/` + `.next/static`, binds
+  loopback by default), so a production-parity local run no longer trips the
+  `next start` standalone warning.
+- **`known_vulns` ranged matching.** `known_vulns` entries now support an
+  optional `version` expression (same syntax as `nmap_version_matches`), so
+  ranged CVEs like SambaCry are advised consistently with the version-gated
+  conditionals. Substring-only entries keep working.
+
+### Fixed
+
+- **SMB version-gated conditionals never fired on real Samba boxes.** The nmap
+  parser yields `version="smbd 3.0.20-Debian"`; the leading `smbd` token made
+  the comparator read the major as `0`, so `>= 3.0.0` failed and the Samba
+  usermap / SambaCry conditionals silently missed. Ordered comparisons now
+  anchor on the first dotted-numeric run in the observed banner (the raw-string
+  exact/substring escape hatch is untouched). Verified live: all 8
+  ftp/ssh/smb/mysql conditionals fire.
+- **Filtered ports were mislabelled as open.** A nmap `filtered` port was
+  counted under "N open ports" with no visual distinction. The heatmap header
+  now reads `N open · M filtered` and filtered tiles carry an inline `filtered`
+  tag.
+- **Friendly AI provider errors.** A free-model `429` surfaced as raw upstream
+  JSON; `upstreamError()` now maps `429` → rate-limit guidance and `401/403` →
+  key guidance, across stream/chat/listModels.
+- **Reasoning-model output dropped.** Reasoning models count hidden reasoning
+  tokens against `max_tokens`; at 700 a heavy prompt could stream zero content.
+  `DEFAULT_MAX_TOKENS` raised to 1500 (engagement summary 2048) and the default
+  model reverts to the non-reasoning `gpt-4o-mini` (reasoning models stay
+  recommended but flagged, never the default).
+
 ## [2.5.0-beta.14] — 2026-06-20
 
 Fourteenth beta. UI/UX polish pass from the beta QA.
