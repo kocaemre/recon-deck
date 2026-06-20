@@ -23,6 +23,12 @@ For the current feature set and status, see [`README.md`](README.md).
 - **v2.0.0** (2026-05-01) — Major. Screenshot annotation (#7, Migration 0016). Native HTML5 Canvas modal with Box / Arrow / Pencil / Text tools, 5-color palette, undo stack. Save chains a NEW evidence row via `parent_evidence_id` so the original always survives. Zero new dependencies.
 - **v2.0.1** (2026-05-01) — Patch. Per-IP rate limiter on `/api/*` (defense-in-depth, LAN-exposure case). `listSummaries` refactored to a single JOIN query (O(1) instead of O(N) subqueries per row).
 - **v2.1.0** (2026-05-01) — Minor. First-run onboarding at `/welcome` (4 steps · `app_state` singleton, Migration 0017). Sample engagement with `SAMPLE` chip + Discard button (Migration 0018). `/settings` Replay onboarding + GitHub release-check toggle. `UpdateAvailableToast` (notify-only, opt-in). Desktop-only viewport guard at `< 1280px`. KB user dir + local export dir now DB-driven (env vars are legacy fallback).
+- **v2.2.0** (2026-05-03) — Minor. Workflow ergonomics: bulk-tick the per-port checklist, collapsible sidebar rail on small screens, `/settings → Detected tools` host-tool detection (searchsploit / SecLists / dirb), searchsploit query-allowlist fallback, and an engagement-creation UX fix.
+- **v2.3.0** (2026-05-07) — Minor. Light mode — tri-state Display toggle (Migration 0020), pre-paint bootstrap to kill the theme flash. Plus searchsploit service-only auto-fallback, Docker-aware Detected tools (`/.dockerenv` + `/host/...` mount probing), and honest `/api/update-check` failure reasons.
+- **v2.4.0** (2026-05-07) — Minor. Context-aware checklists (#14): KB conditional groups with a `when` DSL (`nmap_script_contains` / `nmap_version_matches` / `autorecon_finding` / `port_field_equals` + combinators), per-port fingerprint store (Migration 0021), nmap + AutoRecon fingerprint extractors, a conditional resolver, and UI provenance badges with orphan-state handling.
+- **v2.4.1** (2026-06-16) — Patch. Security hardening from a SAST sweep: KB user-dir symlink-escape + server-side path validation, and a render-time scheme guard on port-detail external links.
+
+> **v2.5.0** is in beta (`:beta` channel) — opt-in AI co-pilot + Exam Mode, stack/version-aware KB conditional content, beta release channel, free-model recommendations, and a batch of installer/export fixes. It lands here once promoted to stable.
 
 ## v2.2+ Candidates
 
@@ -33,10 +39,7 @@ issue first so scope is aligned before code is written.
 
 | Candidate                          | Why                                                                                           | Status        |
 | ---------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |
-| "Check all" / bulk-toggle in port checklist | Operator workflow polish — one click to mark every KB-derived check (or every unchecked one) on the active port. Should round-trip through the existing `setCheck` server action so undo / re-import behaviour stays consistent. | Scoped         |
-| Collapsible sidebar                 | Toggle button in the brand row that hides the engagement list and shrinks the chrome to an icon rail. Persists in `app_state` so the layout doesn't reset between sessions. Useful on smaller laptops + when working a single engagement. | Scoped         |
 | Bind-mount AutoRecon folder         | Power-user path for users who don't want to zip every engagement. Chromium-only today via File System Access API — needs a Firefox fallback. | Scoped         |
-| Light mode                          | recon-deck currently ships dark-only. `next-themes` is already wired in for this exact reason. | Scoped         |
 | Cosign / sigstore image signing     | Increases supply-chain trust for the GHCR image beyond `GITHUB_TOKEN` provenance.             | Scoped         |
 | Nonce-based CSP                     | Replace `script-src 'unsafe-inline'` with per-request nonce in middleware. See SECURITY.md.    | Scoped         |
 | Egress-blocking CI guard            | Run the container in a network-null-routed CI job, assert zero outbound packets. Enforces OPS-03 automatically. | Backlog       |
