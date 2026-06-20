@@ -332,11 +332,51 @@ docker stop recon-deck && docker rm recon-deck   # named volumes survive
 # re-run docker run with the :beta image
 ```
 
-Move back to stable any time with `--stable` (or pull `:latest`). On a busy
-port, the `RECON_DECK_PORT` env goes on the **sh** side of the pipe:
+On a busy port, the `RECON_DECK_PORT` env goes on the **sh** side of the pipe:
 `… | RECON_DECK_PORT=13338 sh -s -- --beta`.
 
 **Local dev:** `git pull && npm install && npm run dev`. Migrations apply at boot.
+
+### How the channels work
+
+There are two channels and they never touch each other. Which one you're on is
+decided **per `install.sh` run** (the `--beta` flag), not baked into the image —
+re-running with a different flag switches you:
+
+| Channel | Pull command | Docker tags it tracks |
+| ------- | ------------ | --------------------- |
+| **Stable** (default) | `… \| sh` | `:latest`, `:X.Y.Z`, `:X.Y`, `:X` |
+| **Beta** (pre-release) | `… \| sh -s -- --beta` | `:beta`, and each build pinned at `:X.Y.Z-beta.N` |
+
+A stable release never moves `:beta`; a beta build never moves `:latest` or the
+short `:X.Y` / `:X` tags. Promotion to stable is just a clean (non-pre-release)
+version tag — the same build that was on `:beta` becomes `:latest`.
+
+### Switching channels
+
+**Stable → beta** — safe. Re-run with `--beta`; your data volumes are reused:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta
+```
+
+**Beta → stable** — re-run without the flag (or `--stable`):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
+```
+
+> ⚠️ **Downgrade caveat.** Database migrations are **forward-only**. If the beta
+> you were running advanced the schema past the stable image's schema (the
+> Schema badge at the top of this README is the current number), the older
+> stable image won't understand the on-disk DB and can fail to boot. Going
+> *back* a channel is only safe when both images share the same schema version.
+> **Back up the data volume first** (see [Backup & Restore](#backup--restore))
+> before downgrading across a schema bump. Moving *forward* (stable → beta, or
+> up to a newer stable) is always fine.
+
+To have the in-app update toast track betas instead of only stable releases,
+set `RECON_UPDATE_CHANNEL=beta` (notify-only — it never installs anything).
 
 ## Tech Stack
 
