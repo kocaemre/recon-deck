@@ -1,42 +1,44 @@
 "use client";
 
 /**
- * ExplainButton — "Explain this" AI affordance for a port (v2.5.0, Sprint 2).
+ * SummarizeEngagementButton — engagement-level AI summary (beta-test feature).
  *
- * Renders nothing unless the AI co-pilot is enabled (and not in Exam Mode).
- * On click it POSTs the port's scan context to the server proxy /api/ai and
- * streams the plain-text explanation into a panel, token by token.
- *
- * Suggest-only: this never runs a command — it describes the scan output and
- * surfaces considerations. Output carries an explicit "verify" disclaimer.
+ * Per-port Explain/Suggest stay the default; this opt-in button asks the model
+ * for ONE prioritized plan across all open ports of the active host — "what to
+ * attack first and why". Hidden unless the AI co-pilot is enabled (and not in
+ * Exam Mode). Streams plain text like ExplainButton; suggest-only, never runs
+ * anything. Larger context than a single port, so it's a deliberate click.
  */
 
 import { useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
-import { AiContextPreview } from "@/components/ai/AiContextPreview";
 import { AiErrorActions } from "@/components/ai/AiErrorActions";
 
-export interface ExplainContext {
+export interface SummaryPort {
   port: number;
   protocol?: string | null;
   service?: string | null;
   version?: string | null;
-  scanOutput: string;
-  /** Target identity for the usage ledger (analytics only). */
-  engagementId?: number;
-  host?: string | null;
+  scanOutput?: string | null;
 }
 
-export function ExplainButton(props: ExplainContext) {
+export function SummarizeEngagementButton({
+  engagementId,
+  target,
+  ports,
+}: {
+  engagementId: number;
+  target: string | null;
+  ports: SummaryPort[];
+}) {
   const status = useAiStatus();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Hidden entirely unless the assistant is usable right now.
-  if (!status || !status.enabled) return null;
+  if (!status || !status.enabled || ports.length === 0) return null;
 
   async function run() {
     setOpen(true);
@@ -48,16 +50,10 @@ export function ExplainButton(props: ExplainContext) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          task: "explain",
-          engagementId: props.engagementId,
-          host: props.host ?? null,
-          context: {
-            port: props.port,
-            protocol: props.protocol ?? null,
-            service: props.service ?? null,
-            version: props.version ?? null,
-            scanOutput: props.scanOutput,
-          },
+          task: "summarize_engagement",
+          engagementId,
+          host: target,
+          context: { target, ports },
         }),
       });
       if (!res.ok || !res.body) {
@@ -69,8 +65,7 @@ export function ExplainButton(props: ExplainContext) {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = dec.decode(value, { stream: true });
-        setText((t) => t + chunk);
+        setText((t) => t + dec.decode(value, { stream: true }));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach the assistant.");
@@ -80,32 +75,32 @@ export function ExplainButton(props: ExplainContext) {
   }
 
   return (
-    <div>
+    <div style={{ padding: "10px 24px", borderBottom: "1px solid var(--border)" }}>
       <button
         type="button"
         onClick={run}
         disabled={streaming}
-        title={`Explain with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
+        title={`Summarize all ${ports.length} ports with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
         style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 5,
-          padding: "4px 9px",
+          gap: 6,
+          padding: "5px 11px",
           borderRadius: 5,
           border: "1px solid var(--accent-border)",
           background: "var(--accent-bg)",
           color: "var(--accent)",
-          fontSize: 11.5,
+          fontSize: 12,
           fontWeight: 600,
           cursor: streaming ? "wait" : "pointer",
         }}
       >
         {streaming ? (
-          <Loader2 size={12} className="animate-spin" />
+          <Loader2 size={13} className="animate-spin" />
         ) : (
-          <Sparkles size={12} />
+          <Sparkles size={13} />
         )}
-        {streaming ? "Explaining…" : "Explain"}
+        {streaming ? "Summarizing…" : "AI: summarize attack surface"}
       </button>
 
       {open && (
@@ -133,7 +128,7 @@ export function ExplainButton(props: ExplainContext) {
             }}
           >
             <span>
-              AI EXPLANATION · {status.model}
+              AI ATTACK-SURFACE SUMMARY · {status.model}
               {status.cloud ? " · cloud" : " · local"}
             </span>
             <button
@@ -164,9 +159,7 @@ export function ExplainButton(props: ExplainContext) {
                 }}
               >
                 {text}
-                {streaming && (
-                  <span style={{ opacity: 0.5 }}>▍</span>
-                )}
+                {streaming && <span style={{ opacity: 0.5 }}>▍</span>}
               </div>
             )}
             {!streaming && !error && text && (
@@ -178,20 +171,10 @@ export function ExplainButton(props: ExplainContext) {
                   fontStyle: "italic",
                 }}
               >
-                AI-generated — verify before acting. The model only describes
+                AI-generated — verify before acting. The model only prioritizes
                 the scan; it does not run anything.
               </div>
             )}
-            <AiContextPreview
-              context={{
-                port: props.port,
-                protocol: props.protocol ?? null,
-                service: props.service ?? null,
-                version: props.version ?? null,
-                scanOutput: props.scanOutput,
-              }}
-              cloud={status.cloud}
-            />
           </div>
         </div>
       )}

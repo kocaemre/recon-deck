@@ -162,6 +162,13 @@
       "when": 1779200000000,
       "tag": "0022_add-ai-config-exam-mode",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1781000000000,
+      "tag": "0023_add-ai-usage",
+      "breakpoints": true
     }
   ]
 }

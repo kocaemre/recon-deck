@@ -18,7 +18,7 @@ import {
   effectiveAppState,
   listFingerprintsForPorts,
 } from "@/lib/db";
-import { getKb, matchPort, applyConditionals } from "@/lib/kb";
+import { getKb, matchPort, applyConditionals, matchKnownVulns } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { EngagementHeader } from "@/components/EngagementHeader";
 import { EngagementResetExpand } from "@/components/EngagementResetExpand";
@@ -26,6 +26,7 @@ import { EngagementContextBridge } from "@/components/EngagementContextBridge";
 import { KeyboardShortcutHandler } from "@/components/KeyboardShortcutHandler";
 import { WarningBanner } from "@/components/WarningBanner";
 import { EngagementHeatmap } from "@/components/EngagementHeatmap";
+import { SummarizeEngagementButton } from "@/components/SummarizeEngagementButton";
 import { EngagementExtras } from "@/components/EngagementExtras";
 import { FindingsPanel } from "@/components/FindingsPanel";
 import { WriteupPanel } from "@/components/WriteupPanel";
@@ -364,16 +365,14 @@ export default async function EngagementPage({
     // substring of the port's product+version line — substrings without a
     // strong anchor ("Apache" alone) would over-match, so the KB authors
     // are expected to scope their `match` strings tightly.
-    const productVersion = [p.product, p.version]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const knownVulns = (kbEntry.known_vulns ?? [])
-      .filter((v) =>
-        productVersion.length > 0 &&
-        productVersion.includes(v.match.toLowerCase()),
-      )
-      .map((v) => ({ match: v.match, note: v.note, link: v.link }));
+    // Range-aware matcher (beta-test B-5): entries may carry a `version`
+    // expression so a ranged CVE no longer needs one brittle substring per
+    // build; entries without it keep the legacy substring-only behaviour.
+    const knownVulns = matchKnownVulns(
+      kbEntry.known_vulns ?? [],
+      p.product,
+      p.version,
+    ).map((v) => ({ match: v.match, note: v.note, link: v.link }));
 
     // v1.4.0 #10: surface KB-declared default credentials so the
     // operator can drop straight into a hydra brute attempt without
@@ -457,6 +456,10 @@ export default async function EngagementPage({
       // once (hasMultipleScans). Single-scan engagements report `null`
       // so the heatmap renders the legacy chip-free tile.
       isClosed: p.closed_at_scan_id != null,
+      // nmap `filtered` ports are part of the attack surface but are NOT
+      // confirmed open — surface them distinctly so the count/label don't
+      // overstate "open". `open|filtered` stays counted as open (ambiguous).
+      isFiltered: p.state === "filtered",
       isNew:
         hasMultipleScans &&
         latestScanId !== null &&
@@ -630,6 +633,24 @@ export default async function EngagementPage({
           <HostScriptCard hostScripts={enrichedHostScripts} />
         </div>
       )}
+
+      <SummarizeEngagementButton
+        engagementId={engagement.id}
+        target={targetHostname ?? targetIp}
+        ports={portData
+          .filter((p) => !p.isClosed)
+          .map((p) => ({
+            port: p.port,
+            protocol: p.protocol,
+            service: p.service,
+            version:
+              [p.product, p.version].filter(Boolean).join(" ").trim() || null,
+            scanOutput: p.scripts
+              .map((s) => `${s.script_id}: ${s.output}`)
+              .join("\n")
+              .slice(0, 1200),
+          }))}
+      />
 
       <EngagementHeatmap
         engagementId={engagement.id}

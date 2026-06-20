@@ -28,15 +28,18 @@ export const AI_PROVIDERS: Record<AiProvider, ProviderPreset> = {
   },
   openai: {
     label: "OpenAI",
+    // Non-reasoning default: produces an answer immediately. Reasoning models
+    // (gpt-5*) spend tokens thinking first and need a bigger budget — fine as
+    // an opt-in pick, risky as the default.
     defaultBaseUrl: "https://api.openai.com/v1",
-    defaultModel: "gpt-4.1-mini",
+    defaultModel: "gpt-4o-mini",
     needsKey: true,
     cloud: true,
   },
   openrouter: {
     label: "OpenRouter",
     defaultBaseUrl: "https://openrouter.ai/api/v1",
-    defaultModel: "openai/gpt-4.1-mini",
+    defaultModel: "openai/gpt-4o-mini",
     needsKey: true,
     cloud: true,
   },
@@ -57,17 +60,24 @@ export const AI_PROVIDER_ORDER: AiProvider[] = ["ollama", "openai", "openrouter"
  * collection, 2026-06.
  */
 export const RECOMMENDED_MODEL_IDS: string[] = [
-  // Paid — cheap, dependable JSON, fast.
-  "openai/gpt-4o-mini",
-  "anthropic/claude-3.5-haiku",
-  "deepseek/deepseek-chat",
-  // Free ($0) — strong at command generation + structured output for "Suggest",
-  // and steerable for security work. Hermes 3 in particular stays neutral on
-  // offensive-security prompts instead of refusing.
-  "qwen/qwen3-coder:free",
-  "openai/gpt-oss-120b:free",
-  "nousresearch/hermes-3-llama-3.1-405b:free",
-  "meta-llama/llama-3.3-70b-instruct:free",
+  // Paid — cheap, dependable, neutral on authorized-pentest phrasing. Prices are
+  // $/1M (in/out), re-verified against the live OpenRouter API 2026-06.
+  // Non-reasoning models lead: they answer immediately. The gpt-5* reasoning
+  // models spend tokens thinking first, so they cost more than their sticker
+  // price for our short tasks and need the larger token budget the client now
+  // sends — solid, but not the default. (beta-test)
+  "openai/gpt-4o-mini", //         ~$0.15/$0.60 — reliable non-reasoning default; immediate answer
+  "google/gemini-2.5-flash-lite", // ~$0.10/$0.40 — cheap, fast, 1M ctx (Google filters can soften sec content)
+  "deepseek/deepseek-chat-v3.1", // ~$0.21/$0.79 — neutral, strong tool-calling, non-reasoning
+  "openai/gpt-5-mini", //          ~$0.25/$2.00 +reasoning — strongest, but reasoning tokens add cost
+  "anthropic/claude-haiku-4.5", // ~$1.00/$5.00 — premium prose; stricter safety, needs clear framing
+  // Free ($0) — heavily rate-limited (frequent 429s) and prompts may be logged
+  // for training upstream; a "try it" tier, not for real engagements. Strong at
+  // command generation + structured output and steerable for security work.
+  "qwen/qwen3-coder:free", //                strongest free for Suggest JSON; 1M ctx
+  "openai/gpt-oss-120b:free", //             reliable OpenAI-lineage JSON formatting
+  "nvidia/nemotron-3-super-120b-a12b:free", // fresh, neutral instruction-follower
+  "meta-llama/llama-3.3-70b-instruct:free", // dependable neutral baseline
 ];
 
 /**

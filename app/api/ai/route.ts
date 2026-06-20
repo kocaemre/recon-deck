@@ -22,13 +22,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, recordAiUsage } from "@/lib/db";
 import { readJsonBody } from "@/lib/api/body";
 import { effectiveAiConfig } from "@/lib/ai/config";
 import {
   buildExplainMessages,
   buildSuggestMessages,
+  buildSummaryMessages,
   parseSuggestions,
+  type SummaryPortInput,
 } from "@/lib/ai/prompts";
 import {
   streamChatCompletion,
@@ -40,6 +42,10 @@ export const dynamic = "force-dynamic";
 
 interface AiRequestBody {
   task?: unknown;
+  /** Optional target identity for the usage ledger (analytics only). */
+  engagementId?: unknown;
+  engagementLabel?: unknown;
+  host?: unknown;
   context?: {
     port?: unknown;
     protocol?: unknown;
@@ -47,6 +53,9 @@ interface AiRequestBody {
     version?: unknown;
     scanOutput?: unknown;
     kbCommands?: unknown;
+    /** summarize_engagement: the host's open ports. */
+    ports?: unknown;
+    target?: unknown;
   };
 }
 
@@ -65,6 +74,24 @@ function asKbCommands(v: unknown): Array<{ label: string; command: string }> {
     .slice(0, 30);
 }
 
+/** Coerce the client-sent open-ports list for the engagement summary. */
+function asSummaryPorts(v: unknown): SummaryPortInput[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((p) => {
+      const o = p as Record<string, unknown>;
+      return {
+        port: Number(o?.port),
+        protocol: asStr(o?.protocol) ?? null,
+        service: asStr(o?.service) ?? null,
+        version: asStr(o?.version) ?? null,
+        scanOutput: asStr(o?.scanOutput) ?? null,
+      };
+    })
+    .filter((p) => Number.isInteger(p.port))
+    .slice(0, 60);
+}
+
 export async function POST(request: NextRequest) {
   const cfg = effectiveAiConfig(db);
   if (!cfg.enabled) {
@@ -80,16 +107,12 @@ export async function POST(request: NextRequest) {
   if (!parsed.ok) return parsed.response;
 
   const { task, context } = parsed.body;
-  if (task !== "explain" && task !== "suggest_commands") {
+  if (
+    task !== "explain" &&
+    task !== "suggest_commands" &&
+    task !== "summarize_engagement"
+  ) {
     return NextResponse.json({ error: "Unknown task." }, { status: 400 });
-  }
-  const port = Number(context?.port);
-  const scanOutput = asStr(context?.scanOutput) ?? "";
-  if (!Number.isInteger(port) || !scanOutput.trim()) {
-    return NextResponse.json(
-      { error: "Missing port or scan output." },
-      { status: 400 },
-    );
   }
 
   const clientCfg = {
@@ -97,18 +120,84 @@ export async function POST(request: NextRequest) {
     apiKey: cfg.apiKey,
     model: cfg.model,
   };
-  const common = {
-    port,
-    protocol: asStr(context?.protocol) ?? null,
-    service: asStr(context?.service) ?? null,
-    version: asStr(context?.version) ?? null,
-    scanOutput,
+
+  // Best-effort usage ledger (analytics only — never breaks the AI response).
+  const engagementId = Number.isInteger(Number(parsed.body.engagementId))
+    ? Number(parsed.body.engagementId)
+    : null;
+  const ledger = (
+    ledgerTask: "explain" | "suggest" | "summary",
+    usage: { promptTokens: number; completionTokens: number; costUsd: number | null } | null,
+  ) => {
+    if (!usage) return;
+    try {
+      recordAiUsage(db, {
+        engagementId,
+        engagementLabel: asStr(parsed.body.engagementLabel) ?? null,
+        host: asStr(parsed.body.host) ?? null,
+        task: ledgerTask,
+        provider: cfg.provider,
+        model: cfg.model,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        costUsd: usage.costUsd,
+      });
+    } catch {
+      /* analytics must never break the response */
+    }
   };
 
   try {
+    // Engagement-level summary: a prioritized plan over ALL open ports.
+    if (task === "summarize_engagement") {
+      const ports = asSummaryPorts(context?.ports);
+      if (ports.length === 0) {
+        return NextResponse.json(
+          { error: "No ports to summarize." },
+          { status: 400 },
+        );
+      }
+      const stream = await streamChatCompletion(
+        clientCfg,
+        buildSummaryMessages({ target: asStr(context?.target) ?? null, ports }),
+        {
+          signal: request.signal,
+          // Whole-host summary is the heaviest prompt — give reasoning models
+          // extra headroom so reasoning doesn't crowd out the answer.
+          maxTokens: 2048,
+          onUsage: (u) => ledger("summary", u),
+        },
+      );
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    // explain / suggest are single-port: validate the port + scan output here.
+    const port = Number(context?.port);
+    const scanOutput = asStr(context?.scanOutput) ?? "";
+    if (!Number.isInteger(port) || !scanOutput.trim()) {
+      return NextResponse.json(
+        { error: "Missing port or scan output." },
+        { status: 400 },
+      );
+    }
+    const common = {
+      port,
+      protocol: asStr(context?.protocol) ?? null,
+      service: asStr(context?.service) ?? null,
+      version: asStr(context?.version) ?? null,
+      scanOutput,
+    };
+
     // Structured task: full JSON, validated server-side before returning.
     if (task === "suggest_commands") {
-      const text = await chatCompletion(
+      const { text, usage } = await chatCompletion(
         clientCfg,
         buildSuggestMessages({
           ...common,
@@ -116,6 +205,7 @@ export async function POST(request: NextRequest) {
         }),
         { signal: request.signal },
       );
+      ledger("suggest", usage);
       const suggestions = parseSuggestions(text);
       if (suggestions.length === 0) {
         return NextResponse.json(
@@ -130,7 +220,10 @@ export async function POST(request: NextRequest) {
     const stream = await streamChatCompletion(
       clientCfg,
       buildExplainMessages(common),
-      { signal: request.signal },
+      {
+        signal: request.signal,
+        onUsage: (u) => ledger("explain", u),
+      },
     );
     return new Response(stream, {
       status: 200,

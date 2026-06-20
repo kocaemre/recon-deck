@@ -67,21 +67,20 @@ default_creds:
     password: ""
     notes: "Empty password sometimes works on misconfigured installs"
 known_vulns:
-  # Match strings are substring-tested against nmap's `<product> <version>`
-  # concat. nmap emits "Samba smbd <version>" as the product blob, so the
-  # patterns below include "smbd" to avoid false positives on unrelated
-  # products that happen to start with "Samba".
+  # `match` is substring-tested against nmap's `<product> <version>` concat
+  # (nmap emits "Samba smbd <version>"); the optional `version` expression then
+  # gates by build range so a ranged CVE needs one entry, not one-per-build
+  # (beta-test B-5).
   - match: "Windows Server 2008"
     note: "EternalBlue (MS17-010) — wormable SMBv1 RCE"
     link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
-  - match: "smbd 3.0.20"
+  - match: "Samba smbd"
+    version: ">= 3.0.0 < 3.0.26"
     note: "Username map script command injection (CVE-2007-2447) — exploits MS-RPC SamrChangePassword"
     link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
-  - match: "smbd 4.5"
-    note: "SambaCry / EternalRed (CVE-2017-7494) RCE via writable share"
-    link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
-  - match: "smbd 4.6.0"
-    note: "SambaCry / EternalRed (CVE-2017-7494) RCE — affected through 4.6.4"
+  - match: "Samba smbd"
+    version: ">= 3.5.0 < 4.6.4"
+    note: "SambaCry / EternalRed (CVE-2017-7494) RCE via writable share — affected 3.5.0 through 4.6.4"
     link: "https://hacktricks.wiki/en/network-services-pentesting/pentesting-smb/index.html"
 resources:
   - title: "445 - Pentesting SMB"

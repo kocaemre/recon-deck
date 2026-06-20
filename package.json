@@ -32,6 +32,7 @@
   "scripts": {
     "dev": "next dev -p 13337",
     "start": "next start -p 13337",
+    "start:standalone": "node scripts/start-standalone.mjs",
     "build": "next build",
     "test": "vitest run",
     "test:watch": "vitest",

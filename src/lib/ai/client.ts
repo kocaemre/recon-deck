@@ -20,6 +20,32 @@ export interface StreamOptions {
   maxTokens?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Fired once with token/cost usage when the provider reports it (used to
+   *  populate the usage ledger). Streaming needs stream_options.include_usage. */
+  onUsage?: (usage: UsageInfo) => void;
+}
+
+/** Token counts + per-call cost, when the provider reports them. */
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  /** USD for this call. OpenRouter reports it; OpenAI/Ollama leave it null. */
+  costUsd: number | null;
+}
+
+/** Parse an OpenAI/OpenRouter `usage` object; null when nothing useful. */
+export function parseUsage(u: unknown): UsageInfo | null {
+  if (!u || typeof u !== "object") return null;
+  const o = u as Record<string, unknown>;
+  const num = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const promptTokens = num(o.prompt_tokens) ?? 0;
+  const completionTokens = num(o.completion_tokens) ?? 0;
+  const costUsd = num(o.cost) ?? null;
+  if (promptTokens === 0 && completionTokens === 0 && costUsd === null) {
+    return null;
+  }
+  return { promptTokens, completionTokens, costUsd };
 }
 
 export class AiUpstreamError extends Error {
@@ -32,13 +58,53 @@ export class AiUpstreamError extends Error {
   }
 }
 
+/**
+ * Turn a non-2xx provider response into a clean, user-facing AiUpstreamError.
+ *
+ * Beta-test B-2: a raw `Provider returned 429: {"error":{...upstream json...}}`
+ * is noise to the operator — and rate-limits are common on the free models the
+ * picker recommends. Map the statuses worth distinguishing to plain guidance;
+ * everything else keeps the generic "Provider returned N" shape (with the
+ * upstream detail, which is useful for the long tail of 4xx/5xx).
+ */
+export function upstreamError(
+  status: number,
+  detail: string,
+  surfaceStatus: number = status,
+): AiUpstreamError {
+  const trimmed = detail.trim();
+  if (status === 429) {
+    return new AiUpstreamError(
+      "The AI provider is rate-limiting requests (429). Free models hit this " +
+        "often — wait a few seconds and retry, or pick another model in " +
+        "Settings → AI assistant.",
+      surfaceStatus,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new AiUpstreamError(
+      `The AI provider rejected the request (${status}) — check your API key ` +
+        "and model access in Settings → AI assistant.",
+      surfaceStatus,
+    );
+  }
+  return new AiUpstreamError(
+    `Provider returned ${status}${trimmed ? `: ${trimmed}` : ""}`,
+    surfaceStatus,
+  );
+}
+
 export interface StreamClientConfig {
   baseUrl: string;
   apiKey: string | null;
   model: string;
 }
 
-const DEFAULT_MAX_TOKENS = 700;
+// Reasoning models (gpt-5*, o-series) count their hidden reasoning against this
+// budget — at 700 a heavy prompt spent it all on reasoning and streamed ZERO
+// content (beta-test). 1500 leaves room for reasoning + a real answer; plain
+// models still stop when done, so it doesn't inflate their output.
+const DEFAULT_MAX_TOKENS = 1500;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Combine the caller's signal (if any) with a timeout signal. */
@@ -67,6 +133,9 @@ export async function streamChatCompletion(
       model: cfg.model,
       messages,
       stream: true,
+      // Ask OpenAI-compatible providers to emit a final usage frame so we can
+      // record token/cost analytics for streamed Explain calls.
+      stream_options: { include_usage: true },
       max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
       temperature: 0.2,
     }),
@@ -81,13 +150,10 @@ export async function streamChatCompletion(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(
-      `Provider returned ${res.status}${detail ? `: ${detail}` : ""}`,
-      res.ok ? 502 : res.status,
-    );
+    throw upstreamError(res.status, detail, res.ok ? 502 : res.status);
   }
 
-  return parseSseToText(res.body);
+  return parseSseToText(res.body, opts.onUsage);
 }
 
 /**
@@ -99,7 +165,7 @@ export async function chatCompletion(
   cfg: StreamClientConfig,
   messages: ChatMessage[],
   opts: StreamOptions = {},
-): Promise<string> {
+): Promise<{ text: string; usage: UsageInfo | null }> {
   const signal = combineSignals(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -127,13 +193,17 @@ export async function chatCompletion(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+    throw upstreamError(res.status, detail);
   }
 
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    usage?: unknown;
   };
-  return json?.choices?.[0]?.message?.content ?? "";
+  return {
+    text: json?.choices?.[0]?.message?.content ?? "",
+    usage: parseUsage(json?.usage),
+  };
 }
 
 /**
@@ -175,7 +245,7 @@ export async function listModels(
     } catch {
       /* ignore */
     }
-    throw new AiUpstreamError(`Provider returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
+    throw upstreamError(res.status, detail);
   }
   const json = (await res.json()) as {
     data?: Array<{
@@ -216,6 +286,7 @@ export async function listModels(
  */
 function parseSseToText(
   upstream: ReadableStream<Uint8Array>,
+  onUsage?: (usage: UsageInfo) => void,
 ): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -249,6 +320,12 @@ function parseSseToText(
           }
           try {
             const json = JSON.parse(payload);
+            // Final usage frame (stream_options.include_usage) — choices is
+            // usually empty here; record it without enqueuing any text.
+            if (json?.usage && onUsage) {
+              const u = parseUsage(json.usage);
+              if (u) onUsage(u);
+            }
             const delta: string | undefined =
               json?.choices?.[0]?.delta?.content;
             if (delta) {

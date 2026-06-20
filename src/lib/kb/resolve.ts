@@ -30,6 +30,7 @@
 import type {
   Conditional,
   KbEntry,
+  KnownVuln,
   WhenExpr,
 } from "./schema";
 
@@ -140,7 +141,7 @@ function compareVersions(a: string, b: string): number {
  * treated as a substring match — escape hatch for KB authors who want
  * to anchor on an exact build string.
  */
-function versionExpressionMatches(expr: string, observed: string): boolean {
+export function versionExpressionMatches(expr: string, observed: string): boolean {
   const trimmed = expr.trim();
   if (!trimmed) return true;
 
@@ -173,8 +174,15 @@ function versionExpressionMatches(expr: string, observed: string): boolean {
     return observed.toLowerCase().startsWith(exact.toLowerCase());
   }
 
+  // Real nmap banners can carry a leading non-numeric token in the version
+  // field — Samba parses as product "Samba", version "smbd 3.0.20-Debian"
+  // (beta-test B-4). For the ORDERED comparisons, anchor on the first
+  // dotted-numeric run so that leading word doesn't collapse the major version
+  // to 0 (which made every SMB version-gated conditional silently miss). The
+  // exact/substring escape-hatch below still matches the raw observed string.
+  const observedNumeric = observed.match(/\d+(?:\.\d+)*/)?.[0] ?? observed;
   for (const { op, ver } of ops) {
-    const cmp = compareVersions(observed, ver);
+    const cmp = compareVersions(observedNumeric, ver);
     switch (op) {
       case "<=": if (cmp > 0) return false; break;
       case "<":  if (cmp >= 0) return false; break;
@@ -320,4 +328,33 @@ export function applyConditionals(
   }
 
   return { checks, commands, active, inactive };
+}
+
+/* -------------------------------------------------------------------------- */
+/* known_vulns matching                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Select the KB `known_vulns` advisories that apply to an observed service.
+ *
+ * Two-stage gate so the range-based form stays consistent with the version-gated
+ * conditionals (beta-test B-5 — substring-only entries under-matched ranged
+ * CVEs like SambaCry on Samba 4.3.x):
+ *   1. `match` is a case-insensitive substring of the `product version` blob —
+ *      the product anchor (KB authors scope this tightly to avoid over-match).
+ *   2. If `version` is set, the observed version must ALSO satisfy that
+ *      expression. Omitting `version` keeps the legacy substring-only behaviour.
+ */
+export function matchKnownVulns(
+  vulns: ReadonlyArray<KnownVuln>,
+  product: string | null,
+  version: string | null,
+): KnownVuln[] {
+  const blob = [product, version].filter(Boolean).join(" ").toLowerCase();
+  if (!blob) return [];
+  return vulns.filter((v) => {
+    if (!blob.includes(v.match.toLowerCase())) return false;
+    if (v.version) return versionExpressionMatches(v.version, version ?? "");
+    return true;
+  });
 }

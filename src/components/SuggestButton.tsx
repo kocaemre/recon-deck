@@ -14,6 +14,7 @@ import { Wand2, Loader2, X, Plus, Check, Copy } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
 import { CopyButton } from "@/components/CopyButton";
 import { AiContextPreview } from "@/components/ai/AiContextPreview";
+import { AiErrorActions } from "@/components/ai/AiErrorActions";
 
 interface Suggestion {
   command: string;
@@ -28,6 +29,9 @@ export interface SuggestContext {
   version?: string | null;
   scanOutput: string;
   kbCommands: Array<{ label: string; command: string }>;
+  /** Target identity for the usage ledger (analytics only). */
+  engagementId?: number;
+  host?: string | null;
 }
 
 export function SuggestButton(props: SuggestContext) {
@@ -85,6 +89,8 @@ export function SuggestButton(props: SuggestContext) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           task: "suggest_commands",
+          engagementId: props.engagementId,
+          host: props.host ?? null,
           context: {
             port: props.port,
             protocol: props.protocol ?? null,
@@ -186,11 +192,7 @@ export function SuggestButton(props: SuggestContext) {
                 Asking the model…
               </div>
             )}
-            {error && (
-              <div style={{ fontSize: 12, color: "var(--danger, #dc2626)" }}>
-                {error}
-              </div>
-            )}
+            {error && <AiErrorActions error={error} onRetry={run} />}
             {!loading && !error && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {items.map((s, i) => (

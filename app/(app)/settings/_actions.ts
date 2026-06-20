@@ -48,6 +48,18 @@ export async function setExamModeAction(enabled: boolean): Promise<void> {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Switch just the AI model (keeps provider / key / base URL). Backs the
+ * one-click "Switch to <model> & retry" affordance the Explain / Suggest panels
+ * show on a provider error (e.g. a free-model 429) — explicit, not automatic.
+ */
+export async function setAiModelAction(model: string): Promise<void> {
+  const trimmed = (model ?? "").trim();
+  if (!trimmed) throw new Error("Invalid model.");
+  setAppState(db, { ai_model: trimmed });
+  revalidatePath("/", "layout");
+}
+
 export interface AiSettingsInput {
   enabled: boolean;
   provider: string;
