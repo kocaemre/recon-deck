@@ -8,6 +8,10 @@
  * attack first and why". Hidden unless the AI co-pilot is enabled (and not in
  * Exam Mode). Streams plain text like ExplainButton; suggest-only, never runs
  * anything. Larger context than a single port, so it's a deliberate click.
+ *
+ * On MULTI-HOST engagements a second button summarizes the whole engagement —
+ * a cross-host plan over every host's open ports (which host/service to attack
+ * first, pivot hints). Shown only when `allHosts` carries more than one host.
  */
 
 import { useState } from "react";
@@ -23,38 +27,61 @@ export interface SummaryPort {
   scanOutput?: string | null;
 }
 
+export interface SummaryHost {
+  target: string | null;
+  ports: SummaryPort[];
+}
+
+type Scope = "host" | "all";
+
 export function SummarizeEngagementButton({
   engagementId,
   target,
   ports,
+  allHosts,
 }: {
   engagementId: number;
   target: string | null;
   ports: SummaryPort[];
+  /** Every host with its open ports — enables the cross-host summary button. */
+  allHosts?: SummaryHost[];
 }) {
   const status = useAiStatus();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<Scope>("host");
+
+  const multiHost = (allHosts?.length ?? 0) > 1;
 
   if (!status || !status.enabled || ports.length === 0) return null;
 
-  async function run() {
+  async function run(which: Scope) {
+    setScope(which);
     setOpen(true);
     setText("");
     setError(null);
     setStreaming(true);
     try {
+      const body =
+        which === "all"
+          ? {
+              task: "summarize_all_hosts",
+              engagementId,
+              host: target,
+              context: { hosts: allHosts },
+            }
+          : {
+              task: "summarize_engagement",
+              engagementId,
+              host: target,
+              context: { target, ports },
+            };
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: "summarize_engagement",
-          engagementId,
-          host: target,
-          context: { target, ports },
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok || !res.body) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -74,34 +101,61 @@ export function SummarizeEngagementButton({
     }
   }
 
+  const hostCount = allHosts?.length ?? 0;
+  const buttonStyle = {
+    display: "inline-flex" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    padding: "5px 11px",
+    borderRadius: 5,
+    border: "1px solid var(--accent-border)",
+    background: "var(--accent-bg)",
+    color: "var(--accent)",
+    fontSize: 12,
+    fontWeight: 600,
+  };
+
   return (
     <div style={{ padding: "10px 24px", borderBottom: "1px solid var(--border)" }}>
-      <button
-        type="button"
-        onClick={run}
-        disabled={streaming}
-        title={`Summarize all ${ports.length} ports with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "5px 11px",
-          borderRadius: 5,
-          border: "1px solid var(--accent-border)",
-          background: "var(--accent-bg)",
-          color: "var(--accent)",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: streaming ? "wait" : "pointer",
-        }}
-      >
-        {streaming ? (
-          <Loader2 size={13} className="animate-spin" />
-        ) : (
-          <Sparkles size={13} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={() => run("host")}
+          disabled={streaming}
+          title={`Summarize ${multiHost ? "this host's" : "all"} ${ports.length} ports with AI (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
+          style={{ ...buttonStyle, cursor: streaming ? "wait" : "pointer" }}
+        >
+          {streaming && scope === "host" ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <Sparkles size={13} />
+          )}
+          {streaming && scope === "host"
+            ? "Summarizing…"
+            : multiHost
+              ? "AI: summarize this host"
+              : "AI: summarize attack surface"}
+        </button>
+
+        {multiHost && (
+          <button
+            type="button"
+            onClick={() => run("all")}
+            disabled={streaming}
+            title={`Cross-host AI summary over all ${hostCount} hosts (${status.provider}${status.cloud ? " · cloud" : " · local"})`}
+            style={{ ...buttonStyle, cursor: streaming ? "wait" : "pointer" }}
+          >
+            {streaming && scope === "all" ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Sparkles size={13} />
+            )}
+            {streaming && scope === "all"
+              ? "Summarizing…"
+              : `AI: summarize all ${hostCount} hosts`}
+          </button>
         )}
-        {streaming ? "Summarizing…" : "AI: summarize attack surface"}
-      </button>
+      </div>
 
       {open && (
         <div
@@ -128,7 +182,10 @@ export function SummarizeEngagementButton({
             }}
           >
             <span>
-              AI ATTACK-SURFACE SUMMARY · {status.model}
+              {scope === "all"
+                ? `AI CROSS-HOST SUMMARY · ${hostCount} HOSTS`
+                : "AI ATTACK-SURFACE SUMMARY"}{" "}
+              · {status.model}
               {status.cloud ? " · cloud" : " · local"}
             </span>
             <button
@@ -148,7 +205,7 @@ export function SummarizeEngagementButton({
           </div>
           <div style={{ padding: 10 }}>
             {error ? (
-              <AiErrorActions error={error} onRetry={run} />
+              <AiErrorActions error={error} onRetry={() => run(scope)} />
             ) : (
               <div
                 style={{

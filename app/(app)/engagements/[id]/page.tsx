@@ -503,6 +503,32 @@ export default async function EngagementPage({
       return structured ? { ...hs, structured } : hs;
     });
 
+  // Multi-host AI summary: group every host's currently-open ports (closed
+  // ports excluded, mirroring the per-host `!isClosed` filter) so the
+  // cross-host "summarize all hosts" button can send the whole engagement.
+  // Built only for multi-host engagements; single-host falls back to the
+  // per-host summary that already covers the only host.
+  const allHostsSummary = isMultiHost
+    ? engagement.hosts.map((h) => ({
+        target: h.hostname ?? h.ip,
+        ports: engagement.ports
+          .filter((p) => p.host_id === h.id && p.closed_at_scan_id == null)
+          .sort((a, b) => a.port - b.port)
+          .map((p) => ({
+            port: p.port,
+            protocol: p.protocol,
+            service: p.service,
+            version:
+              [p.product, p.version].filter(Boolean).join(" ").trim() || null,
+            scanOutput: p.scripts
+              .filter((s) => !s.is_host_script)
+              .map((s) => `${s.script_id}: ${s.output}`)
+              .join("\n")
+              .slice(0, 1200),
+          })),
+      }))
+    : undefined;
+
   const paletteContextPorts = portData.map((p) => ({
     id: p.id,
     port: p.port,
@@ -650,6 +676,7 @@ export default async function EngagementPage({
               .join("\n")
               .slice(0, 1200),
           }))}
+        allHosts={allHostsSummary}
       />
 
       <EngagementHeatmap

@@ -3,6 +3,7 @@ import {
   buildExplainMessages,
   buildSuggestMessages,
   buildSummaryMessages,
+  buildAllHostsSummaryMessages,
   parseSuggestions,
   fenceUntrusted,
   MAX_SCAN_CHARS,
@@ -150,5 +151,53 @@ describe("ai/prompts — suggest commands", () => {
     }));
     const msgs = buildSummaryMessages({ target: "t", ports: many });
     expect(msgs[1].content).toContain("further ports omitted");
+  });
+
+  it("buildAllHostsSummaryMessages groups ports under each host + fences data", () => {
+    const msgs = buildAllHostsSummaryMessages({
+      hosts: [
+        {
+          target: "10.10.10.3",
+          ports: [{ port: 21, service: "ftp", scanOutput: "banner A" }],
+        },
+        {
+          target: "10.10.10.4",
+          ports: [{ port: 445, service: "smb", scanOutput: "banner B" }],
+        },
+      ],
+    });
+    expect(msgs[0].role).toBe("system");
+    expect(msgs[0].content).toMatch(/cross-host/i);
+    const user = msgs[1].content;
+    expect(user).toContain("10.10.10.3");
+    expect(user).toContain("10.10.10.4");
+    expect(user).toContain("21/tcp");
+    expect(user).toContain("445/tcp");
+    expect(user).toContain("<untrusted_scan_output>");
+  });
+
+  it("buildAllHostsSummaryMessages drops hosts with no open ports", () => {
+    const msgs = buildAllHostsSummaryMessages({
+      hosts: [
+        { target: "empty", ports: [] },
+        { target: "live", ports: [{ port: 80, service: "http", scanOutput: "x" }] },
+      ],
+    });
+    expect(msgs[1].content).toContain("live");
+    expect(msgs[1].content).not.toContain("empty");
+  });
+
+  it("buildAllHostsSummaryMessages caps total embedded ports across hosts", () => {
+    const hosts = Array.from({ length: 12 }, (_, h) => ({
+      target: `host-${h}`,
+      ports: Array.from({ length: 10 }, (_, i) => ({
+        port: 1000 + i,
+        service: "x",
+        scanOutput: "y",
+      })),
+    }));
+    const msgs = buildAllHostsSummaryMessages({ hosts });
+    // 12 hosts × 10 ports = 120 candidates, global cap is 60 → omissions noted.
+    expect(msgs[1].content).toMatch(/omitted for length/);
   });
 });
