@@ -2,6 +2,28 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.14] — 2026-06-20
+
+Fourteenth beta. UI/UX polish pass from the beta QA.
+
+### Added
+
+- **AI Suggest panel niceties.** Each suggested command gets an **Add to My
+  Commands** button (saved against the port), a **Copy all safe** bulk action,
+  and a tooltip explaining the SAFE/INTRUSIVE badge. Both Explain and Suggest
+  now have a **"what gets sent"** disclosure so you can see exactly what leaves
+  the machine (port + scan output + baseline KB commands) before trusting a
+  cloud provider.
+
+### Fixed
+
+- **AutoRecon warning banner was faint on the light theme** — it now uses the
+  theme-aware `--risk-med` colour instead of a fixed light amber.
+- **Writeup panel** now scrolls into view and focuses its textarea when opened,
+  so it's obvious it expanded on a long engagement page.
+- **Sidebar Active/Archived tabs** carry `aria-label` + `aria-pressed`, so the
+  count is announced as "Active engagements: N" instead of "ACTIVE1".
+
 ## [2.5.0-beta.13] — 2026-06-19
 
 Thirteenth beta. Export-alias + test-robustness loose ends.
