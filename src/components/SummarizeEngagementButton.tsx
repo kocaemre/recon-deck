@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import { useAiStatus } from "@/components/ai/useAiStatus";
 import { AiErrorActions } from "@/components/ai/AiErrorActions";
+import { Markdown } from "@/components/ai/Markdown";
 
 export interface SummaryPort {
   port: number;
@@ -207,15 +208,8 @@ export function SummarizeEngagementButton({
             {error ? (
               <AiErrorActions error={error} onRetry={() => run(scope)} />
             ) : (
-              <div
-                style={{
-                  fontSize: 12.5,
-                  lineHeight: 1.55,
-                  color: "var(--fg)",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {text}
+              <div>
+                <Markdown text={text} />
                 {streaming && <span style={{ opacity: 0.5 }}>▍</span>}
               </div>
             )}
