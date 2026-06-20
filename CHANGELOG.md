@@ -2,6 +2,25 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.18] — 2026-06-20
+
+Eighteenth beta. AI panel readability follow-ups from the beta.17 test.
+
+### Added
+
+- **Markdown rendering in the AI panels.** The co-pilot replies in Markdown, but
+  Explain / Summary printed it raw (literal `**bold**`, `### headings`, `-`
+  bullets). A tiny dependency-free renderer now formats the subset the model
+  uses (headings, bold, italic, inline code, bullet / numbered lists).
+  **XSS-safe by construction:** model output (which can echo attacker-controlled
+  scan text) renders to React text nodes only — no `dangerouslySetInnerHTML`,
+  and links are deliberately not turned into clickable anchors.
+- **Ordered "game plan" summaries.** Both the single-host and cross-host summary
+  prompts now ask for a numbered, sequential plan — what to do first, then next,
+  then pivot — each step naming the target service, the action, and a short why,
+  ending with a one-line best-first-move call-out. Renders as a real ordered
+  list with the new Markdown renderer.
+
 ## [2.5.0-beta.17] — 2026-06-20
 
 Seventeenth beta. Rebuild of beta.16 (its multi-arch build was cancelled on a
