@@ -22,7 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, recordAiUsage } from "@/lib/db";
 import { readJsonBody } from "@/lib/api/body";
 import { effectiveAiConfig } from "@/lib/ai/config";
 import {
@@ -40,6 +40,10 @@ export const dynamic = "force-dynamic";
 
 interface AiRequestBody {
   task?: unknown;
+  /** Optional target identity for the usage ledger (analytics only). */
+  engagementId?: unknown;
+  engagementLabel?: unknown;
+  host?: unknown;
   context?: {
     port?: unknown;
     protocol?: unknown;
@@ -97,6 +101,33 @@ export async function POST(request: NextRequest) {
     apiKey: cfg.apiKey,
     model: cfg.model,
   };
+
+  // Best-effort usage ledger (analytics only — never breaks the AI response).
+  const engagementId = Number.isInteger(Number(parsed.body.engagementId))
+    ? Number(parsed.body.engagementId)
+    : null;
+  const ledger = (
+    ledgerTask: "explain" | "suggest",
+    usage: { promptTokens: number; completionTokens: number; costUsd: number | null } | null,
+  ) => {
+    if (!usage) return;
+    try {
+      recordAiUsage(db, {
+        engagementId,
+        engagementLabel: asStr(parsed.body.engagementLabel) ?? null,
+        host: asStr(parsed.body.host) ?? null,
+        task: ledgerTask,
+        provider: cfg.provider,
+        model: cfg.model,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        costUsd: usage.costUsd,
+      });
+    } catch {
+      /* analytics must never break the response */
+    }
+  };
+
   const common = {
     port,
     protocol: asStr(context?.protocol) ?? null,
@@ -108,7 +139,7 @@ export async function POST(request: NextRequest) {
   try {
     // Structured task: full JSON, validated server-side before returning.
     if (task === "suggest_commands") {
-      const text = await chatCompletion(
+      const { text, usage } = await chatCompletion(
         clientCfg,
         buildSuggestMessages({
           ...common,
@@ -116,6 +147,7 @@ export async function POST(request: NextRequest) {
         }),
         { signal: request.signal },
       );
+      ledger("suggest", usage);
       const suggestions = parseSuggestions(text);
       if (suggestions.length === 0) {
         return NextResponse.json(
@@ -130,7 +162,10 @@ export async function POST(request: NextRequest) {
     const stream = await streamChatCompletion(
       clientCfg,
       buildExplainMessages(common),
-      { signal: request.signal },
+      {
+        signal: request.signal,
+        onUsage: (u) => ledger("explain", u),
+      },
     );
     return new Response(stream, {
       status: 200,

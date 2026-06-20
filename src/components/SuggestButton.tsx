@@ -29,6 +29,9 @@ export interface SuggestContext {
   version?: string | null;
   scanOutput: string;
   kbCommands: Array<{ label: string; command: string }>;
+  /** Target identity for the usage ledger (analytics only). */
+  engagementId?: number;
+  host?: string | null;
 }
 
 export function SuggestButton(props: SuggestContext) {
@@ -86,6 +89,8 @@ export function SuggestButton(props: SuggestContext) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           task: "suggest_commands",
+          engagementId: props.engagementId,
+          host: props.host ?? null,
           context: {
             port: props.port,
             protocol: props.protocol ?? null,

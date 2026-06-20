@@ -20,6 +20,32 @@ export interface StreamOptions {
   maxTokens?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Fired once with token/cost usage when the provider reports it (used to
+   *  populate the usage ledger). Streaming needs stream_options.include_usage. */
+  onUsage?: (usage: UsageInfo) => void;
+}
+
+/** Token counts + per-call cost, when the provider reports them. */
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  /** USD for this call. OpenRouter reports it; OpenAI/Ollama leave it null. */
+  costUsd: number | null;
+}
+
+/** Parse an OpenAI/OpenRouter `usage` object; null when nothing useful. */
+export function parseUsage(u: unknown): UsageInfo | null {
+  if (!u || typeof u !== "object") return null;
+  const o = u as Record<string, unknown>;
+  const num = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const promptTokens = num(o.prompt_tokens) ?? 0;
+  const completionTokens = num(o.completion_tokens) ?? 0;
+  const costUsd = num(o.cost) ?? null;
+  if (promptTokens === 0 && completionTokens === 0 && costUsd === null) {
+    return null;
+  }
+  return { promptTokens, completionTokens, costUsd };
 }
 
 export class AiUpstreamError extends Error {
@@ -103,6 +129,9 @@ export async function streamChatCompletion(
       model: cfg.model,
       messages,
       stream: true,
+      // Ask OpenAI-compatible providers to emit a final usage frame so we can
+      // record token/cost analytics for streamed Explain calls.
+      stream_options: { include_usage: true },
       max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
       temperature: 0.2,
     }),
@@ -120,7 +149,7 @@ export async function streamChatCompletion(
     throw upstreamError(res.status, detail, res.ok ? 502 : res.status);
   }
 
-  return parseSseToText(res.body);
+  return parseSseToText(res.body, opts.onUsage);
 }
 
 /**
@@ -132,7 +161,7 @@ export async function chatCompletion(
   cfg: StreamClientConfig,
   messages: ChatMessage[],
   opts: StreamOptions = {},
-): Promise<string> {
+): Promise<{ text: string; usage: UsageInfo | null }> {
   const signal = combineSignals(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, opts.signal);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -165,8 +194,12 @@ export async function chatCompletion(
 
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    usage?: unknown;
   };
-  return json?.choices?.[0]?.message?.content ?? "";
+  return {
+    text: json?.choices?.[0]?.message?.content ?? "",
+    usage: parseUsage(json?.usage),
+  };
 }
 
 /**
@@ -249,6 +282,7 @@ export async function listModels(
  */
 function parseSseToText(
   upstream: ReadableStream<Uint8Array>,
+  onUsage?: (usage: UsageInfo) => void,
 ): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -282,6 +316,12 @@ function parseSseToText(
           }
           try {
             const json = JSON.parse(payload);
+            // Final usage frame (stream_options.include_usage) — choices is
+            // usually empty here; record it without enqueuing any text.
+            if (json?.usage && onUsage) {
+              const u = parseUsage(json.usage);
+              if (u) onUsage(u);
+            }
             const delta: string | undefined =
               json?.choices?.[0]?.delta?.content;
             if (delta) {

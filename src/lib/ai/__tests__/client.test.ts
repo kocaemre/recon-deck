@@ -111,7 +111,7 @@ describe("ai/client chatCompletion (non-streaming)", () => {
       ),
     );
     const out = await chatCompletion(cfg, []);
-    expect(out).toBe('[{"command":"x"}]');
+    expect(out.text).toBe('[{"command":"x"}]');
   });
 
   it("sends stream:false", async () => {

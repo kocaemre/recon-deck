@@ -23,6 +23,9 @@ export interface ExplainContext {
   service?: string | null;
   version?: string | null;
   scanOutput: string;
+  /** Target identity for the usage ledger (analytics only). */
+  engagementId?: number;
+  host?: string | null;
 }
 
 export function ExplainButton(props: ExplainContext) {
@@ -46,6 +49,8 @@ export function ExplainButton(props: ExplainContext) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           task: "explain",
+          engagementId: props.engagementId,
+          host: props.host ?? null,
           context: {
             port: props.port,
             protocol: props.protocol ?? null,

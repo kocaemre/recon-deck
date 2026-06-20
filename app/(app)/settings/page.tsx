@@ -291,6 +291,13 @@ export default function SettingsIndexPage() {
             examMode: aiRaw.exam_mode,
           }}
         />
+        <div style={{ marginTop: 12 }}>
+          <SettingsLink
+            href="/settings/usage"
+            title="Usage & cost"
+            description="Per-target token + cost analytics for AI co-pilot calls."
+          />
+        </div>
       </section>
 
       {/* v1.9.0: first-run / onboarding controls. */}

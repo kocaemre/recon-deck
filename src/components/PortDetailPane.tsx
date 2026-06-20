@@ -318,6 +318,8 @@ export function PortDetailPane({
                     service={serviceName ?? null}
                     version={exploitQuery ?? null}
                     scanOutput={scanOutput}
+                    engagementId={engagementId}
+                    host={targetHost ?? null}
                   />
                   <SuggestButton
                     port={portNum}
@@ -329,6 +331,8 @@ export function PortDetailPane({
                       label: c.label,
                       command: c.command,
                     }))}
+                    engagementId={engagementId}
+                    host={targetHost ?? null}
                   />
                 </div>
               );
