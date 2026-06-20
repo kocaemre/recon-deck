@@ -2,6 +2,29 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.16] — 2026-06-20
+
+Sixteenth beta. Cross-host AI summary + container-management ergonomics.
+
+### Added
+
+- **Cross-host AI summary.** On a multi-host engagement the AI summary now
+  offers a second button — **"summarize all N hosts"** — that produces one
+  prioritized plan across every host's open ports (which host/service to attack
+  first, version-specific issues, likely pivot paths), alongside the existing
+  per-host summary. Each port's scan output stays injection-fenced; budget is
+  capped (≤12 hosts, ≤60 ports total). Single-host engagements are unchanged.
+  Logged to the `ai_usage` ledger as a `summary` call.
+
+### Changed
+
+- **`install.sh` now prints Start + Uninstall hints** at the end of a run
+  (alongside Stop / Logs / Update), so managing the container after a
+  `docker stop` no longer requires a trip to the README.
+- **Roadmap:** added **MCP (Model Context Protocol) support** as a Future
+  Considerations direction — read-only first, opt-in, loopback-only,
+  Exam-Mode-aware, suggest-never-execute. Not a commitment.
+
 ## [2.5.0-beta.15] — 2026-06-20
 
 Fifteenth beta. Findings from a hands-on beta.14 test against real scan data
