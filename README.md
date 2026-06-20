@@ -318,6 +318,24 @@ docker stop recon-deck && docker rm recon-deck
 # re-run docker run from Quick Start; named volumes survive
 ```
 
+**Beta:** updating a beta install works the same way — re-run the `--beta`
+one-liner (idempotent: pulls the newest `:beta`, replaces the container, volumes
+survive), or pull the image and re-run manually:
+
+```bash
+# easy — re-run to pull the latest pre-release
+curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh -s -- --beta
+
+# manual
+docker pull ghcr.io/kocaemre/recon-deck:beta
+docker stop recon-deck && docker rm recon-deck   # named volumes survive
+# re-run docker run with the :beta image
+```
+
+Move back to stable any time with `--stable` (or pull `:latest`). On a busy
+port, the `RECON_DECK_PORT` env goes on the **sh** side of the pipe:
+`… | RECON_DECK_PORT=13338 sh -s -- --beta`.
+
 **Local dev:** `git pull && npm install && npm run dev`. Migrations apply at boot.
 
 ## Tech Stack
