@@ -2,6 +2,38 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] — 2026-06-22
+
+First stable of the 2.5.x line — rolls up the `beta.1`–`beta.19` series. Headline: an **opt-in, local-first AI co-pilot**, stack/version-aware KB overlays, findings in every export, and a local usage/cost ledger — all while staying offline-by-default.
+
+### Added
+
+- **AI co-pilot (opt-in, off by default).** `Explain` scan / NSE output and `Suggest` next commands — KB-grounded, suggest-never-execute. Local-first via Ollama; OpenAI / OpenRouter only if you opt in. Prompts are injection-hardened (untrusted scan output is fenced) and the API key never leaves the server.
+- **Cross-host attack plan** — one ordered, prioritized plan across every host in a multi-host engagement (plus a single-host summary).
+- **Exam Mode** — one toggle hard-disables all AI, for OSCP-style exams that forbid it.
+- **Web-augmented Explain (`:online`)** — optional OpenRouter live web search for current CVEs / exploits. Per-call, OpenRouter-only, egress-warned, hidden under Exam Mode.
+- **Searchable model picker** — provider model list with per-token pricing, a per-target cost estimate, FREE badges, and curated recommendations.
+- **AI usage & cost analytics** at `/settings/usage` — per-target token + cost ledger, all local SQLite.
+- **Stack/version-aware KB conditionals** — web stack (80/443/8080) and version-gated FTP / SSH / SMB / MySQL overlays (vsftpd 2.3.4 backdoor, Samba usermap / SambaCry, OpenSSH user-enum / regreSSHion, MySQL CVE-2012-2122).
+- **Findings in Markdown / JSON / HTML exports** + a `findings-csv` alias; exports now carry the real app version.
+- Opt-in **onboarding AI step**, and **Markdown-rendered AI panels** with ordered "game plan" summaries.
+
+### Changed
+
+- Default model is the non-reasoning `gpt-4o-mini`; refreshed OpenRouter recommendations. Larger token budget so reasoning models don't stream empty. One-click **"switch model & retry"** on a provider error.
+
+### Fixed
+
+- `filtered` ports are no longer counted or labeled as "open" on the heatmap.
+- SMB version-gated conditionals + range-aware `known_vulns` now fire on real Samba banners (a leading `smbd` token no longer zeroes the version).
+- Ordered lists in AI panels no longer restart at "1." when split by prose.
+
+### Migrations
+
+- Schema **0023** (`ai_usage` ledger). Forward-only; applies at boot.
+
+> Per-beta detail for the whole 2.5.0 series is preserved in the `2.5.0-beta.*` entries below.
+
 ## [2.5.0-beta.19] — 2026-06-20
 
 Nineteenth beta. Opt-in web-augmented Explain + a Markdown polish from the
