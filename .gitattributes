@@ -1,1 +1,6 @@
 *.yaml text eol=lf
+
+# media
+*.gif binary
+*.png binary
+*.mp4 binary
