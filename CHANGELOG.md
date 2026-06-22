@@ -2,6 +2,31 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0-beta.19] — 2026-06-20
+
+Nineteenth beta. Opt-in web-augmented Explain + a Markdown polish from the
+beta.18 test.
+
+### Added
+
+- **Opt-in web-augmented Explain (`:online`).** OpenRouter runs a live web
+  search when the model id carries a `:online` suffix — useful for "is there a
+  current CVE / exploit / Metasploit module for this version?". Surfaced as a
+  deliberate per-call **"Search web"** button next to Explain, shown **only when
+  the provider is OpenRouter**. Never ambient: the proxy appends `:online` only
+  when an explicit `web: true` arrives *and* the provider is OpenRouter. It
+  sends scan-derived queries off-host, so the button carries an egress warning,
+  the panel header marks `:online · 🌐 web`, and it stays off by default and
+  hidden under Exam Mode (AI is fully gated there). The `:online` model is
+  recorded verbatim in the usage ledger so its higher cost is visible in
+  `/settings/usage`. Suggest stays KB-grounded — web is Explain-only.
+
+### Changed
+
+- **Suggest card "why" now renders Markdown** — backticked flags/paths and
+  emphasis in the rationale display formatted, consistent with the
+  Explain/Summary panels.
+
 ## [2.5.0-beta.18] — 2026-06-20
 
 Eighteenth beta. AI panel readability follow-ups from the beta.17 test.
