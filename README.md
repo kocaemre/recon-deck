@@ -1,5 +1,17 @@
 <div align="center">
 
+# 🎉🛰️ &nbsp;recon-deck **v2.5.0** is live!&nbsp; 🎉
+
+### The opt-in AI co-pilot release — paste nmap, get an AI-assisted attack plan. 100% offline by default.
+
+</div>
+
+> **🚀 What it brings:** &nbsp; 🤖 **AI co-pilot** — `Explain` scan output & `Suggest` next commands (local-first, suggest-never-execute) &nbsp;·&nbsp; 🧭 **cross-host attack plan** &nbsp;·&nbsp; 🎓 **Exam Mode** (one toggle off for exams) &nbsp;·&nbsp; 🌐 web-augmented `:online` CVE/exploit lookups &nbsp;·&nbsp; 💸 **usage & cost analytics** &nbsp;·&nbsp; 🧩 stack/version-aware KB. &nbsp; → &nbsp;[Full release notes](CHANGELOG.md)
+
+---
+
+<div align="center">
+
 # 🛰️ recon-deck
 
 **From `nmap` output to an actionable, port-aware recon checklist in under 30 seconds.**
