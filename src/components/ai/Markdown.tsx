@@ -90,6 +90,10 @@ export function Markdown({ text }: { text: string }) {
           return (
             <Tag
               key={i}
+              // Honor the source start number so an ordered list split by
+              // interleaved prose keeps counting (2., 3., …) instead of
+              // restarting at 1. on every fragment.
+              start={b.type === "ol" ? (b.start ?? 1) : undefined}
               style={{
                 margin: "4px 0 8px",
                 paddingLeft: 20,
