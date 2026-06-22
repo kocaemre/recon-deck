@@ -609,6 +609,8 @@ function SekmeButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${label} engagements: ${count}`}
       className="uppercase tracking-[0.08em] font-medium"
       style={{
         flex: 1,

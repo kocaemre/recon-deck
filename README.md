@@ -6,8 +6,8 @@
 Offline. Self-hosted. Every engagement export-ready as Markdown.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.4.1-blue)](CHANGELOG.md)
-[![Schema](https://img.shields.io/badge/schema-0021-orange)](src/lib/db/migrations/)
+[![Version](https://img.shields.io/badge/version-2.5.0-brightgreen)](CHANGELOG.md)
+[![Schema](https://img.shields.io/badge/schema-0023-orange)](src/lib/db/migrations/)
 [![GHCR](https://img.shields.io/badge/ghcr.io-kocaemre%2Frecon--deck-2496ED?logo=docker&logoColor=white)](https://github.com/kocaemre/recon-deck/pkgs/container/recon-deck)
 [![Next.js](https://img.shields.io/badge/Next.js-15.5-black?logo=next.js)](https://nextjs.org)
 [![Offline-first](https://img.shields.io/badge/network-offline_by_default-success)](SECURITY.md)
@@ -28,9 +28,9 @@ Built for **OSCP / HTB students and solo pentesters** who currently juggle 8 bro
 
 <br><br>
 
-  <img src="docs/screenshots/02-engagement-heatmap.png" alt="recon-deck heatmap — 28 ports across one host, KB-driven risk + check counts on each card" width="1100">
+  <img src="docs/media/heatmap.gif" alt="recon-deck port heatmap — paste nmap and every open port becomes a risk-colored card with prefilled commands and tickable checks" width="1100">
   <br>
-  <sub><i>An engagement view: 28 open ports, KB-matched risk colors, per-port check completion. <a href="docs/screenshots/">More screenshots →</a></i></sub>
+  <sub><i>Paste nmap → every open port becomes a KB-driven card: prefilled commands, risk colors, tickable checks. <a href="docs/screenshots/">More screenshots →</a></i></sub>
 </div>
 
 <br>
@@ -39,6 +39,50 @@ Built for **OSCP / HTB students and solo pentesters** who currently juggle 8 bro
 # 30-second smoke test — pulls the image, starts on http://localhost:13337
 curl -sSL https://raw.githubusercontent.com/kocaemre/recon-deck/main/install.sh | sh
 ```
+
+---
+
+## ✨ See it in action
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>🤖 AI “Explain” <sub>(opt-in)</sub></b><br>
+      <sub>Local-first co-pilot streams what a service is and what to check next — it only ever suggests, never runs.</sub><br><br>
+      <img src="docs/media/ai-explain.gif" alt="AI explain a port" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <b>🧭 Cross-host attack plan</b><br>
+      <sub>One ordered plan across every host — which box to hit first, and why.</sub><br><br>
+      <img src="docs/media/cross-host.gif" alt="cross-host attack plan" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>💸 Bring your own model</b><br>
+      <sub>Ollama (local) · OpenAI · OpenRouter — even FREE models, with a live cost estimate.</sub><br><br>
+      <img src="docs/media/model-picker.gif" alt="searchable model picker with pricing" width="100%">
+    </td>
+    <td width="50%" valign="top">
+      <b>📊 Usage &amp; cost analytics</b><br>
+      <sub>Every AI call logged with tokens + cost, per target — all local SQLite, nothing phones home.</sub><br><br>
+      <img src="docs/media/usage.gif" alt="AI usage and cost analytics page" width="100%">
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🆕 New in v2.5.0
+
+> An **optional, off-by-default AI co-pilot** — local-first via Ollama, or any OpenAI-compatible cloud (OpenAI / OpenRouter) when you opt in.
+
+- 🤖 **AI co-pilot** — `Explain` scan output & `Suggest` next commands (KB-grounded). Suggest-never-execute.
+- 🧭 **Cross-host attack plan** — one ordered, prioritized plan across all hosts in an engagement.
+- 🎓 **Exam Mode** — one toggle fully disables AI for OSCP-style exams that forbid it.
+- 🌐 **Web-augmented Explain** — optional OpenRouter `:online` lookups for current CVEs/exploits, with an egress warning.
+- 💸 **Usage & cost analytics** — per-target token + cost ledger at `/settings/usage`, all local SQLite.
+- 🧩 **Stack/version-aware KB** — e.g. Samba 3.0.x surfaces usermap / SambaCry paths automatically.
 
 ---
 
@@ -188,9 +232,9 @@ Image tags: `:latest` and `:X.Y.Z` are stable; `:beta` always points at the newe
 
 ## What it is / What it is NOT
 
-**For OSCP/HTB students and solo pentesters.** Offline. No LLM. Does not run scans — it complements AutoRecon and HackTricks. Think of it as the OSCP-flavored Obsidian for recon: same category as Obsidian, focused on post-scan workflow.
+**For OSCP/HTB students and solo pentesters.** Offline by default. Does not run scans — it complements AutoRecon and HackTricks. Think of it as the OSCP-flavored Obsidian for recon: same category as Obsidian, focused on post-scan workflow. An **optional, off-by-default AI co-pilot** (local-first via Ollama; OpenAI/OpenRouter only if you opt in) can explain scan output and suggest commands — with it disabled (the default) nothing leaves your machine, and **Exam Mode** turns it off with one switch for exams that forbid AI.
 
-**It is NOT** a reporting platform, a team tool, a scanner, an AI assistant, or a mobile app. The intent is deliberate and narrow — see [ROADMAP.md](ROADMAP.md) for the out-of-scope list.
+**It is NOT** a reporting platform, a team tool, a scanner, or a mobile app — and it never runs commands for you (the AI co-pilot only *suggests*; you run things yourself). The intent is deliberate and narrow — see [ROADMAP.md](ROADMAP.md) for the out-of-scope list.
 
 ---
 

@@ -13,11 +13,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
+import { CopyCommand, SECLISTS_INSTALL } from "@/components/CopyCommand";
 
 export function PastePanel() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const router = useRouter();
 
   async function handleSubmit() {
@@ -152,6 +155,11 @@ PORT     STATE SERVICE     VERSION
         />
       </div>
 
+      {/* How-to disclosure — nudges the operator to run a version+script scan
+          so the heatmap risk and the stack/version conditional overlays have
+          data to work with, then paste that output back here. */}
+      <HowToScan open={showHelp} onToggle={() => setShowHelp((v) => !v)} />
+
       {/* Action row */}
       <div className="mt-[14px] flex items-center gap-3">
         <button
@@ -204,6 +212,120 @@ PORT     STATE SERVICE     VERSION
         >
           {error}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Collapsible "how to scan" helper. Recommends the nmap invocation that gives
+ * recon-deck the most to work with — `-sV` version banners feed the version
+ * conditionals (vsftpd/Samba/OpenSSH CVEs) and `-sC` default scripts feed the
+ * stack conditionals (PHP/WordPress/Tomcat…), while `-oN` gives clean text to
+ * paste back. The point is to turn a bare port list into a fingerprinted scan.
+ */
+function HowToScan({
+  open,
+  onToggle,
+}: {
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="mt-[10px]">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="inline-flex items-center gap-1.5"
+        style={{
+          padding: "4px 6px",
+          marginLeft: -6,
+          background: "transparent",
+          border: 0,
+          color: "var(--fg-subtle)",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+        aria-expanded={open}
+      >
+        <HelpCircle size={13} />
+        <span>Which nmap scan should I paste?</span>
+        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      </button>
+
+      {open && (
+        <div
+          className="mt-2"
+          style={{
+            padding: 14,
+            borderRadius: 6,
+            background: "var(--bg-1)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 12.5,
+              color: "var(--fg-muted)",
+              margin: "0 0 12px",
+              lineHeight: 1.6,
+            }}
+          >
+            recon-deck reads a bare port list, but it does far more with a{" "}
+            <span style={{ color: "var(--fg)" }}>versioned, scripted</span> scan:
+            service versions unlock CVE-specific steps (vsftpd 2.3.4, Samba
+            usermap, OpenSSH…) and default-script output lets it auto-detect the
+            web stack and tailor the checklist. Run one of these, then paste the
+            output here.
+          </p>
+
+          <CopyCommand
+            label="Full — all ports, versions + default scripts (recommended)"
+            command="nmap -sCV -p- --min-rate 1000 -oN nmap.txt <TARGET>"
+          />
+          <CopyCommand
+            label="Fast — top 1000 ports, same depth"
+            command="nmap -sCV --top-ports 1000 -oN nmap.txt <TARGET>"
+          />
+
+          <p
+            style={{
+              fontSize: 11.5,
+              color: "var(--fg-subtle)",
+              margin: "10px 0 0",
+              lineHeight: 1.55,
+            }}
+          >
+            Paste the contents of{" "}
+            <span className="mono" style={{ color: "var(--fg-muted)" }}>
+              nmap.txt
+            </span>{" "}
+            above — or scan with{" "}
+            <span className="mono" style={{ color: "var(--fg-muted)" }}>
+              -oX nmap.xml
+            </span>{" "}
+            and paste the XML. Even richer: drop an AutoRecon results{" "}
+            <span className="mono" style={{ color: "var(--fg-muted)" }}>
+              .zip
+            </span>{" "}
+            on the Import panel.
+          </p>
+
+          <p
+            style={{
+              fontSize: 11.5,
+              color: "var(--fg-subtle)",
+              margin: "12px 0 0",
+              lineHeight: 1.55,
+            }}
+          >
+            The <span className="mono" style={{ color: "var(--fg-muted)" }}>ffuf</span>/
+            <span className="mono" style={{ color: "var(--fg-muted)" }}>gobuster</span>{" "}
+            commands recon-deck suggests use SecLists. Don&apos;t have it on your
+            box?
+          </p>
+          <CopyCommand command={SECLISTS_INSTALL.apt} />
+        </div>
       )}
     </div>
   );

@@ -30,6 +30,7 @@
 import type {
   Conditional,
   KbEntry,
+  KnownVuln,
   WhenExpr,
 } from "./schema";
 
@@ -110,13 +111,16 @@ export interface ResolvedEntry {
 
 /**
  * Compare two dotted-numeric versions. Returns -1 / 0 / 1 like a usual
- * comparator. Non-numeric segments are coerced to 0 so an exotic build
- * suffix doesn't poison the comparison; KB authors who need exotic
- * matching should use a different predicate.
+ * comparator. Each segment is reduced to its leading integer, so a build
+ * suffix attached to a number is preserved at that position rather than
+ * zeroed — `"7.7p1"` parses as `[7, 7]`, not `[7, 0]`. This matters for
+ * services whose banner always carries a portable suffix (OpenSSH `pN`,
+ * Samba/MySQL distro tags). A segment with no leading digit (e.g. a bare
+ * "Ubuntu" token from a multi-word banner) still collapses to 0.
  */
 function compareVersions(a: string, b: string): number {
-  const pa = a.replace(/^v/i, "").split(/[.\s]/).map((n) => Number(n) || 0);
-  const pb = b.replace(/^v/i, "").split(/[.\s]/).map((n) => Number(n) || 0);
+  const pa = a.replace(/^v/i, "").split(/[.\s]/).map((n) => parseInt(n, 10) || 0);
+  const pb = b.replace(/^v/i, "").split(/[.\s]/).map((n) => parseInt(n, 10) || 0);
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i++) {
     const da = pa[i] ?? 0;
@@ -137,7 +141,7 @@ function compareVersions(a: string, b: string): number {
  * treated as a substring match — escape hatch for KB authors who want
  * to anchor on an exact build string.
  */
-function versionExpressionMatches(expr: string, observed: string): boolean {
+export function versionExpressionMatches(expr: string, observed: string): boolean {
   const trimmed = expr.trim();
   if (!trimmed) return true;
 
@@ -170,8 +174,15 @@ function versionExpressionMatches(expr: string, observed: string): boolean {
     return observed.toLowerCase().startsWith(exact.toLowerCase());
   }
 
+  // Real nmap banners can carry a leading non-numeric token in the version
+  // field — Samba parses as product "Samba", version "smbd 3.0.20-Debian"
+  // (beta-test B-4). For the ORDERED comparisons, anchor on the first
+  // dotted-numeric run so that leading word doesn't collapse the major version
+  // to 0 (which made every SMB version-gated conditional silently miss). The
+  // exact/substring escape-hatch below still matches the raw observed string.
+  const observedNumeric = observed.match(/\d+(?:\.\d+)*/)?.[0] ?? observed;
   for (const { op, ver } of ops) {
-    const cmp = compareVersions(observed, ver);
+    const cmp = compareVersions(observedNumeric, ver);
     switch (op) {
       case "<=": if (cmp > 0) return false; break;
       case "<":  if (cmp >= 0) return false; break;
@@ -317,4 +328,33 @@ export function applyConditionals(
   }
 
   return { checks, commands, active, inactive };
+}
+
+/* -------------------------------------------------------------------------- */
+/* known_vulns matching                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Select the KB `known_vulns` advisories that apply to an observed service.
+ *
+ * Two-stage gate so the range-based form stays consistent with the version-gated
+ * conditionals (beta-test B-5 — substring-only entries under-matched ranged
+ * CVEs like SambaCry on Samba 4.3.x):
+ *   1. `match` is a case-insensitive substring of the `product version` blob —
+ *      the product anchor (KB authors scope this tightly to avoid over-match).
+ *   2. If `version` is set, the observed version must ALSO satisfy that
+ *      expression. Omitting `version` keeps the legacy substring-only behaviour.
+ */
+export function matchKnownVulns(
+  vulns: ReadonlyArray<KnownVuln>,
+  product: string | null,
+  version: string | null,
+): KnownVuln[] {
+  const blob = [product, version].filter(Boolean).join(" ").toLowerCase();
+  if (!blob) return [];
+  return vulns.filter((v) => {
+    if (!blob.includes(v.match.toLowerCase())) return false;
+    if (v.version) return versionExpressionMatches(v.version, version ?? "");
+    return true;
+  });
 }

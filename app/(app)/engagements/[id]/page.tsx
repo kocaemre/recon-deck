@@ -18,7 +18,7 @@ import {
   effectiveAppState,
   listFingerprintsForPorts,
 } from "@/lib/db";
-import { getKb, matchPort, applyConditionals } from "@/lib/kb";
+import { getKb, matchPort, applyConditionals, matchKnownVulns } from "@/lib/kb";
 import { interpolateWordlists } from "@/lib/kb/wordlists";
 import { EngagementHeader } from "@/components/EngagementHeader";
 import { EngagementResetExpand } from "@/components/EngagementResetExpand";
@@ -26,6 +26,7 @@ import { EngagementContextBridge } from "@/components/EngagementContextBridge";
 import { KeyboardShortcutHandler } from "@/components/KeyboardShortcutHandler";
 import { WarningBanner } from "@/components/WarningBanner";
 import { EngagementHeatmap } from "@/components/EngagementHeatmap";
+import { SummarizeEngagementButton } from "@/components/SummarizeEngagementButton";
 import { EngagementExtras } from "@/components/EngagementExtras";
 import { FindingsPanel } from "@/components/FindingsPanel";
 import { WriteupPanel } from "@/components/WriteupPanel";
@@ -364,16 +365,14 @@ export default async function EngagementPage({
     // substring of the port's product+version line — substrings without a
     // strong anchor ("Apache" alone) would over-match, so the KB authors
     // are expected to scope their `match` strings tightly.
-    const productVersion = [p.product, p.version]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const knownVulns = (kbEntry.known_vulns ?? [])
-      .filter((v) =>
-        productVersion.length > 0 &&
-        productVersion.includes(v.match.toLowerCase()),
-      )
-      .map((v) => ({ match: v.match, note: v.note, link: v.link }));
+    // Range-aware matcher (beta-test B-5): entries may carry a `version`
+    // expression so a ranged CVE no longer needs one brittle substring per
+    // build; entries without it keep the legacy substring-only behaviour.
+    const knownVulns = matchKnownVulns(
+      kbEntry.known_vulns ?? [],
+      p.product,
+      p.version,
+    ).map((v) => ({ match: v.match, note: v.note, link: v.link }));
 
     // v1.4.0 #10: surface KB-declared default credentials so the
     // operator can drop straight into a hydra brute attempt without
@@ -457,6 +456,10 @@ export default async function EngagementPage({
       // once (hasMultipleScans). Single-scan engagements report `null`
       // so the heatmap renders the legacy chip-free tile.
       isClosed: p.closed_at_scan_id != null,
+      // nmap `filtered` ports are part of the attack surface but are NOT
+      // confirmed open — surface them distinctly so the count/label don't
+      // overstate "open". `open|filtered` stays counted as open (ambiguous).
+      isFiltered: p.state === "filtered",
       isNew:
         hasMultipleScans &&
         latestScanId !== null &&
@@ -499,6 +502,32 @@ export default async function EngagementPage({
       const structured = structuredByKey.get(`host:${hs.script_id}`);
       return structured ? { ...hs, structured } : hs;
     });
+
+  // Multi-host AI summary: group every host's currently-open ports (closed
+  // ports excluded, mirroring the per-host `!isClosed` filter) so the
+  // cross-host "summarize all hosts" button can send the whole engagement.
+  // Built only for multi-host engagements; single-host falls back to the
+  // per-host summary that already covers the only host.
+  const allHostsSummary = isMultiHost
+    ? engagement.hosts.map((h) => ({
+        target: h.hostname ?? h.ip,
+        ports: engagement.ports
+          .filter((p) => p.host_id === h.id && p.closed_at_scan_id == null)
+          .sort((a, b) => a.port - b.port)
+          .map((p) => ({
+            port: p.port,
+            protocol: p.protocol,
+            service: p.service,
+            version:
+              [p.product, p.version].filter(Boolean).join(" ").trim() || null,
+            scanOutput: p.scripts
+              .filter((s) => !s.is_host_script)
+              .map((s) => `${s.script_id}: ${s.output}`)
+              .join("\n")
+              .slice(0, 1200),
+          })),
+      }))
+    : undefined;
 
   const paletteContextPorts = portData.map((p) => ({
     id: p.id,
@@ -630,6 +659,25 @@ export default async function EngagementPage({
           <HostScriptCard hostScripts={enrichedHostScripts} />
         </div>
       )}
+
+      <SummarizeEngagementButton
+        engagementId={engagement.id}
+        target={targetHostname ?? targetIp}
+        ports={portData
+          .filter((p) => !p.isClosed)
+          .map((p) => ({
+            port: p.port,
+            protocol: p.protocol,
+            service: p.service,
+            version:
+              [p.product, p.version].filter(Boolean).join(" ").trim() || null,
+            scanOutput: p.scripts
+              .map((s) => `${s.script_id}: ${s.output}`)
+              .join("\n")
+              .slice(0, 1200),
+          }))}
+        allHosts={allHostsSummary}
+      />
 
       <EngagementHeatmap
         engagementId={engagement.id}

@@ -2,7 +2,422 @@
 
 All notable changes to recon-deck. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0] — 2026-06-22
+
+First stable of the 2.5.x line — rolls up the `beta.1`–`beta.19` series. Headline: an **opt-in, local-first AI co-pilot**, stack/version-aware KB overlays, findings in every export, and a local usage/cost ledger — all while staying offline-by-default.
+
+### Added
+
+- **AI co-pilot (opt-in, off by default).** `Explain` scan / NSE output and `Suggest` next commands — KB-grounded, suggest-never-execute. Local-first via Ollama; OpenAI / OpenRouter only if you opt in. Prompts are injection-hardened (untrusted scan output is fenced) and the API key never leaves the server.
+- **Cross-host attack plan** — one ordered, prioritized plan across every host in a multi-host engagement (plus a single-host summary).
+- **Exam Mode** — one toggle hard-disables all AI, for OSCP-style exams that forbid it.
+- **Web-augmented Explain (`:online`)** — optional OpenRouter live web search for current CVEs / exploits. Per-call, OpenRouter-only, egress-warned, hidden under Exam Mode.
+- **Searchable model picker** — provider model list with per-token pricing, a per-target cost estimate, FREE badges, and curated recommendations.
+- **AI usage & cost analytics** at `/settings/usage` — per-target token + cost ledger, all local SQLite.
+- **Stack/version-aware KB conditionals** — web stack (80/443/8080) and version-gated FTP / SSH / SMB / MySQL overlays (vsftpd 2.3.4 backdoor, Samba usermap / SambaCry, OpenSSH user-enum / regreSSHion, MySQL CVE-2012-2122).
+- **Findings in Markdown / JSON / HTML exports** + a `findings-csv` alias; exports now carry the real app version.
+- Opt-in **onboarding AI step**, and **Markdown-rendered AI panels** with ordered "game plan" summaries.
+
+### Changed
+
+- Default model is the non-reasoning `gpt-4o-mini`; refreshed OpenRouter recommendations. Larger token budget so reasoning models don't stream empty. One-click **"switch model & retry"** on a provider error.
+
+### Fixed
+
+- `filtered` ports are no longer counted or labeled as "open" on the heatmap.
+- SMB version-gated conditionals + range-aware `known_vulns` now fire on real Samba banners (a leading `smbd` token no longer zeroes the version).
+- Ordered lists in AI panels no longer restart at "1." when split by prose.
+
+### Migrations
+
+- Schema **0023** (`ai_usage` ledger). Forward-only; applies at boot.
+
+> Per-beta detail for the whole 2.5.0 series is preserved in the `2.5.0-beta.*` entries below.
+
+## [2.5.0-beta.19] — 2026-06-20
+
+Nineteenth beta. Opt-in web-augmented Explain + a Markdown polish from the
+beta.18 test.
+
+### Added
+
+- **Opt-in web-augmented Explain (`:online`).** OpenRouter runs a live web
+  search when the model id carries a `:online` suffix — useful for "is there a
+  current CVE / exploit / Metasploit module for this version?". Surfaced as a
+  deliberate per-call **"Search web"** button next to Explain, shown **only when
+  the provider is OpenRouter**. Never ambient: the proxy appends `:online` only
+  when an explicit `web: true` arrives *and* the provider is OpenRouter. It
+  sends scan-derived queries off-host, so the button carries an egress warning,
+  the panel header marks `:online · 🌐 web`, and it stays off by default and
+  hidden under Exam Mode (AI is fully gated there). The `:online` model is
+  recorded verbatim in the usage ledger so its higher cost is visible in
+  `/settings/usage`. Suggest stays KB-grounded — web is Explain-only.
+
+### Changed
+
+- **Suggest card "why" now renders Markdown** — backticked flags/paths and
+  emphasis in the rationale display formatted, consistent with the
+  Explain/Summary panels.
+
+## [2.5.0-beta.18] — 2026-06-20
+
+Eighteenth beta. AI panel readability follow-ups from the beta.17 test.
+
+### Added
+
+- **Markdown rendering in the AI panels.** The co-pilot replies in Markdown, but
+  Explain / Summary printed it raw (literal `**bold**`, `### headings`, `-`
+  bullets). A tiny dependency-free renderer now formats the subset the model
+  uses (headings, bold, italic, inline code, bullet / numbered lists).
+  **XSS-safe by construction:** model output (which can echo attacker-controlled
+  scan text) renders to React text nodes only — no `dangerouslySetInnerHTML`,
+  and links are deliberately not turned into clickable anchors.
+- **Ordered "game plan" summaries.** Both the single-host and cross-host summary
+  prompts now ask for a numbered, sequential plan — what to do first, then next,
+  then pivot — each step naming the target service, the action, and a short why,
+  ending with a one-line best-first-move call-out. Renders as a real ordered
+  list with the new Markdown renderer.
+
+## [2.5.0-beta.17] — 2026-06-20
+
+Seventeenth beta. Rebuild of beta.16 (its multi-arch build was cancelled on a
+stuck arm64 emulation step) plus documentation. Same app changes as beta.16
+(cross-host AI summary, installer Start/Uninstall hints).
+
+### Documentation
+
+- **README — release-channel mechanics.** The Upgrading section now maps each
+  channel to its Docker tags, explains the channel is chosen per `install.sh`
+  run (not baked into the image), and adds an explicit forward-only-migration
+  downgrade caveat (back up the volume before going back a channel across a
+  schema bump).
+
+## [2.5.0-beta.16] — 2026-06-20
+
+Sixteenth beta. Cross-host AI summary + container-management ergonomics.
+
+### Added
+
+- **Cross-host AI summary.** On a multi-host engagement the AI summary now
+  offers a second button — **"summarize all N hosts"** — that produces one
+  prioritized plan across every host's open ports (which host/service to attack
+  first, version-specific issues, likely pivot paths), alongside the existing
+  per-host summary. Each port's scan output stays injection-fenced; budget is
+  capped (≤12 hosts, ≤60 ports total). Single-host engagements are unchanged.
+  Logged to the `ai_usage` ledger as a `summary` call.
+
+### Changed
+
+- **`install.sh` now prints Start + Uninstall hints** at the end of a run
+  (alongside Stop / Logs / Update), so managing the container after a
+  `docker stop` no longer requires a trip to the README.
+- **Roadmap:** added **MCP (Model Context Protocol) support** as a Future
+  Considerations direction — read-only first, opt-in, loopback-only,
+  Exam-Mode-aware, suggest-never-execute. Not a commitment.
+
+## [2.5.0-beta.15] — 2026-06-20
+
+Fifteenth beta. Findings from a hands-on beta.14 test against real scan data
+(live nmap/AutoRecon + published CTF banners), plus AI usage analytics.
+
+### Added
+
+- **AI usage & cost analytics** at `/settings/usage`. A new `ai_usage` ledger
+  (migration `0023`) records one row per AI call — model, token counts, and the
+  OpenRouter-reported cost — tagged with engagement/host. The page shows totals,
+  spend by model / target / task, and a recent-calls table. All local SQLite;
+  cost shows only when the provider reports it.
+- **Engagement-level "summarize attack surface"** — an opt-in
+  `summarize_engagement` task that produces one prioritized plan across all open
+  ports of the active host. Each port's scan output is injection-fenced
+  (per-port clip + 40-port cap) and it streams like Explain.
+- **One-click "Switch model & retry"** on an AI provider error. On OpenRouter
+  the Explain/Suggest panels offer the first curated recommended model that
+  isn't current — explicit (button + target model in the label), never an
+  automatic paid swap.
+- **`npm run start:standalone`** — a cross-platform local launcher for the
+  `output: "standalone"` build (copies `public/` + `.next/static`, binds
+  loopback by default), so a production-parity local run no longer trips the
+  `next start` standalone warning.
+- **`known_vulns` ranged matching.** `known_vulns` entries now support an
+  optional `version` expression (same syntax as `nmap_version_matches`), so
+  ranged CVEs like SambaCry are advised consistently with the version-gated
+  conditionals. Substring-only entries keep working.
+
+### Fixed
+
+- **SMB version-gated conditionals never fired on real Samba boxes.** The nmap
+  parser yields `version="smbd 3.0.20-Debian"`; the leading `smbd` token made
+  the comparator read the major as `0`, so `>= 3.0.0` failed and the Samba
+  usermap / SambaCry conditionals silently missed. Ordered comparisons now
+  anchor on the first dotted-numeric run in the observed banner (the raw-string
+  exact/substring escape hatch is untouched). Verified live: all 8
+  ftp/ssh/smb/mysql conditionals fire.
+- **Filtered ports were mislabelled as open.** A nmap `filtered` port was
+  counted under "N open ports" with no visual distinction. The heatmap header
+  now reads `N open · M filtered` and filtered tiles carry an inline `filtered`
+  tag.
+- **Friendly AI provider errors.** A free-model `429` surfaced as raw upstream
+  JSON; `upstreamError()` now maps `429` → rate-limit guidance and `401/403` →
+  key guidance, across stream/chat/listModels.
+- **Reasoning-model output dropped.** Reasoning models count hidden reasoning
+  tokens against `max_tokens`; at 700 a heavy prompt could stream zero content.
+  `DEFAULT_MAX_TOKENS` raised to 1500 (engagement summary 2048) and the default
+  model reverts to the non-reasoning `gpt-4o-mini` (reasoning models stay
+  recommended but flagged, never the default).
+
+## [2.5.0-beta.14] — 2026-06-20
+
+Fourteenth beta. UI/UX polish pass from the beta QA.
+
+### Added
+
+- **AI Suggest panel niceties.** Each suggested command gets an **Add to My
+  Commands** button (saved against the port), a **Copy all safe** bulk action,
+  and a tooltip explaining the SAFE/INTRUSIVE badge. Both Explain and Suggest
+  now have a **"what gets sent"** disclosure so you can see exactly what leaves
+  the machine (port + scan output + baseline KB commands) before trusting a
+  cloud provider.
+
+### Fixed
+
+- **AutoRecon warning banner was faint on the light theme** — it now uses the
+  theme-aware `--risk-med` colour instead of a fixed light amber.
+- **Writeup panel** now scrolls into view and focuses its textarea when opened,
+  so it's obvious it expanded on a long engagement page.
+- **Sidebar Active/Archived tabs** carry `aria-label` + `aria-pressed`, so the
+  count is announced as "Active engagements: N" instead of "ACTIVE1".
+
+## [2.5.0-beta.13] — 2026-06-19
+
+Thirteenth beta. Export-alias + test-robustness loose ends.
+
+### Added
+
+- **`findings-csv` export alias.** The csv export is the findings CSV (the menu
+  labels it "Findings CSV"), so `/api/engagements/:id/export/findings-csv` now
+  works as an alias for `/export/csv` — same generator, same `.csv` file. The
+  `csv` route is unchanged.
+
+### Fixed
+
+- **probe tests gave false failures under root.** The read-only-directory cases
+  rely on a `0o444` chmod denying writes, but root bypasses permission bits, so
+  they failed when the suite ran as root (CI containers / Docker). They now skip
+  under root (`process.getuid() === 0`); non-root dev/CI exercises them fully.
+
+## [2.5.0-beta.12] — 2026-06-19
+
+Twelfth beta. Findings make it into the shareable reports.
+
+### Fixed
+
+- **Findings were dropped from the Markdown / JSON / HTML exports.** They
+  rendered in CSV / SysReptor / PwnDoc but vanished from the three formats
+  operators actually share — a finding added in the UI silently disappeared
+  from the report. All three now carry a severity-sorted Findings section with
+  the affected host/port resolved (markdown `## Findings`, an HTML
+  `<section class="findings">`, and a top-level `findings[]` in JSON that's
+  always present for a stable schema). Engagements with no findings keep the
+  prior layout byte-for-byte.
+- **Exports stamped `recon_deck_version: "0.0.0-dev"`.** Same root cause as the
+  earlier health-endpoint fix — `npm_package_version` is unset under
+  `node server.js`. Exports now carry the real `APP_VERSION` (inlined from
+  package.json at build).
+
+## [2.5.0-beta.11] — 2026-06-18
+
+Eleventh beta. Custom host-port actually works now.
+
+### Fixed
+
+- **`421 Misdirected Request` on a custom host-port.** The SEC-01 host-header
+  allowlist was built from the container's internal port (13337), so accessing
+  a custom mapping (`RECON_DECK_PORT=13339` → `-p 13339:13337`) sent
+  `Host: localhost:13339` and got rejected. Loopback hostnames (localhost /
+  127.0.0.1 / [::1]) are now accepted on any port — safe, since DNS-rebinding
+  turns on the hostname, not the port; non-loopback hosts still need an exact
+  `RECON_DECK_TRUSTED_HOSTS` match.
+- **Wrong `RECON_DECK_PORT` hint in the installer.** It put the env on `curl`
+  instead of the piped `sh` (where the script reads it); corrected to
+  `curl … | RECON_DECK_PORT=13338 sh -s -- --beta`.
+
+## [2.5.0-beta.10] — 2026-06-18
+
+Tenth beta. Free-model recommendations for the AI co-pilot.
+
+### Added
+
+- **Free OpenRouter models in the recommended set.** The model picker now
+  pins current zero-cost OpenRouter tiers that suit recon-deck's tasks —
+  command generation + structured output, and neutral on offensive-security
+  prompts rather than refusing: `qwen/qwen3-coder:free`,
+  `openai/gpt-oss-120b:free`, `nousresearch/hermes-3-llama-3.1-405b:free`, and
+  `meta-llama/llama-3.3-70b-instruct:free`. Surfaced only when the provider
+  actually lists the id, so OpenAI/Ollama users are unaffected.
+- **FREE badge in the model picker.** Any $0 model (prompt + completion price
+  both 0) now shows a green FREE badge instead of "$0.00/$0.00", so budget
+  options stand out — including uncensored free models you find via search.
+
+## [2.5.0-beta.9] — 2026-06-18
+
+Ninth beta. Installer + version-reporting fixes from the beta-image QA pass.
+
+### Fixed
+
+- **Installer aborted under `sh`.** `install.sh` shipped `set -euo pipefail`,
+  but the documented one-liner pipes to `sh` (dash on Debian/Ubuntu), which
+  died with `set: Illegal option -o pipefail` before doing anything. The script
+  is now POSIX (`#!/bin/sh` + `set -eu`, no other bashisms), so the documented
+  `curl … | sh -s -- --beta` works unchanged.
+- **`/api/health` reported `"version":"unknown"`.** `npm_package_version` isn't
+  set under `node server.js`; the version is now inlined from package.json at
+  build via next.config (`APP_VERSION`), so health reports the real release.
+- **Onboarding boot mockup showed a stale `v2.0.1`.** It now tracks the real
+  version from the same build-time constant.
+
+### Added
+
+- **`RECON_DECK_PORT` env override in the installer.** Run on a different host
+  port when 13337 is taken (`RECON_DECK_PORT=13338 curl … | sh -s -- --beta`),
+  with an actionable hint on a port clash instead of a raw docker error.
+
+## [2.5.0-beta.8] — 2026-06-18
+
+Eighth beta. Nudges operators to install SecLists when it's missing.
+
+### Added
+
+- **SecLists install nudge.** recon-deck's gobuster/ffuf/smtp-user-enum
+  commands point at SecLists, so a box without it just hits "wordlist not
+  found". A concrete, copyable install nudge now appears in three places:
+  Settings → Detected tools (a callout shown only when SecLists isn't
+  detected, with `apt install` + `git clone` and a pointer to the Docker
+  bind-mount / Wordlists override), the onboarding Local-paths step, and the
+  paste panel's "how to scan" helper. Backed by a shared `CopyCommand`
+  component so every command pill copies identically.
+
+## [2.5.0-beta.7] — 2026-06-18
+
+Seventh beta. Version-gated conditionals + a scan-quality nudge on the paste panel.
+
+### Added
+
+- **Version-gated KB conditionals on ports 21 / 445 / 22 / 3306.** Using the
+  resolver's `nmap_version_matches` predicate, the KB now flags build-specific
+  vulnerabilities the moment nmap pins the version: vsftpd 2.3.4 backdoor
+  (CVE-2011-2523) and ProFTPD 1.3.5 mod_copy (CVE-2015-3306) on FTP; Samba
+  usermap_script (CVE-2007-2447) and SambaCry (CVE-2017-7494, which also appends
+  `smb-vuln-cve-2017-7494` to the nmap scan) on SMB; OpenSSH username enum
+  (CVE-2018-15473) and regreSSHion (CVE-2024-6387) on SSH; and the MySQL 5.5
+  memcmp() auth bypass (CVE-2012-2122).
+- **"Which nmap scan should I paste?" helper** on the paste panel. A collapsible
+  hint recommends a versioned, scripted scan (`nmap -sCV -p- -oN nmap.txt`) with
+  one-click copy, explaining that `-sV` versions feed the CVE overlays and `-sC`
+  scripts feed the web-stack overlays — then nudges the operator to run it and
+  paste the result back. Closes the loop on the conditional KB: the overlays only
+  fire on fingerprinted scans, so the paste surface now steers toward producing one.
+
+### Fixed
+
+- **Version comparison no longer drops suffixed minors.** `compareVersions` now
+  reduces each segment to its leading integer, so an OpenSSH `"7.7p1"` banner
+  parses as `[7, 7]` instead of `[7, 0]` — without this the SSH version ranges
+  above mis-fired on 7.7/7.8/7.9.
+
+## [2.5.0-beta.6] — 2026-06-18
+
+Sixth beta. The conditional KB finally ships content.
+
+### Added
+
+- **Stack-aware web conditionals on ports 80 / 443 / 8080.** The conditional
+  resolver shipped in 2.4.0 but no KB carried any overlay — every port had an
+  empty conditional block. This lands the first real content across all three
+  web surfaces: each detects the running stack from nmap NSE output (server
+  header / title / generator) or AutoRecon `tech` fingerprints and overlays
+  focused checks plus a broadened brute-force extension list for **PHP,
+  WordPress, ASP.NET, Java/Tomcat, Python, and Ruby**. Port 8080 leads with
+  Java/Tomcat/Jenkins (including a Groovy-console RCE check) since it usually
+  fronts a Java app server. Baseline checklists are untouched when nothing
+  matches. (Supersedes #42; closes the conditional-content gap from #14.)
+
+## [2.5.0-beta.5] — 2026-06-18
+
+Fifth beta. Onboarding now introduces the AI co-pilot.
+
+### Added
+
+- **Onboarding "AI assistant" step.** First-run onboarding grew from four steps
+  to five (`Scope → Tour → Paths → AI assistant → Updates`) so new operators
+  actually discover the v2.5.0 co-pilot and Exam Mode. The step is **off by
+  default** and local-first: skipping it (or leaving the toggle unchecked) ships
+  with no AI, identical to prior behaviour. Enabling it reveals provider choice
+  (Ollama local / OpenAI / OpenRouter), endpoint, model, and a write-only API
+  key for cloud providers — with an explicit egress warning when scan output
+  would leave the host, and a note pointing OSCP candidates at Exam Mode (which
+  hard-disables only the AI, not the internet or HackTricks). The tour's Settings
+  preview now lists the AI assistant. All settings remain editable later in
+  Settings → AI assistant.
+
+## [2.5.0-beta.4] — 2026-06-18
+
+Fourth beta. Polishes the AI model selection.
+
+### Added
+
+- **Searchable model picker** in Settings → AI assistant: a search box over the
+  provider's full model list, a **Recommended** section pinned on top (curated
+  cheap/strong models for explain + suggest, including a free option), per-model
+  input/output price shown inline and on hover (with context length), and a live
+  **"≈ $X for a typical target"** cost estimate for the selected model. Powered
+  by OpenRouter's per-model pricing from `/models`; local providers (no pricing)
+  simply omit the figures. Free-text model entry still works.
+
+## [2.5.0-beta.3] — 2026-06-17
+
+Third beta. Adds the second AI feature on top of beta.2's Explain.
+
+### Added
+
+- **"Suggest commands" (AI, KB-grounded).** On a port's NSE output, the
+  assistant proposes recon commands tailored to the scan — grounded in the
+  port's vetted KB commands so it adapts proven commands instead of inventing
+  them. Returns a validated JSON list rendered as copyable cards with a
+  safe/intrusive risk badge; suggest-only, nothing is executed. Same opt-in
+  gate, server-built prompt, untrusted-output fencing, and Exam Mode hiding as
+  Explain.
+
+## [2.5.0-beta.2] — 2026-06-17
+
+Second beta. The **optional AI co-pilot** lands (opt-in, local-first) along
+with **Exam Mode**. Off by default — the offline experience is unchanged
+unless you enable it.
+
+### Added
+
+- **AI co-pilot (opt-in, OFF by default).** Configure under Settings → AI
+  assistant: provider (local **Ollama** default, or **OpenAI** / **OpenRouter**),
+  base URL, model, and a write-only API key. When enabled it defaults to a
+  local model, so scan data stays on your machine unless you pick a cloud
+  provider (which shows an explicit egress warning). The API key never leaves
+  the server.
+  - **"Explain this"** on a port's NSE output — streams a plain-language
+    summary of the scan. Suggest-only: the model has no tools and never runs
+    anything; output carries a "verify" disclaimer.
+  - Server-proxied (`/api/ai`) so the browser never talks to the provider
+    directly; the system prompt is built server-side and scan output is fenced
+    as untrusted data with forged-delimiter defanging (prompt-injection
+    hardening). Inherits the per-IP rate limit.
+- **Exam Mode.** One toggle hard-disables the AI assistant (for exams that
+  forbid AI, e.g. OSCP) and shows an app-wide "EXAM MODE · AI OFF" badge.
+  Internet research / HackTricks / searchsploit are untouched — only the AI is
+  turned off.
+
+## [2.5.0-beta.1] — 2026-06-17
+
+First build on the new beta channel. Infrastructure only so far — the 2.5.0
+feature work (AI co-pilot, Exam Mode, …) will land in subsequent betas.
 
 ### Added
 

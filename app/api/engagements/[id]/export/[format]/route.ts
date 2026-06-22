@@ -46,6 +46,9 @@ const FORMATS = {
   json: { ext: "json", contentType: "application/json; charset=utf-8" },
   html: { ext: "html", contentType: "text/html; charset=utf-8" },
   csv: { ext: "csv", contentType: "text/csv; charset=utf-8" },
+  // Alias for `csv` — the csv export IS the findings CSV, and the export menu
+  // labels it "Findings CSV", so the self-documenting URL works too.
+  "findings-csv": { ext: "csv", contentType: "text/csv; charset=utf-8" },
   sysreptor: {
     ext: "sysreptor.json",
     contentType: "application/json; charset=utf-8",
@@ -63,6 +66,7 @@ function isFormat(x: string): x is Format {
     x === "json" ||
     x === "html" ||
     x === "csv" ||
+    x === "findings-csv" ||
     x === "sysreptor" ||
     x === "pwndoc"
   );
@@ -146,6 +150,7 @@ export async function GET(
         body = generateHtml(vm);
         break;
       case "csv":
+      case "findings-csv":
         body = generateFindingsCsv(vm);
         break;
       case "sysreptor":

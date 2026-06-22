@@ -141,3 +141,12 @@ export {
   type FingerprintSource,
   type FingerprintType,
 } from "./fingerprints-repo";
+export {
+  recordAiUsage,
+  listAiUsage,
+  buildUsageReport,
+  type RecordAiUsageInput,
+  type UsageReport,
+  type UsageTotals,
+  type UsageGroup,
+} from "./ai-usage-repo";

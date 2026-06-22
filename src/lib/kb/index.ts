@@ -39,6 +39,8 @@ export {
 export {
   applyConditionals,
   evaluateWhen,
+  matchKnownVulns,
+  versionExpressionMatches,
   type ResolveContext,
   type ResolveContextPort,
   type ResolveContextScript,

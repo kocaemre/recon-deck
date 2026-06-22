@@ -38,6 +38,23 @@ export function WriteupPanel({ engagementId, initialWriteup }: Props) {
   const [pending, setPending] = useState(false);
   const lastSavedRef = useRef(initialWriteup);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // P6: opening the (collapsible) panel on a long engagement page left the
+  // operator unsure it opened — pull the textarea into view and focus it.
+  function toggleOpen() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      window.setTimeout(() => {
+        textareaRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        textareaRef.current?.focus();
+      }, 50);
+    }
+  }
 
   const dirty = draft !== lastSavedRef.current;
 
@@ -98,7 +115,7 @@ export function WriteupPanel({ engagementId, initialWriteup }: Props) {
     >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         className="flex items-center gap-2"
         style={{
           width: "100%",
@@ -132,6 +149,7 @@ export function WriteupPanel({ engagementId, initialWriteup }: Props) {
       {open && (
         <div style={{ padding: "0 14px 14px" }}>
           <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(ev) => setDraft(ev.target.value)}
             placeholder="Executive summary, narrative, findings rationale… plain text. Lands at the top of the Markdown export and in the SysReptor / PwnDoc notes field."

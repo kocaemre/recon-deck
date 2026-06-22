@@ -102,5 +102,6 @@
   },
   "notes": {
     "80/tcp": "Looked at main page, see screenshot-01.png in HackTricks folder"
-  }
+  },
+  "findings": []
 }

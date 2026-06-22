@@ -29,7 +29,7 @@ export function UpdatesStep({
         className="mono uppercase tracking-[0.08em] font-medium"
         style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginBottom: 14 }}
       >
-        STEP 04 / 04 · UPDATES
+        STEP 05 / 05 · UPDATES
       </div>
       <h1
         className="font-semibold"

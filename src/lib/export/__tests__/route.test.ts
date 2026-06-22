@@ -67,12 +67,16 @@ vi.mock("@/lib/export/json", () => ({
 vi.mock("@/lib/export/html", () => ({
   generateHtml: vi.fn(() => "<!DOCTYPE html>"),
 }));
+vi.mock("@/lib/export/findings-csv", () => ({
+  generateFindingsCsv: vi.fn(() => "severity,title\r\n"),
+}));
 
 import { GET } from "../../../../app/api/engagements/[id]/export/[format]/route";
 import { getById } from "@/lib/db";
 import { generateMarkdown } from "@/lib/export/markdown";
 import { generateJson } from "@/lib/export/json";
 import { generateHtml } from "@/lib/export/html";
+import { generateFindingsCsv } from "@/lib/export/findings-csv";
 
 const FIXTURE_ENG = {
   id: 1,
@@ -148,6 +152,24 @@ describe("GET /api/engagements/[id]/export/[format]", () => {
         "text/html; charset=utf-8",
       );
       expect(await res.text()).toBe("<!DOCTYPE html>");
+    });
+
+    it("returns 200 + text/csv for format=csv", async () => {
+      vi.mocked(getById).mockReturnValue(FIXTURE_ENG as any);
+      const res = await GET(makeReq(), makeParams("1", "csv"));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
+      expect(vi.mocked(generateFindingsCsv)).toHaveBeenCalledTimes(1);
+    });
+
+    it("accepts findings-csv as an alias for csv", async () => {
+      vi.mocked(getById).mockReturnValue(FIXTURE_ENG as any);
+      const res = await GET(makeReq(), makeParams("1", "findings-csv"));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
+      // filename keeps the .csv extension
+      expect(res.headers.get("Content-Disposition")).toContain(".csv");
+      expect(vi.mocked(generateFindingsCsv)).toHaveBeenCalledTimes(1);
     });
 
     it("sets Cache-Control: no-store", async () => {

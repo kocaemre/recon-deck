@@ -72,7 +72,17 @@ export const DefaultCredSchema = z
 
 export const KnownVulnSchema = z
   .object({
+    /** Case-insensitive substring tested against nmap's `<product> <version>`
+     *  blob — the product anchor (e.g. "Samba smbd", "vsFTPd"). */
     match: z.string().min(1),
+    /**
+     * Optional version expression (same syntax as conditional
+     * `nmap_version_matches`: "2.3.4", "< 7.7", ">= 3.5.0 < 4.6.4"). When set,
+     * the advisory only surfaces if the port's version ALSO satisfies it — so a
+     * range-bounded CVE (SambaCry 3.5.0–4.6.4) no longer needs one brittle
+     * substring entry per build. Omit for an exact/substring-only advisory.
+     */
+    version: z.string().min(1).optional(),
     note: z.string().min(1),
     link: httpUrl("known_vulns link must use https:// or http://"),
   })

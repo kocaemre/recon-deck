@@ -78,14 +78,14 @@ Stated explicitly to avoid unearned trust:
 
 ## Offline Guarantee (OPS-03)
 
-**recon-deck's server process makes zero outbound HTTP requests.**
+**In its default configuration, recon-deck's server process makes zero outbound HTTP requests.** Every feature that can reach the network is opt-in and OFF by default:
 
-- `NEXT_TELEMETRY_DISABLED=1` is set in the Dockerfile.
-- The codebase contains no `fetch(...)` / `axios.get(...)` / `https.request(...)` calls to external hosts from server code.
+- `NEXT_TELEMETRY_DISABLED=1` is set in the Dockerfile. No usage pings, no crash reports.
+- **Update check** (`app_state.update_check`, default off) — queries the GitHub releases API only when the operator enables it; short-circuits server-side when off so the client never even fetches.
+- **AI co-pilot** (`app_state.ai_enabled`, default off) — when enabled it defaults to a **local** provider (Ollama), so scan data stays on the host; cloud providers (OpenAI/OpenRouter) are an explicit per-operator choice that shows an egress warning. All calls are server-proxied (the browser never talks to the provider directly), the API key is server-only, and **Exam Mode** (`exam_mode`) hard-disables the whole assistant.
 - Resource links in cards open in the user's browser (which the user already trusts) — never from the container.
-- No auto-update check, no "new version available" notification, no usage pings, no crash reports. Updates are user-initiated via `docker pull`.
 
-This invariant is verified today by code review. A network-sniff CI guard (running the container with an egress-blocking iptables rule and asserting zero outbound packets) is a future hardening item.
+With the update check and AI both off (the default), the server makes no outbound requests at all. This invariant is verified today by code review. A network-sniff CI guard (running the container with an egress-blocking iptables rule and asserting zero outbound packets in the default config) is a future hardening item.
 
 ---
 

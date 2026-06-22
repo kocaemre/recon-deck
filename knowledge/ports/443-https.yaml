@@ -32,7 +32,14 @@ commands:
   - label: "nmap HTTPS scripts"
     template: "nmap -p{PORT} --script=ssl-cert,ssl-enum-ciphers,http-headers {IP}"
   - label: "gobuster directory brute force (HTTPS)"
+    id: gobuster-dir
     template: "gobuster dir -u https://{IP}:{PORT} -k -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt"
+  - label: "ffuf with extensions (HTTPS)"
+    id: ffuf-ext
+    template: "ffuf -u https://{IP}:{PORT}/FUZZ -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -e .php,.txt,.html"
+  - label: "WordPress scan (wpscan)"
+    id: wpscan
+    template: "wpscan --url https://{IP}:{PORT} --disable-tls-checks"
 known_vulns:
   - match: "OpenSSL 1.0.1"
     note: "Heartbleed (CVE-2014-0160) memory disclosure"
@@ -44,3 +51,98 @@ resources:
   - title: "TLS Cheatsheet"
     url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"
     author: OWASP
+# Same stack-aware overlays as port 80 — the web app behind TLS is fingerprinted
+# identically (server header / AutoRecon tech), so the framework-specific checks
+# and extension lists apply here too, on top of the baseline TLS introspection.
+conditional:
+  - id: php-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-server-header, pattern: "PHP" }
+        - nmap_script_contains: { script: http-php-version, pattern: "PHP" }
+        - autorecon_finding: { type: tech, value: php }
+    adds_checks:
+      - key: https-php-info-pages
+        label: "Tested phpinfo.php / info.php / test.php"
+      - key: https-php-cve-check
+        label: "Checked detected PHP version against known CVEs"
+      - key: https-php-lfi
+        label: "Tested LFI/RFI on common PHP entry points"
+    modifies_commands:
+      gobuster-dir:
+        append: " -x php,html,txt"
+  - id: wordpress-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-generator, pattern: "WordPress" }
+        - nmap_script_contains: { script: http-title, pattern: "WordPress" }
+        - autorecon_finding: { type: tech, value: wordpress }
+    adds_checks:
+      - key: https-wordpress-wpscan
+        label: "Ran wpscan (users, plugins, themes)"
+      - key: https-wordpress-login
+        label: "Checked wp-login.php / wp-admin for weak creds"
+    modifies_commands:
+      wpscan:
+        append: " --enumerate u,ap,at"
+  - id: aspnet-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-server-header, pattern: "Microsoft-IIS" }
+        - nmap_script_contains: { script: http-server-header, pattern: "ASP.NET" }
+        - nmap_script_contains: { script: http-headers, pattern: "ASP.NET" }
+        - autorecon_finding: { type: tech, value: asp.net }
+    adds_checks:
+      - key: https-aspnet-trace-axd
+        label: "Checked /trace.axd and common ASP.NET debug endpoints"
+      - key: https-aspnet-viewstate
+        label: "Reviewed ViewState / event validation settings"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.aspx,.asp,.ashx"
+  - id: java-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-server-header, pattern: "Tomcat" }
+        - nmap_script_contains: { script: http-server-header, pattern: "Apache-Coyote" }
+        - autorecon_finding: { type: tech, value: tomcat }
+        - autorecon_finding: { type: tech, value: java }
+    adds_checks:
+      - key: https-java-manager
+        label: "Checked /manager/html and /host-manager for default creds"
+      - key: https-java-jsp-debug
+        label: "Reviewed JSP/Servlet endpoints for debug/info leakage"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.jsp,.jspx,.do"
+  - id: python-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-server-header, pattern: "Werkzeug" }
+        - nmap_script_contains: { script: http-server-header, pattern: "gunicorn" }
+        - autorecon_finding: { type: tech, value: python }
+        - autorecon_finding: { type: tech, value: flask }
+        - autorecon_finding: { type: tech, value: django }
+    adds_checks:
+      - key: https-python-debug
+        label: "Tested Werkzeug/Flask debug console (/console) and stack traces"
+      - key: https-python-ssti
+        label: "Tested template injection (SSTI) on reflected inputs"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.py"
+  - id: ruby-detected
+    when:
+      anyOf:
+        - nmap_script_contains: { script: http-server-header, pattern: "Phusion Passenger" }
+        - nmap_script_contains: { script: http-server-header, pattern: "WEBrick" }
+        - autorecon_finding: { type: tech, value: ruby }
+        - autorecon_finding: { type: tech, value: rails }
+    adds_checks:
+      - key: https-ruby-rails-routes
+        label: "Probed Rails default routes and /rails/info (dev mode leak)"
+      - key: https-ruby-cve-check
+        label: "Checked Rails/Ruby version against known RCE CVEs"
+    modifies_commands:
+      ffuf-ext:
+        append: ",.rb,.erb"

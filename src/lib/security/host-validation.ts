@@ -39,8 +39,32 @@ export function getAllowedHosts(): Set<string> {
 }
 
 /**
- * Return true if the given Host header value is permitted.
+ * Loopback hostnames. The DNS-rebinding threat hinges on the *hostname* an
+ * attacker page resolves to 127.0.0.1 (e.g. `evil.com`) — the port is whatever
+ * the container is published on. So a loopback host is safe on ANY port, which
+ * is what lets a custom host-port mapping (RECON_DECK_PORT / `-p 13339:13337`)
+ * work: the browser sends `Host: localhost:13339` while the container's internal
+ * PORT is still 13337. We loosen the port for loopback names only; everything
+ * else (LAN/mDNS) still needs an exact RECON_DECK_TRUSTED_HOSTS match.
+ */
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Strip the `:port` suffix, preserving a bracketed IPv6 literal (`[::1]`). */
+function hostnameOf(host: string): string {
+  if (host.startsWith("[")) {
+    const close = host.indexOf("]");
+    return close === -1 ? host : host.slice(0, close + 1);
+  }
+  const colon = host.indexOf(":");
+  return colon === -1 ? host : host.slice(0, colon);
+}
+
+/**
+ * Return true if the given Host header value is permitted: an exact allowlist
+ * match (default port + configured trusted hosts), or any loopback hostname
+ * regardless of port.
  */
 export function isHostAllowed(host: string): boolean {
-  return getAllowedHosts().has(host);
+  if (getAllowedHosts().has(host)) return true;
+  return LOOPBACK_HOSTNAMES.has(hostnameOf(host));
 }

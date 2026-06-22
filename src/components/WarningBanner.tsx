@@ -18,8 +18,13 @@ export function WarningBanner({ warnings }: WarningBannerProps) {
       role="alert"
       className="flex items-start gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3"
     >
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-      <div className="flex-1 text-sm text-amber-200">
+      <AlertTriangle
+        className="mt-0.5 h-4 w-4 shrink-0"
+        style={{ color: "var(--risk-med)" }}
+      />
+      {/* Use the theme-flipping --risk-med token (#fbbf24 dark / #a16207 light)
+          instead of a fixed amber-200, which was too faint on the light theme. */}
+      <div className="flex-1 text-sm" style={{ color: "var(--risk-med)" }}>
         {warnings.map((w, i) => (
           <p key={i}>{w}</p>
         ))}
@@ -29,7 +34,8 @@ export function WarningBanner({ warnings }: WarningBannerProps) {
         size="sm"
         onClick={() => setVisible(false)}
         aria-label="Dismiss warning"
-        className="shrink-0 text-amber-400 hover:text-amber-300"
+        className="shrink-0"
+        style={{ color: "var(--risk-med)" }}
       >
         <X className="h-4 w-4" />
       </Button>

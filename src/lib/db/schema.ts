@@ -28,6 +28,7 @@ import {
   sqliteTable,
   integer,
   text,
+  real,
   index,
   primaryKey,
 } from "drizzle-orm/sqlite-core";
@@ -774,7 +775,56 @@ export const app_state = sqliteTable("app_state", {
    *  are explicit user overrides. Stored as TEXT; the repo narrows it
    *  to the ThemeMode union. v2.3.0 #3. */
   theme: text("theme").notNull().default("system"),
+  /** Optional AI co-pilot (v2.5.0). All opt-in; default OFF. When enabled,
+   *  defaults to a local provider so no scan data leaves the host unless the
+   *  operator points at a cloud provider. `ai_api_key` is server-only and is
+   *  never returned to the client. */
+  ai_enabled: integer("ai_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  ai_provider: text("ai_provider").notNull().default("ollama"),
+  ai_base_url: text("ai_base_url"),
+  ai_model: text("ai_model"),
+  ai_api_key: text("ai_api_key"),
+  /** Exam Mode (v2.5.0): hard override that forces the AI assistant off
+   *  (OSCP-style exams forbid AI). Does not affect any other feature. */
+  exam_mode: integer("exam_mode", { mode: "boolean" }).notNull().default(false),
   updated_at: text("updated_at").notNull(),
 });
 
 export type AppState = typeof app_state.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// ai_usage (v2.5.0 beta-test feature: AI cost / token analytics)
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per AI co-pilot call. Backs the /settings/usage analytics page.
+ * `engagement_id` is SET NULL on engagement delete; `engagement_label` + `host`
+ * snapshot the target so per-engagement / per-IP breakdowns survive deletion.
+ * `cost_usd` is null when the provider doesn't report a per-call cost.
+ */
+export const ai_usage = sqliteTable(
+  "ai_usage",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    created_at: text("created_at").notNull(),
+    engagement_id: integer("engagement_id").references(() => engagements.id, {
+      onDelete: "set null",
+    }),
+    engagement_label: text("engagement_label"),
+    host: text("host"),
+    task: text("task", { enum: ["explain", "suggest", "summary"] }).notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    prompt_tokens: integer("prompt_tokens").notNull().default(0),
+    completion_tokens: integer("completion_tokens").notNull().default(0),
+    cost_usd: real("cost_usd"),
+  },
+  (t) => [
+    index("ai_usage_engagement_id_idx").on(t.engagement_id),
+    index("ai_usage_created_at_idx").on(t.created_at),
+  ],
+);
+
+export type AiUsage = typeof ai_usage.$inferSelect;

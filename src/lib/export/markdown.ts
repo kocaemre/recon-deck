@@ -57,6 +57,7 @@ import type {
   PortViewModel,
 } from "./view-model";
 import type { PortScript } from "@/lib/db/schema";
+import { enrichFindings } from "./findings-shared";
 
 // -----------------------------------------------------------------------------
 // Public API
@@ -184,6 +185,14 @@ function buildBody(vm: EngagementViewModel): string {
     parts.push(`## Writeup\n\n${writeup}\n\n---`);
   }
 
+  // Findings — the report payload. Slots after the writeup (exec summary) and
+  // before the technical per-port detail. Omitted entirely when there are none
+  // so engagements without findings keep the legacy layout byte-for-byte.
+  const findingsSection = buildFindingsSection(vm);
+  if (findingsSection) {
+    parts.push(findingsSection);
+  }
+
   // 2. P1-F PR 3: multi-host engagements emit one block per host. Single-host
   //    engagements keep the legacy layout byte-for-byte (golden fixtures stay
   //    stable). The choice between the two paths uses `vm.hosts.length` —
@@ -215,6 +224,36 @@ function buildBody(vm: EngagementViewModel): string {
   }
 
   return parts.join("\n\n");
+}
+
+/**
+ * Build the `## Findings` section, severity-sorted. Returns null when the
+ * engagement has no findings so the section is skipped entirely.
+ */
+function buildFindingsSection(vm: EngagementViewModel): string | null {
+  const findings = enrichFindings(vm);
+  if (findings.length === 0) return null;
+
+  const blocks = findings.map((f) => {
+    const sev = f.severity.charAt(0).toUpperCase() + f.severity.slice(1);
+    const lines: string[] = [`### [${sev}] ${f.title}`];
+    const meta: string[] = [];
+    if (f.host) {
+      const portPart =
+        f.port != null
+          ? ` · ${f.port}/${f.protocol}${f.service ? ` ${f.service}` : ""}`
+          : "";
+      meta.push(`Affected: ${f.host}${portPart}`);
+    }
+    if (f.cve) meta.push(f.cve);
+    if (meta.length > 0) lines.push("", `*${meta.join(" · ")}*`);
+    if (f.description && f.description.trim()) {
+      lines.push("", f.description.trim());
+    }
+    return lines.join("\n");
+  });
+
+  return `## Findings\n\n${blocks.join("\n\n")}`;
 }
 
 /**
