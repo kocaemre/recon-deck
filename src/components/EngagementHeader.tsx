@@ -33,6 +33,7 @@ import {
   updateEngagementTarget,
   discardSample,
 } from "../../app/(app)/engagements/[id]/actions";
+import { getCopyableRawScanText } from "@/lib/raw-scan";
 
 type RiskKey = "critical" | "high" | "medium" | "low" | "info";
 
@@ -58,6 +59,7 @@ interface EngagementHeaderProps {
   engagementId: number;
   name: string;
   source: string;
+  rawInput: string;
   createdAt: string;
   targetIp: string;
   targetHostname: string | null;
@@ -104,6 +106,7 @@ export function EngagementHeader({
   engagementId,
   name,
   source,
+  rawInput,
   createdAt,
   targetIp,
   targetHostname,
@@ -216,6 +219,18 @@ export function EngagementHeader({
       "_blank",
       "noopener,noreferrer",
     );
+  }
+
+  const copyableRawScan = getCopyableRawScanText(source, rawInput);
+
+  async function copyRawScan() {
+    if (!copyableRawScan) return;
+    try {
+      await navigator.clipboard.writeText(copyableRawScan);
+      toast.success("Raw scan copied");
+    } catch {
+      toast.error("Could not copy raw scan.");
+    }
   }
 
   const createdLabel = (() => {
@@ -383,6 +398,28 @@ export function EngagementHeader({
             <RotateCw size={11} />
             Re-import
           </button>
+          {copyableRawScan && (
+            <button
+              type="button"
+              onClick={copyRawScan}
+              className="inline-flex items-center gap-1.5"
+              style={{
+                height: 24,
+                padding: "0 10px",
+                borderRadius: 5,
+                background: "var(--bg-2)",
+                color: "var(--fg-muted)",
+                fontSize: 11.5,
+                fontWeight: 500,
+                border: "1px solid var(--border)",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+              title="Copy the latest imported raw scan text"
+            >
+              Copy raw scan
+            </button>
+          )}
           {/* v2.1.1: Palette button removed from the header — Cmd+K
               shortcut still opens it. The visible button overlapped
               conceptually with sidebar's "Search all engagements" and
