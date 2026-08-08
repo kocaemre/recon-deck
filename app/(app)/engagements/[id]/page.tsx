@@ -616,6 +616,7 @@ export default async function EngagementPage({
         engagementId={engagement.id}
         name={engagement.name}
         source={engagement.source}
+        rawInput={engagement.raw_input}
         createdAt={engagement.created_at}
         targetIp={targetIp}
         targetHostname={targetHostname}
