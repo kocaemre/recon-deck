@@ -21,6 +21,41 @@ import type { FullEngagement } from "@/lib/db/types";
 import type { KnowledgeBase } from "@/lib/kb";
 import type { KbEntry } from "@/lib/kb";
 import { loadEngagementForExport } from "../view-model";
+import { createTestDb } from "../../../../tests/helpers/db";
+import { createFromScan, getById } from "../../db/engagement-repo";
+import { parseNmapXml } from "../../parser/nmap-xml";
+
+describe("reparsed port metadata ownership", () => {
+  it("keeps CPE and reason separate for each host and transport", () => {
+    const port = (protocol: string, reason: string, cpe: string) =>
+      `<port protocol="${protocol}" portid="80"><state state="open" reason="${reason}"/><service name="http"><cpe>${cpe}</cpe></service></port>`;
+    const host = (ip: string, ports: string) =>
+      `<host><address addr="${ip}" addrtype="ipv4"/><ports>${ports}</ports></host>`;
+    const raw = `<nmaprun>${host("192.0.2.10", port("tcp", "syn-ack", "cpe:/a:apache:http_server") + port("udp", "udp-response", "cpe:/a:example:udp"))}${host("192.0.2.20", port("tcp", "user-set", "cpe:/a:nginx:nginx"))}</nmaprun>`;
+    const db = createTestDb();
+    const { id } = createFromScan(db, parseNmapXml(raw), raw);
+    const engagement = getById(db, id)!;
+    const vm = loadEngagementForExport(engagement, buildKb());
+    expect(vm.hosts.map((h) => ({
+      ip: h.host.ip,
+      ports: h.ports.map((p) => ({ protocol: p.port.protocol, reason: p.reason, cpe: p.cpe })),
+    }))).toEqual([
+      { ip: "192.0.2.10", ports: [
+        { protocol: "tcp", reason: "syn-ack", cpe: ["cpe:/a:apache:http_server"] },
+        { protocol: "udp", reason: "udp-response", cpe: ["cpe:/a:example:udp"] },
+      ] },
+      { ip: "192.0.2.20", ports: [
+        { protocol: "tcp", reason: "user-set", cpe: ["cpe:/a:nginx:nginx"] },
+      ] },
+    ]);
+
+    // A host absent from the retained XML must not inherit the primary's CPE.
+    engagement.raw_input = `<nmaprun>${host("192.0.2.10", port("tcp", "syn-ack", "cpe:/a:apache:http_server"))}</nmaprun>`;
+    const absent = loadEngagementForExport(engagement, buildKb()).hosts[1].ports[0];
+    expect(absent.cpe).toBeUndefined();
+    expect(absent.reason).toBeUndefined();
+  });
+});
 
 // -----------------------------------------------------------------------------
 // Fixtures

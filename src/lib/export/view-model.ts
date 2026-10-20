@@ -245,15 +245,13 @@ export function loadEngagementForExport(
     }
   }
 
-  const reparsedByPort = new Map<number, { reason?: string; cpe?: string[] }>();
-  if (reparsed) {
-    for (const p of reparsed.ports) {
-      const meta: { reason?: string; cpe?: string[] } = {};
-      if (p.reason) meta.reason = p.reason;
-      if (p.cpe && p.cpe.length > 0) meta.cpe = p.cpe;
-      if (meta.reason || meta.cpe) reparsedByPort.set(p.port, meta);
-    }
-  }
+  // Metadata belongs to an IP + protocol + port, not a port number alone.
+  const reparsedByHost = new Map(
+    reparsed?.hosts.map((h) => [
+      h.target.ip,
+      new Map(h.ports.map((p) => [`${p.protocol}:${p.port}`, p])),
+    ]),
+  );
 
   // 1. Sort ports ASC — guarantees deterministic rendering order and stable
   //    JSON key order for downstream `checklist` / `notes` objects in the JSON
@@ -347,7 +345,7 @@ export function loadEngagementForExport(
       ),
     }));
 
-    const meta = reparsedByPort.get(p.port);
+    const meta = reparsedByHost.get(portIp)?.get(`${p.protocol}:${p.port}`);
     return {
       port: p,
       nseScripts,

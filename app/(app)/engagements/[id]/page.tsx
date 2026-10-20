@@ -34,8 +34,6 @@ import { HostScriptCard } from "@/components/HostScriptCard";
 import { parseNmapXml } from "@/lib/parser/nmap-xml";
 import { parseNmapText } from "@/lib/parser/nmap-text";
 import type {
-  ScriptElem,
-  ScriptTable,
   ParsedScan,
 } from "@/lib/parser/types";
 
@@ -138,8 +136,6 @@ export default async function EngagementPage({
   // AutoRecon imports raw_input is just the zip filename, so re-parse is
   // skipped — v2 fields will be empty/undefined (importer fills extraports
   // for nmap-text by accumulating "Not shown" lines, see nmap-text.ts).
-  const structuredByKey = new Map<string, Array<ScriptElem | ScriptTable>>();
-  const reparsedByPort = new Map<number, { reason?: string; cpe?: string[] }>();
   let reparsed: ParsedScan | undefined;
   if (engagement.source === "nmap-xml") {
     try {
@@ -170,24 +166,12 @@ export default async function EngagementPage({
       }
     }
   }
-  if (reparsed) {
-    for (const p of reparsed.ports) {
-      for (const s of p.scripts) {
-        if (s.structured && s.structured.length > 0) {
-          structuredByKey.set(`${p.port}:${s.id}`, s.structured);
-        }
-      }
-      const meta: { reason?: string; cpe?: string[] } = {};
-      if (p.reason) meta.reason = p.reason;
-      if (p.cpe && p.cpe.length > 0) meta.cpe = p.cpe;
-      if (meta.reason || meta.cpe) reparsedByPort.set(p.port, meta);
-    }
-    for (const hs of reparsed.hostScripts) {
-      if (hs.structured && hs.structured.length > 0) {
-        structuredByKey.set(`host:${hs.id}`, hs.structured);
-      }
-    }
-  }
+  // The top-level parser fields mirror only the first host. Match the
+  // active host explicitly, then distinguish TCP and UDP ports.
+  const reparsedHost = reparsed?.hosts.find((h) => h.target.ip === activeHost?.ip);
+  const reparsedByPort = new Map(
+    reparsedHost?.ports.map((p) => [`${p.protocol}:${p.port}`, p]),
+  );
 
   // v2: engagement-level artifacts now come straight off FullEngagement
   // (getById was extended to expose them).
@@ -394,7 +378,8 @@ export default async function EngagementPage({
     const arFileScripts = p.scripts.filter((s) => s.source === "autorecon");
 
     const enrichedNseScripts = nseScripts.map((s) => {
-      const structured = structuredByKey.get(`${p.port}:${s.script_id}`);
+      const structured = reparsedByPort.get(`${p.protocol}:${p.port}`)
+        ?.scripts.find((parsed) => parsed.id === s.script_id)?.structured;
       return structured ? { ...s, structured } : s;
     });
 
@@ -425,7 +410,7 @@ export default async function EngagementPage({
     const portDone = kbChecks.filter((c) => checkMap.get(c.key) === true)
       .length;
 
-    const meta = reparsedByPort.get(p.port);
+    const meta = reparsedByPort.get(`${p.protocol}:${p.port}`);
 
     return {
       id: p.id,
@@ -499,7 +484,8 @@ export default async function EngagementPage({
         hs.host_id === activeHostId,
     )
     .map((hs) => {
-      const structured = structuredByKey.get(`host:${hs.script_id}`);
+      const structured = reparsedHost?.hostScripts
+        .find((parsed) => parsed.id === hs.script_id)?.structured;
       return structured ? { ...hs, structured } : hs;
     });
 
@@ -642,10 +628,10 @@ export default async function EngagementPage({
         isSample={engagement.is_sample}
         localExportDir={appCfg.localExportDir}
         scanner={reparsed?.scanner}
-        extraPorts={reparsed?.extraPorts}
+        extraPorts={reparsedHost?.extraPorts}
         finishedAt={reparsed?.runstats?.finishedAt}
-        addresses={reparsed?.target.addresses}
-        hostnames={reparsed?.target.hostnames}
+        addresses={reparsedHost?.target.addresses}
+        hostnames={reparsedHost?.target.hostnames}
       />
 
       {warnings.length > 0 && (
@@ -724,8 +710,8 @@ export default async function EngagementPage({
       />
 
       <EngagementExtras
-        os={reparsed?.os}
-        traceroute={reparsed?.traceroute}
+        os={reparsedHost?.os}
+        traceroute={reparsedHost?.traceroute}
         preScripts={reparsed?.preScripts}
         postScripts={reparsed?.postScripts}
         artifacts={extrasArtifacts}
