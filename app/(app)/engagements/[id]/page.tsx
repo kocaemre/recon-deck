@@ -33,6 +33,7 @@ import { WriteupPanel } from "@/components/WriteupPanel";
 import { HostScriptCard } from "@/components/HostScriptCard";
 import { parseNmapXml } from "@/lib/parser/nmap-xml";
 import { parseNmapText } from "@/lib/parser/nmap-text";
+import { getCopyableRawScanText } from "@/lib/raw-scan";
 import type {
   ScriptElem,
   ScriptTable,
@@ -616,7 +617,7 @@ export default async function EngagementPage({
         engagementId={engagement.id}
         name={engagement.name}
         source={engagement.source}
-        rawInput={engagement.raw_input}
+        copyableRawScan={getCopyableRawScanText(engagement, scanHistory[0])}
         createdAt={engagement.created_at}
         targetIp={targetIp}
         targetHostname={targetHostname}

@@ -33,7 +33,6 @@ import {
   updateEngagementTarget,
   discardSample,
 } from "../../app/(app)/engagements/[id]/actions";
-import { getCopyableRawScanText } from "@/lib/raw-scan";
 
 type RiskKey = "critical" | "high" | "medium" | "low" | "info";
 
@@ -59,7 +58,7 @@ interface EngagementHeaderProps {
   engagementId: number;
   name: string;
   source: string;
-  rawInput: string;
+  copyableRawScan: string | null;
   createdAt: string;
   targetIp: string;
   targetHostname: string | null;
@@ -106,7 +105,7 @@ export function EngagementHeader({
   engagementId,
   name,
   source,
-  rawInput,
+  copyableRawScan,
   createdAt,
   targetIp,
   targetHostname,
@@ -220,8 +219,6 @@ export function EngagementHeader({
       "noopener,noreferrer",
     );
   }
-
-  const copyableRawScan = getCopyableRawScanText(source, rawInput);
 
   async function copyRawScan() {
     if (!copyableRawScan) return;
