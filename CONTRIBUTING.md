@@ -73,8 +73,13 @@ resources:
 ### Hard Rules (CI enforces all of these)
 
 1. **`schema_version: 1`** must be present. See [Schema Versioning](#schema-versioning).
-2. **Command placeholders are limited to `{IP}`, `{PORT}`, `{HOST}`.** Anything
-   else (`{TARGET}`, `{RHOST}`, `{FOO}`) is rejected by `scripts/lint-kb.ts`.
+2. **Command placeholders are limited to `{IP}`, `{PORT}`, `{HOST}` and
+   `{WORDLIST_*}` tokens.** Wordlist keys use uppercase letters, digits and
+   underscores after `WORDLIST_`, for example `{WORDLIST_RAFT_DIRS}`. See
+   [`src/lib/kb/wordlists.ts`](src/lib/kb/wordlists.ts) for shipped defaults;
+   operators can override paths in Settings → Wordlists. Unknown keys without
+   an override remain literal. Other placeholders (`{TARGET}`, `{RHOST}`,
+   `{FOO}`) are rejected by `scripts/lint-kb.ts`.
 3. **URLs in `resources[]` must be `http://` or `https://`.** No `file://`,
    `data:`, `javascript:`, etc.
 4. **Denylisted command patterns are rejected.** No `rm -rf`, no `curl | sh`, no
@@ -333,7 +338,7 @@ to how much context each PR drags in. Keep PRs small, focused, and easy to read.
 ### Before You Open a PR
 
 - [ ] **Read [`ROADMAP.md`](ROADMAP.md) first.** If your change lands in an
-      out-of-scope area (scanners, multi-user, AI, mobile), don't open a PR —
+      out-of-scope area (scanners, multi-user, autonomous exploitation, mobile), don't open a PR —
       open a discussion issue instead.
 - [ ] **One concern per PR.** Don't bundle a KB fix with a parser refactor with
       a Dockerfile tweak. Three PRs is three fast reviews; one kitchen-sink PR
@@ -399,7 +404,14 @@ The four most common requests the project receives, and the short answer:
 - **"Can recon-deck run scans?"** No. recon-deck is post-scan workflow only.
   Run AutoRecon (or nmap directly) to generate the scan, then import.
 - **"Can this be multi-user?"** No. It's a single-user local tool by design.
-- **"Can you add AI / exploit suggestions?"** Not currently. The KB stays human-curated by design.
+- **"Can you add AI / exploit suggestions?"** The AI co-pilot shipped in 2.5.0:
+  opt-in and off by default, local-first via an operator-supplied Ollama
+  endpoint. It explains NSE output and suggests commands grounded in the KB;
+  outputs are labelled AI-derived and never auto-executed. Cloud providers
+  require explicit opt-in with an egress warning, and Exam Mode disables the
+  assistant. The KB remains human-curated; autonomous exploitation remains
+  out of scope. Discuss further feature work against the roadmap before
+  implementing it.
 - **"Is there a mobile app?"** No. Desktop-only — pentesting happens on laptops.
 
 Each of these has a longer rationale in [`ROADMAP.md`](ROADMAP.md).
