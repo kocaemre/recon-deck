@@ -163,8 +163,11 @@ function parsePortSpec(spec: string, warnings: string[]): ParsedPort | null {
     );
     return null;
   }
-  const service = parts[4] && parts[4] !== "" ? parts[4].toLowerCase() : undefined;
-  const version = parts[6] && parts[6] !== "" ? parts[6] : undefined;
+  // Nmap escapes slashes as pipes inside service/version subfields (-oG).
+  // Keep the decoded compound service for KB aliases such as ssl/http.
+  // Do not decode the state field: open|filtered is a literal state.
+  const service = parts[4]?.replace(/\|/g, "/").toLowerCase() || undefined;
+  const version = parts[6]?.replace(/\|/g, "/") || undefined;
   const port: ParsedPort = {
     port: portNum,
     protocol: proto,
@@ -172,6 +175,7 @@ function parsePortSpec(spec: string, warnings: string[]): ParsedPort | null {
     scripts: [],
   };
   if (service) port.service = service;
+  if (service?.startsWith("ssl/")) port.tunnel = "ssl";
   if (version) port.version = version;
   return port;
 }

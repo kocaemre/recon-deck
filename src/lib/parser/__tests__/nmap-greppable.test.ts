@@ -1,8 +1,35 @@
 import { describe, it, expect } from "vitest";
 import { parseNmapGreppable } from "../nmap-greppable";
 import { parseAny } from "../index";
+import { loadKnowledgeBase } from "../../kb/loader";
+import { matchPort } from "../../kb/matcher";
 
 describe("nmap-greppable parser", () => {
+  it("decodes escaped TLS services and matches the shipped HTTPS knowledge base", () => {
+    const scan = parseAny("# Nmap 7.94 scan initiated\nHost: 192.0.2.10 () Ports: 443/open/tcp//ssl|http//Apache mod_ssl|2.8.12/\n");
+    const port = scan.ports[0];
+    expect(port).toMatchObject({
+      service: "ssl/http", tunnel: "ssl", version: "Apache mod_ssl/2.8.12",
+    });
+    const kb = loadKnowledgeBase({
+      shippedPortsDir: "knowledge/ports",
+      shippedDefaultFile: "knowledge/default.yaml",
+    });
+    expect(matchPort(kb, port.port, port.service).service).toBe("https");
+  });
+
+  it.each(["ssl|imap", "ssl|pop3"])("recognizes non-HTTP TLS service %s", (service) => {
+    const scan = parseNmapGreppable(`Host: 192.0.2.10 () Ports: 993/open/tcp//${service}///`);
+    expect(scan.ports[0].service).toBe(service.replace("|", "/"));
+    expect(scan.ports[0].tunnel).toBe("ssl");
+  });
+
+  it("preserves uncertain states and service names without inventing TLS", () => {
+    const scan = parseNmapGreppable("Host: 192.0.2.10 () Ports: 53/open|filtered/udp//domain?///");
+    expect(scan.ports[0]).toMatchObject({ state: "filtered", service: "domain?" });
+    expect(scan.ports[0].tunnel).toBeUndefined();
+  });
+
   it("parses Host: line with ip + hostname + ports", () => {
     const grep = `# Nmap 7.94 scan initiated as: nmap -oG out 10.10.10.5
 Host: 10.10.10.5 (box.htb) Status: Up
