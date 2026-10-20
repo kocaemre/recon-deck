@@ -1,6 +1,7 @@
 import "server-only";
 
 import { XMLParser } from "fast-xml-parser";
+import { xmlCharacterReferences } from "./xml-character-references";
 import type {
   ParsedScan,
   ParsedHost,
@@ -31,16 +32,18 @@ import type {
  *   - scanner{name, version, args, xmlVersion} from <nmaprun> attrs
  *   - runstats{finishedAt, elapsed, summary, exitStatus, hosts}
  *
- * Security-critical: two-layer XXE defense per D-14 / D-15 / SEC-05 unchanged.
+ * Security-critical: two-layer XXE defense per D-14 / D-15 / SEC-05.
  *   1. Strip benign DOCTYPE; reject DOCTYPE with internal subset (`[`).
- *   2. processEntities: false — defense in depth.
+ *   2. A restricted, non-recursive decoder rejects all custom definitions.
  */
 
 const PARSER_OPTIONS = {
   ignoreAttributes: false,
   attributeNamePrefix: "",
   parseAttributeValue: false,
-  processEntities: false,
+  // Enable the hook, not the library's general-purpose entity decoder.
+  processEntities: true,
+  entityDecoder: xmlCharacterReferences,
   isArray: (name: string) =>
     [
       "host",

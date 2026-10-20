@@ -40,7 +40,7 @@ Users who expose recon-deck on a LAN or mDNS hostname opt in explicitly via the 
 
 **Threat.** A pasted nmap XML containing `<!DOCTYPE>` declarations or external entity references could exfiltrate files from the container filesystem or cause a denial-of-service via entity expansion ("billion laughs").
 
-**Mitigation.** The XML parser (`fast-xml-parser`) is configured with `processEntities: false`, and the parser module detects DOCTYPE declarations in the input and rejects the whole document outright (SEC-05). The XML is always parsed server-side — never in the browser.
+**Mitigation.** Before parsing, the XML module strips simple DOCTYPE declarations (including external DTD references) and rejects declarations with internal subsets (SEC-05). Entity processing uses a restricted decoder that accepts only XML's five predefined character references and valid XML 1.0 numeric references, in one non-recursive pass. It rejects custom entity definitions, never resolves external resources, and leaves CDATA literal. The XML is always parsed server-side — never in the browser.
 
 ### KB poisoning (malicious YAML in the user-override volume)
 
@@ -99,7 +99,7 @@ With the update check and AI both off (the default), the server makes no outboun
 | External link safety  | All external `<a>` carry `rel="noopener noreferrer"`; scheme allowlist `http:`/`https:` only | SEC-04      |
 | Host-header allowlist | `middleware.ts` rejects requests with Host mismatched against the allowlist        | SEC-01      |
 | XSS prevention        | No `dangerouslySetInnerHTML`; React text-node rendering; ESLint-enforced           | SEC-03      |
-| XXE prevention        | `fast-xml-parser` with `processEntities: false`; DOCTYPE rejection                 | SEC-05      |
+| XXE prevention        | Restricted character-reference decoder; custom entities/internal DOCTYPE subsets rejected | SEC-05      |
 
 ---
 

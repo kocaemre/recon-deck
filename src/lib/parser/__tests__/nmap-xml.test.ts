@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseNmapXml } from "../nmap-xml.js";
 import type { ParsedScan } from "../types.js";
+import { xmlCharacterReferences } from "../xml-character-references";
 
 const FIXTURES = path.resolve(__dirname, "../../../../tests/fixtures/parser/xml");
 
@@ -11,6 +12,48 @@ function loadFixture(name: string): string {
 }
 
 describe("parseNmapXml (Plan 02)", () => {
+  describe("XML character references", () => {
+    const wrap = (script: string, doctype = "") => `${doctype}<nmaprun><host><address addr="192.0.2.10" addrtype="ipv4"/><ports><port protocol="tcp" portid="80"><state state="open"/><service name="http" product="Research &amp; Development"/>${script}</port></ports></host></nmaprun>`;
+
+    it("decodes predefined and numeric references in attributes and structured text", () => {
+      const scan = parseNmapXml(wrap('<script id="http-title" output="Research &amp; Development&#xa;Second line"><elem key="label">&lt;tag&gt; &quot;quoted&quot; &apos;text&apos; &#233; &#x1F600;</elem></script>'));
+      expect(scan.ports[0].product).toBe("Research & Development");
+      expect(scan.ports[0].scripts[0].output).toBe("Research & Development\nSecond line");
+      expect(scan.ports[0].scripts[0].structured).toEqual([
+        { key: "label", value: '<tag> "quoted" \'text\' é 😀' },
+      ]);
+    });
+
+    it("decodes exactly once and leaves unknown names and invalid characters literal", () => {
+      const output = "&amp;lt; &amp;#10; &custom; &copy; &#0; &#xD800; &#x110000;";
+      const scan = parseNmapXml(wrap(`<script id="test" output="${output}"/>`));
+      expect(scan.ports[0].scripts[0].output).toBe("&lt; &#10; &custom; &copy; &#0; &#xD800; &#x110000;");
+    });
+
+    it("keeps references inside CDATA literal", () => {
+      const scan = parseNmapXml(wrap('<script id="test"><![CDATA[&amp; &#10; <tag>]]></script>'));
+      expect(scan.ports[0].scripts[0].output).toBe("&amp; &#10; <tag>");
+    });
+
+    it("strips external DTD declarations without resolving them", () => {
+      const scan = parseNmapXml(wrap('<script id="test" output="&external; &amp;"/>', '<!DOCTYPE nmaprun SYSTEM "https://example.invalid/never-fetch.dtd">'));
+      expect(scan.ports[0].scripts[0].output).toBe("&external; &");
+    });
+
+    it.each([
+      '<!DOCTYPE nmaprun [<!ENTITY external SYSTEM "file:///nonexistent/recon-deck-test">]>',
+      '<!DOCTYPE nmaprun [<!ENTITY nested "&amp;&amp;">]>',
+      '<!DOCTYPE nmaprun [<!ENTITY % remote SYSTEM "https://example.invalid/entities.dtd">%remote;]>',
+    ])("rejects custom definitions before parsing: %s", (doctype) => {
+      expect(() => parseNmapXml(wrap('<script id="test" output="&external;"/>', doctype))).toThrow(/DOCTYPE/);
+    });
+
+    it("also rejects custom definitions at the decoder boundary", () => {
+      expect(() => xmlCharacterReferences.addInputEntities({ custom: "value" })).toThrow(/Custom XML/);
+      expect(() => xmlCharacterReferences.setExternalEntities({ custom: "value" })).toThrow(/Custom XML/);
+    });
+  });
+
   describe("INPUT-02 / PARSE-01: happy path", () => {
     it("simple-tcp.xml: returns source='nmap-xml' with three open ports", () => {
       const result: ParsedScan = parseNmapXml(loadFixture("simple-tcp.xml"));
