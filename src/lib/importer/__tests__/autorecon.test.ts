@@ -74,6 +74,41 @@ async function makeZipBuffer(
 
 // ---------------------------- fixture buffers ------------------------------
 
+describe("UDP scan host ownership", () => {
+  const tcp = makeNmapXml([{ port: 22, proto: "tcp", service: "ssh" }]);
+  const udp = makeNmapXml([{ port: 161, proto: "udp", service: "snmp" }]);
+  const otherUdp = udp.replaceAll("10.10.10.5", "10.10.10.6");
+
+  it.each([true, false])("does not borrow another directory's UDP scan (first=%s)", async (first) => {
+    const other = ["results/10.10.10.6/scans/xml/_top_20_udp_nmap.xml", otherUdp];
+    const primary = ["results/10.10.10.5/scans/xml/_full_tcp_nmap.xml", tcp];
+    const files = Object.fromEntries(first ? [other, primary] : [primary, other]);
+    const result = await importAutoRecon(await makeZipBuffer(files), "multi.zip");
+    expect(result.scan.ports.map((p) => `${p.protocol}:${p.port}`)).toEqual(["tcp:22"]);
+  });
+
+  it("merges the matching directory even when another UDP scan comes first", async () => {
+    const result = await importAutoRecon(await makeZipBuffer({
+      "results/10.10.10.6/scans/xml/_top_20_udp_nmap.xml": otherUdp,
+      "results/10.10.10.5/scans/xml/_full_tcp_nmap.xml": tcp,
+      "results/10.10.10.5/scans/xml/_top_20_udp_nmap.xml": udp,
+    }), "multi.zip");
+    expect(result.scan.ports.map((p) => `${p.protocol}:${p.port}`)).toEqual(["tcp:22", "udp:161"]);
+    expect(result.scan.hosts[0].ports).toEqual(result.scan.ports);
+  });
+
+  it("warns instead of merging XML for a different IP in the matching directory", async () => {
+    const result = await importAutoRecon(await makeZipBuffer({
+      "scans/xml/_full_tcp_nmap.xml": tcp,
+      "scans/xml/_top_20_udp_nmap.xml": otherUdp,
+    }), "mismatch.zip");
+    expect(result.scan.ports).toHaveLength(1);
+    expect(result.scan.warnings).toContain(
+      "AutoRecon: skipped UDP scan for a different host (expected 10.10.10.5).",
+    );
+  });
+});
+
 let normalZip: ArrayBuffer;
 let noManualCommandsZip: ArrayBuffer;
 let nestedZip: ArrayBuffer;

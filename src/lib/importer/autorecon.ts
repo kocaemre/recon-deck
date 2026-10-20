@@ -328,8 +328,7 @@ export async function importAutoRecon(
   const udpEntry = Object.values(zip.files).find(
     (f) =>
       !f.dir &&
-      (f.name === `${scansBase}xml/_top_20_udp_nmap.xml` ||
-        f.name.endsWith("/scans/xml/_top_20_udp_nmap.xml")),
+      f.name === `${scansBase}xml/_top_20_udp_nmap.xml`,
   );
   if (udpEntry) {
     try {
@@ -339,9 +338,15 @@ export async function importAutoRecon(
         budget,
       );
       const udpScan = parseNmapXml(udpXmlString);
+      const udpHost = udpScan.hosts.find((h) => h.target.ip === scan.target.ip);
+      if (!udpHost) {
+        scan.warnings.push(
+          `AutoRecon: skipped UDP scan for a different host (expected ${scan.target.ip}).`,
+        );
+      }
       // Merge UDP ports — dedupe by (proto, port).
       const seen = new Set(scan.ports.map((p) => `${p.protocol}:${p.port}`));
-      for (const p of udpScan.ports) {
+      for (const p of udpHost?.ports ?? []) {
         const key = `${p.protocol}:${p.port}`;
         if (!seen.has(key)) {
           scan.ports.push(p);
