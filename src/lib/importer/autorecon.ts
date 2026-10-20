@@ -92,10 +92,10 @@ export interface ArCommand {
 
 export interface AutoReconResult {
   scan: ParsedScan;
-  /** Per-port (port number) service file outputs. Same as v1. */
-  arFiles: Map<number, ArFile[]>;
-  /** Per-port (port number) manual commands. Same as v1. */
-  arCommands: Map<number, ArCommand[]>;
+  /** Primary-host service files keyed by protocol:port (e.g. tcp:53). */
+  arFiles: Map<string, ArFile[]>;
+  /** Primary-host manual commands keyed by protocol:port. */
+  arCommands: Map<string, ArCommand[]>;
   /** Engagement-level artifacts (loot, report, screenshots, patterns, ...). v2. */
   arArtifacts: ArArtifact[];
 }
@@ -362,7 +362,7 @@ export async function importAutoRecon(
   }
 
   // ----- 4. Per-port service files (TCP + UDP, port-dirs + flat) -----
-  const arFiles = new Map<number, ArFile[]>();
+  const arFiles = new Map<string, ArFile[]>();
   for (const port of scan.ports) {
     const proto = port.protocol;
     const portDirPrefix = `${scansBase}${proto}${port.port}/`;
@@ -414,11 +414,11 @@ export async function importAutoRecon(
         encoding: "utf8",
       });
     }
-    if (files.length > 0) arFiles.set(port.port, files);
+    if (files.length > 0) arFiles.set(`${port.protocol}:${port.port}`, files);
   }
 
   // ----- 5. Manual commands -----
-  const arCommands = new Map<number, ArCommand[]>();
+  const arCommands = new Map<string, ArCommand[]>();
   const manualCommandsPath = `${scansBase}_manual_commands.txt`;
   const manualCommandsEntry = zip.file(manualCommandsPath);
   if (manualCommandsEntry) {
@@ -428,22 +428,24 @@ export async function importAutoRecon(
       budget,
     );
     const lines = text.split(/\r?\n/);
-    let currentPort: number | null = null;
+    let currentPort: string | null = null;
     let currentLabel: string | null = null;
-    const validPorts = new Set(scan.ports.map((p) => p.port));
-    const warnedPorts = new Set<number>();
+    const validPorts = new Set(scan.ports.map((p) => `${p.protocol}:${p.port}`));
+    const warnedPorts = new Set<string>();
     for (const line of lines) {
       const headerMatch = HEADER_RE.exec(line);
       if (headerMatch) {
         const portNum = Number(headerMatch[3]);
-        if (validPorts.has(portNum)) {
-          currentPort = portNum;
+        const protocol = headerMatch[2];
+        const key = `${protocol}:${portNum}`;
+        if (validPorts.has(key)) {
+          currentPort = key;
         } else {
           currentPort = null;
-          if (!warnedPorts.has(portNum)) {
-            warnedPorts.add(portNum);
+          if (!warnedPorts.has(key)) {
+            warnedPorts.add(key);
             scan.warnings.push(
-              `AutoRecon manual command for port ${portNum} dropped — ` +
+              `AutoRecon manual command for port ${portNum}/${protocol} dropped — ` +
                 `port not found in scan results.`,
             );
           }

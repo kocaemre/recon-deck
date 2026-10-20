@@ -2,6 +2,9 @@ import { describe, expect, it, beforeAll } from "vitest";
 import JSZip from "jszip";
 import { importAutoRecon } from "../autorecon.js";
 import type { AutoReconResult } from "../autorecon.js";
+import { createTestDb } from "../../../../tests/helpers/db";
+import { createFromScan, getById } from "../../db/engagement-repo";
+import { listForPort } from "../../db/fingerprints-repo";
 
 /**
  * TEST-03 fixture corpus for the AutoRecon importer.
@@ -188,14 +191,14 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
     });
 
     it("attaches per-port service files to arFiles map", () => {
-      expect(result.arFiles.get(80)).toBeDefined();
-      expect(result.arFiles.get(80)!.length).toBeGreaterThanOrEqual(1);
-      expect(result.arFiles.get(22)).toBeDefined();
-      expect(result.arFiles.get(22)!.length).toBeGreaterThanOrEqual(1);
+      expect(result.arFiles.get("tcp:80")).toBeDefined();
+      expect(result.arFiles.get("tcp:80")!.length).toBeGreaterThanOrEqual(1);
+      expect(result.arFiles.get("tcp:22")).toBeDefined();
+      expect(result.arFiles.get("tcp:22")!.length).toBeGreaterThanOrEqual(1);
     });
 
     it("service file content is the full file text", () => {
-      const port80Files = result.arFiles.get(80)!;
+      const port80Files = result.arFiles.get("tcp:80")!;
       expect(port80Files[0].filename).toBe("tcp_80_http_nmap.txt");
       expect(port80Files[0].content).toContain("Apache/2.4.52");
     });
@@ -214,24 +217,24 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
     });
 
     it("attaches commands to correct port number in arCommands map", () => {
-      expect(result.arCommands.get(80)).toBeDefined();
-      expect(result.arCommands.get(22)).toBeDefined();
+      expect(result.arCommands.get("tcp:80")).toBeDefined();
+      expect(result.arCommands.get("tcp:22")).toBeDefined();
     });
 
     it("extracts tool label from [-] sub-header", () => {
-      const port80Cmds = result.arCommands.get(80)!;
+      const port80Cmds = result.arCommands.get("tcp:80")!;
       expect(port80Cmds[0].label).toBe("nikto");
       expect(port80Cmds[1].label).toBe("gobuster");
     });
 
     it("handles multiple commands per port", () => {
-      expect(result.arCommands.get(80)).toHaveLength(2);
-      expect(result.arCommands.get(80)![0].template).toContain("nikto");
-      expect(result.arCommands.get(80)![1].template).toContain("gobuster");
+      expect(result.arCommands.get("tcp:80")).toHaveLength(2);
+      expect(result.arCommands.get("tcp:80")![0].template).toContain("nikto");
+      expect(result.arCommands.get("tcp:80")![1].template).toContain("gobuster");
     });
 
     it("attaches correct command template to single-command port", () => {
-      const port22Cmds = result.arCommands.get(22)!;
+      const port22Cmds = result.arCommands.get("tcp:22")!;
       expect(port22Cmds).toHaveLength(1);
       expect(port22Cmds[0].label).toBe("hydra");
       expect(port22Cmds[0].template).toContain("hydra");
@@ -245,10 +248,10 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
           (w) => /port 21/i.test(w) && /dropped/i.test(w),
         ),
       ).toBe(true);
-      expect(result.arCommands.get(21)).toBeUndefined();
+      expect(result.arCommands.get("tcp:21")).toBeUndefined();
       // The matching port still gets its commands.
-      expect(result.arCommands.get(80)).toBeDefined();
-      expect(result.arCommands.get(80)![0].label).toBe("nikto");
+      expect(result.arCommands.get("tcp:80")).toBeDefined();
+      expect(result.arCommands.get("tcp:80")![0].label).toBe("nikto");
     });
   });
 
@@ -266,7 +269,7 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
     it("still returns valid scan and arFiles", () => {
       expect(result.scan.source).toBe("autorecon");
       expect(result.scan.ports).toHaveLength(2);
-      expect(result.arFiles.get(80)).toBeDefined();
+      expect(result.arFiles.get("tcp:80")).toBeDefined();
     });
   });
 
@@ -287,13 +290,13 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
     });
 
     it("attaches per-port files when scansBase has no IP prefix", () => {
-      expect(result.arFiles.get(80)).toBeDefined();
-      expect(result.arFiles.get(80)![0].filename).toBe("tcp_80_http_nmap.txt");
+      expect(result.arFiles.get("tcp:80")).toBeDefined();
+      expect(result.arFiles.get("tcp:80")![0].filename).toBe("tcp_80_http_nmap.txt");
     });
 
     it("parses manual commands when scansBase has no IP prefix", () => {
-      expect(result.arCommands.get(80)).toBeDefined();
-      expect(result.arCommands.get(80)![0].label).toBe("nikto");
+      expect(result.arCommands.get("tcp:80")).toBeDefined();
+      expect(result.arCommands.get("tcp:80")![0].label).toBe("nikto");
     });
   });
 
@@ -383,7 +386,7 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
       const result = await importAutoRecon(oversizedArZip, "oversized-ar.zip");
       // Import succeeded; the oversized service file was silently dropped.
       expect(result.scan.ports).toHaveLength(1);
-      expect(result.arFiles.get(80)).toBeUndefined();
+      expect(result.arFiles.get("tcp:80")).toBeUndefined();
     }, 30_000);
 
     it("rejects when aggregate decompressed size exceeds 200 MB budget", async () => {
@@ -409,5 +412,47 @@ describe("importAutoRecon (Phase 05, Plan 02)", () => {
         importAutoRecon(aggregateBombZip, "agg-bomb.zip"),
       ).rejects.toThrow(/200 MB|zip bomb/i);
     }, 60_000);
+  });
+});
+
+describe("TCP/UDP artifact ownership", () => {
+  it("persists files, commands, and derived fingerprints on their own transport", async () => {
+    const tcp = makeNmapXml([{ port: 53, proto: "tcp", service: "domain" }]);
+    const udp = makeNmapXml([{ port: 53, proto: "udp", service: "domain" }]);
+    const result = await importAutoRecon(await makeZipBuffer({
+      "scans/xml/_full_tcp_nmap.xml": tcp,
+      "scans/xml/_top_20_udp_nmap.xml": udp,
+      "scans/tcp53/tcp-evidence.txt": "TCP_ONLY WordPress",
+      "scans/udp53/udp-evidence.txt": "UDP_ONLY Drupal",
+      "scans/_manual_commands.txt": makeManualCommands([
+        { service: "domain", proto: "tcp", port: 53, tools: [{ name: "tcp-command", cmd: "dig +tcp @10.10.10.5 example.test" }] },
+        { service: "domain", proto: "udp", port: 53, tools: [{ name: "udp-command", cmd: "dig @10.10.10.5 example.test" }] },
+      ]),
+      "other/scans/xml/_full_tcp_nmap.xml": tcp.replaceAll("10.10.10.5", "10.10.10.6"),
+    }), "transports.zip");
+    const db = createTestDb();
+    const { id } = createFromScan(db, result.scan, "transports.zip", result);
+    const engagement = getById(db, id)!;
+    const primary = engagement.hosts.find((h) => h.is_primary)!;
+    for (const [protocol, marker, tech] of [["tcp", "TCP_ONLY WordPress", "wordpress"], ["udp", "UDP_ONLY Drupal", "drupal"]]) {
+      const port = engagement.ports.find((p) => p.host_id === primary.id && p.protocol === protocol)!;
+      expect(port.scripts.filter((s) => s.source === "autorecon").map((s) => s.output)).toEqual([marker]);
+      expect(port.commands.map((c) => c.label)).toEqual([`${protocol}-command`]);
+      expect(listForPort(db, port.id, "autorecon").map((f) => f.value)).toEqual([tech]);
+    }
+    const secondary = engagement.ports.find((p) => p.host_id !== primary.id)!;
+    expect(secondary.scripts.filter((s) => s.source === "autorecon")).toEqual([]);
+    expect(secondary.commands).toEqual([]);
+  });
+
+  it("drops commands for an absent transport even when the port number exists", async () => {
+    const result = await importAutoRecon(await makeZipBuffer({
+      "scans/xml/_full_tcp_nmap.xml": makeNmapXml([{ port: 53, proto: "tcp", service: "domain" }]),
+      "scans/_manual_commands.txt": makeManualCommands([
+        { service: "domain", proto: "udp", port: 53, tools: [{ name: "udp-only", cmd: "dig @10.10.10.5 example.test" }] },
+      ]),
+    }), "missing-udp.zip");
+    expect(result.arCommands.size).toBe(0);
+    expect(result.scan.warnings.some((w) => w.includes("port 53/udp dropped"))).toBe(true);
   });
 });

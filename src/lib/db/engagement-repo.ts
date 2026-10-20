@@ -79,14 +79,13 @@ function generateName(scan: ParsedScan): string {
  * Phase 5 extension: when `arData` is provided, per-port AutoRecon service
  * file outputs are inserted into `port_scripts` with `source='autorecon'`,
  * and parsed manual commands are inserted into `port_commands`. Both maps
- * are keyed by PORT NUMBER (not port_id) because at call time the caller
- * only knows the port number from the parsed data; the transaction looks
- * up AR data by port number after inserting each port row.
+ * are keyed by protocol:port (not port_id), using the parsed transport and
+ * port number before database IDs exist.
  *
  * @param db       - Drizzle database instance (injection for testability)
  * @param scan     - Parsed nmap output (from parseAny or parseNmapXml)
  * @param rawInput - Original paste/upload string before parsing (PERSIST-04)
- * @param arData   - Optional AutoRecon-specific data keyed by port number
+ * @param arData   - Optional AutoRecon-specific data keyed by protocol:port
  * @returns Created engagement id and name
  */
 export function createFromScan(
@@ -94,8 +93,8 @@ export function createFromScan(
   scan: ParsedScan,
   rawInput: string,
   arData?: {
-    arFiles: Map<number, { filename: string; content: string; encoding?: "utf8" | "base64" }[]>;
-    arCommands: Map<number, { label: string; template: string }[]>;
+    arFiles: Map<string, { filename: string; content: string; encoding?: "utf8" | "base64" }[]>;
+    arCommands: Map<string, { label: string; template: string }[]>;
     arArtifacts?: Array<{
       kind:
         | "loot"
@@ -156,8 +155,8 @@ export function createFromScan(
     // P1-F PR 2: insert one row per ParsedHost. The first host is marked
     // primary and mirrors the legacy engagements.target_ip/target_hostname/
     // os_* columns. AR data (per-port files, manual commands, screenshots)
-    // is keyed by port number only and is applied to the *primary* host's
-    // ports — multi-host AutoRecon zips aren't a supported import shape yet.
+    // is keyed by protocol:port and is applied to the *primary* host's
+    // ports; secondary hosts currently import nmap ports/scripts only.
     const portIdByKey = new Map<string, number>();
 
     for (let hostIdx = 0; hostIdx < scan.hosts.length; hostIdx++) {
@@ -231,7 +230,7 @@ export function createFromScan(
         // Phase 5 D-12: AutoRecon per-port service files. Only applied to
         // the primary host — AR import is single-host today.
         if (isPrimary && arData?.arFiles) {
-          const files = arData.arFiles.get(p.port);
+          const files = arData.arFiles.get(`${p.protocol}:${p.port}`);
           if (files) {
             for (const f of files) {
               tx
@@ -261,7 +260,7 @@ export function createFromScan(
 
         // Phase 5 CD-01: AutoRecon manual commands (primary host only).
         if (isPrimary && arData?.arCommands) {
-          const cmds = arData.arCommands.get(p.port);
+          const cmds = arData.arCommands.get(`${p.protocol}:${p.port}`);
           if (cmds) {
             for (const cmd of cmds) {
               tx
