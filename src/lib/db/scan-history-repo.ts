@@ -17,12 +17,12 @@ import "server-only";
  *       * new host surfaced           → insert host (is_primary = false), then ports
  *
  * Findings, evidence, checks, notes, and AR artifacts are NOT touched here
- * — those are operator-curated content; only the scan-derived port surface
- * area changes. PR 2 will surface a diff view; PR 1 just persists the
+ * — those are operator-curated content; only scan-derived host scripts and
+ * the port surface area change. PR 2 will surface a diff view; PR 1 persists the
  * deltas so the schema is honest about what has happened.
  */
 
-import { and, eq, desc, isNull } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import {
   scan_history,
@@ -163,6 +163,36 @@ export function rescanEngagement(
           })
           .where(eq(hostsTable.id, hostId))
           .run();
+      }
+
+      // Refresh only the host-script ids actually observed in this scan.
+      // Missing results may simply mean a partial scan did not run that NSE
+      // script; keep them, other hosts, and AutoRecon output untouched.
+      if (ph.hostScripts.length > 0) {
+        tx.delete(port_scripts)
+          .where(
+            and(
+              eq(port_scripts.engagement_id, engagementId),
+              eq(port_scripts.host_id, hostId),
+              eq(port_scripts.is_host_script, true),
+              eq(port_scripts.source, "nmap"),
+              inArray(port_scripts.script_id, ph.hostScripts.map((s) => s.id)),
+            ),
+          )
+          .run();
+        for (const s of ph.hostScripts) {
+          tx.insert(port_scripts)
+            .values({
+              engagement_id: engagementId,
+              host_id: hostId,
+              port_id: null,
+              script_id: s.id,
+              output: s.output,
+              is_host_script: true,
+              source: "nmap",
+            })
+            .run();
+        }
       }
 
       for (const p of ph.ports) {
