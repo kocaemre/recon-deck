@@ -29,6 +29,7 @@ import {
   findings as findingsTable,
   hosts,
   scan_history,
+  port_fingerprints,
 } from "./schema";
 import type { ParsedScan } from "../parser/types";
 import type { FullEngagement, EngagementSummary, PortWithDetails } from "./types";
@@ -970,7 +971,7 @@ export function listDeletedSummaries(db: Db): EngagementSummary[] {
  * is simpler and safer than a streamed approach), then re-inserted with
  * fresh primary keys via the standard `INSERT ... RETURNING id` pattern.
  *
- * Foreign keys are remapped through six per-table id maps:
+ * Foreign keys are remapped through per-table id maps:
  *   - scanIdMap     (scan_history.id → new scan_history.id)
  *   - hostIdMap     (hosts.id → new hosts.id)
  *   - portIdMap     (ports.id → new ports.id)
@@ -1013,6 +1014,8 @@ export function cloneEngagement(
         os_accuracy: eng.os_accuracy,
         raw_input: eng.raw_input,
         warnings_json: eng.warnings_json,
+        tags: eng.tags,
+        writeup: eng.writeup,
         created_at: now,
         updated_at: now,
       })
@@ -1088,6 +1091,7 @@ export function cloneEngagement(
           version: p.version,
           tunnel: p.tunnel,
           extrainfo: p.extrainfo,
+          starred: p.starred,
           first_seen_scan_id:
             p.first_seen_scan_id != null
               ? scanIdMap.get(p.first_seen_scan_id) ?? null
@@ -1104,6 +1108,27 @@ export function cloneEngagement(
         .returning({ id: ports.id })
         .get();
       portIdMap.set(p.id, inserted.id);
+    }
+
+    // Preserve persisted signals from both nmap and AutoRecon. Re-extracting
+    // from raw_input would lose AutoRecon signals and later rescan results.
+    const fingerprintRows = tx
+      .select({
+        port_id: port_fingerprints.port_id,
+        source: port_fingerprints.source,
+        type: port_fingerprints.type,
+        value: port_fingerprints.value,
+      })
+      .from(port_fingerprints)
+      .innerJoin(ports, eq(ports.id, port_fingerprints.port_id))
+      .where(eq(ports.engagement_id, sourceId))
+      .all();
+    for (const f of fingerprintRows) {
+      const newPortId = portIdMap.get(f.port_id);
+      if (newPortId == null) continue;
+      tx.insert(port_fingerprints)
+        .values({ ...f, port_id: newPortId })
+        .run();
     }
 
     // 5. port_scripts — engagement-level rows (port_id NULL,
@@ -1215,6 +1240,18 @@ export function cloneEngagement(
         .returning({ id: port_evidence.id })
         .get();
       evidenceIdMap.set(e.id, inserted.id);
+    }
+
+    // Remap annotation parents after all evidence ids are known, including
+    // parents that appear later in the source rows. Never retain source ids.
+    for (const e of evidenceRows) {
+      if (e.parent_evidence_id == null) continue;
+      tx.update(port_evidence)
+        .set({
+          parent_evidence_id: evidenceIdMap.get(e.parent_evidence_id) ?? null,
+        })
+        .where(eq(port_evidence.id, evidenceIdMap.get(e.id)!))
+        .run();
     }
 
     // 10. findings — remap evidence_refs (JSON array of evidence ids).
