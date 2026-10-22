@@ -169,6 +169,13 @@
       "when": 1781000000000,
       "tag": "0023_add-ai-usage",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1781100000000,
+      "tag": "0024_fix-search-index-lifecycle",
+      "breakpoints": true
     }
   ]
 }
