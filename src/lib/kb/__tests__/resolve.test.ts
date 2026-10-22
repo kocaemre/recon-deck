@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyConditionals,
   evaluateWhen,
+  versionExpressionMatches,
   type ResolveContext,
 } from "../resolve.js";
 import type { KbEntry, WhenExpr } from "../schema.js";
@@ -31,6 +32,28 @@ function makeEntry(over: Partial<KbEntry> = {}): KbEntry {
     ...over,
   } as KbEntry;
 }
+
+describe("versionExpressionMatches", () => {
+  it.each(["< 7.7", "<= 7.7", "> 0", ">= 0", ">= 0 < 7.7", "== 0"])(
+    "requires a numeric observed version for %s",
+    (expression) => {
+      for (const observed of ["", " \t", "unknown", "version unavailable"]) {
+        expect(versionExpressionMatches(expression, observed)).toBe(false);
+      }
+    },
+  );
+
+  it("still compares an observed numeric zero", () => {
+    expect(versionExpressionMatches("== 0", "0")).toBe(true);
+    expect(versionExpressionMatches("<= 0", "0.0")).toBe(true);
+  });
+
+  it("preserves bare string matching without numeric evidence", () => {
+    expect(versionExpressionMatches("UNKNOWN", "unknown-build")).toBe(true);
+    expect(versionExpressionMatches("unknown", "unavailable")).toBe(false);
+    expect(versionExpressionMatches("", "")).toBe(true);
+  });
+});
 
 describe("evaluateWhen (v2.4.0 P4 #29)", () => {
   describe("port_field_equals", () => {

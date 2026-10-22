@@ -180,7 +180,10 @@ export function versionExpressionMatches(expr: string, observed: string): boolea
   // dotted-numeric run so that leading word doesn't collapse the major version
   // to 0 (which made every SMB version-gated conditional silently miss). The
   // exact/substring escape-hatch below still matches the raw observed string.
-  const observedNumeric = observed.match(/\d+(?:\.\d+)*/)?.[0] ?? observed;
+  const observedNumeric = observed.match(/\d+(?:\.\d+)*/)?.[0];
+  // Missing or opaque versions are not version zero: no numeric evidence
+  // means a comparison cannot establish that a version-gated check applies.
+  if (observedNumeric === undefined) return false;
   for (const { op, ver } of ops) {
     const cmp = compareVersions(observedNumeric, ver);
     switch (op) {

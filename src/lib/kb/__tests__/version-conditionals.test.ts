@@ -4,6 +4,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { KbEntrySchema, type KbEntry } from "../schema.js";
 import { applyConditionals, type ResolveContext } from "../resolve.js";
+import { parseNmapXml } from "../../parser/nmap-xml.js";
 
 /**
  * Version-gated KB conditionals (beta.7): nmap_version_matches overlays on
@@ -91,6 +92,28 @@ describe("version conditionals — 445 smb", () => {
 
 describe("version conditionals — 22 ssh (pN suffix handling)", () => {
   const entry = loadEntry("22-ssh.yaml");
+
+  it("an imported OpenSSH service without a version keeps version-gated checks inactive", () => {
+    const scan = parseNmapXml(`<?xml version="1.0"?>
+      <nmaprun><host>
+        <status state="up"/>
+        <address addr="192.0.2.10" addrtype="ipv4"/>
+        <ports><port protocol="tcp" portid="22">
+          <state state="open"/>
+          <service name="ssh" product="OpenSSH"/>
+        </port></ports>
+      </host></nmaprun>`);
+    const port = scan.ports[0];
+    expect(port.product).toBe("OpenSSH");
+    expect(port.version).toBeUndefined();
+
+    const r = applyConditionals(
+      entry,
+      ctx(port.product ?? null, port.version ?? null, port.service),
+    );
+    expect(r.active).toEqual([]);
+    expect(r.checks.map((check) => check.key)).toEqual(entry.checks.map((check) => check.key));
+  });
 
   it("OpenSSH 7.6p1 → username enum (< 7.7)", () => {
     const r = applyConditionals(entry, ctx("OpenSSH", "7.6p1", "ssh"));
