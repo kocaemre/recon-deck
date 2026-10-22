@@ -247,7 +247,7 @@ export default async function EngagementPage({
   // 0007). `activeHost` is set above and falls through to the primary host
   // when the URL doesn't pin a specific one.
   const targetIp = activeHost?.ip ?? engagement.hosts[0].ip;
-  const targetHostname = activeHost?.hostname ?? engagement.hosts[0].hostname;
+  const targetHostname = activeHost ? activeHost.hostname : engagement.hosts[0].hostname;
 
   // v2.4.0 P4 (#29): bulk-load fingerprints for every port up front so
   // the resolver doesn't N+1 against port_fingerprints inside the

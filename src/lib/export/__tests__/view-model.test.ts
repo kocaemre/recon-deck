@@ -274,7 +274,12 @@ function buildKb(): KnowledgeBase {
       "443-https": kbEntry({
         port: 443,
         service: "https",
-        commands: [],
+        commands: [
+          {
+            label: "TLS certificate",
+            template: "openssl s_client -connect {IP}:{PORT} -servername {HOST}",
+          },
+        ],
         checks: [{ key: "https-cert", label: "Inspect TLS cert" }],
         risk: "low",
       }),
@@ -389,6 +394,47 @@ describe("loadEngagementForExport (Plan 06-01 Task 2)", () => {
       "nc 10.10.10.5 22  # IP=10.10.10.5",
     );
   });
+
+  it.each([
+    ["unnamed secondary host", null, 2, "10.10.10.20", "10.10.10.20"],
+    ["named secondary host", "secondary.htb", 2, "10.10.10.20", "secondary.htb"],
+    ["legacy port without a host", null, null, "10.10.10.5", "box.htb"],
+    ["port with a missing host", null, 999, "10.10.10.5", "box.htb"],
+  ] as const)(
+    "interpolates KB and AutoRecon commands for %s",
+    (_label, hostname, hostId, expectedIp, expectedHost) => {
+      const engagement = buildEngagement();
+      engagement.hosts.push({
+        ...engagement.hosts[0],
+        id: 2,
+        ip: "10.10.10.20",
+        hostname,
+        is_primary: false,
+      });
+      const https = engagement.ports.find((p) => p.port === 443)!;
+      https.host_id = hostId;
+      https.commands = [
+        {
+          id: 502,
+          engagement_id: 1,
+          port_id: https.id,
+          source: "autorecon",
+          label: "headers",
+          template: "curl -I https://{HOST}:{PORT}/",
+        },
+      ];
+
+      const vm = loadEngagementForExport(engagement, buildKb());
+      const port443 = vm.ports.find((p) => p.port.port === 443)!;
+
+      expect(port443.kbCommands[0].command).toBe(
+        `openssl s_client -connect ${expectedIp}:443 -servername ${expectedHost}`,
+      );
+      expect(port443.arCommands[0].command).toBe(
+        `curl -I https://${expectedHost}:443/`,
+      );
+    },
+  );
 
   it("Test 4: coverage = Math.round(100 * done / total); 0 when totalChecks === 0", () => {
     const vm = loadEngagementForExport(buildEngagement(), buildKb());

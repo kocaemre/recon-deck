@@ -293,7 +293,7 @@ export function loadEngagementForExport(
     port: (typeof sortedPorts)[number],
   ): string | null => {
     const h = port.host_id !== null ? hostById.get(port.host_id) : undefined;
-    return h?.hostname ?? primaryHost.hostname;
+    return h ? h.hostname : primaryHost.hostname;
   };
 
   const portVms: PortViewModel[] = sortedPorts.map((p) => {
