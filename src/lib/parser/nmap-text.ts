@@ -78,6 +78,11 @@ function parseHostLine(
 const PORT_LINE_RE =
   /^(\d+)\/(tcp|udp|sctp|ip)\s+(open(?:\|filtered)?|filtered|closed(?:\|filtered)?|unfiltered)\s+(\S+)(?:\s+(.+?))?\s*$/;
 
+// With --reason, Nmap inserts a reason token, optional "from <IP>", and
+// optional "ttl <number>" before VERSION. Only use this with a REASON header.
+const REASON_LINE_RE =
+  /^(\S+)(?:\s+from\s+[0-9a-fA-F:.]+)?(?:\s+ttl\s+(\d+))?(?:\s+(.+))?$/;
+
 const NSE_CONT_RE = /^\|(\s+)(.+)$/;
 const NSE_TERM_RE = /^\|_(\s*)(.+)$/;
 const HOST_SCRIPT_HEADER_RE = /^Host script results:\s*$/;
@@ -200,6 +205,8 @@ export function parseNmapText(input: string): ParsedScan {
   // a flush — it belongs to the parent's body.
   let nseBufferIndent = 0;
   let tracerouteCollecting = false;
+  let tableHasReason = false;
+  let tableHasVersion = false;
 
   const flushNseBufferTo = (dest: ScriptOutput[]) => {
     if (nseBuffer.length === 0) return;
@@ -242,6 +249,8 @@ export function parseNmapText(input: string): ParsedScan {
       builder = parsed ? newBuilder(parsed) : undefined;
       currentPort = undefined;
       tracerouteCollecting = false;
+      tableHasReason = false;
+      tableHasVersion = false;
       phase = "preamble";
       continue;
     }
@@ -325,7 +334,11 @@ export function parseNmapText(input: string): ParsedScan {
       continue;
     }
 
-    if (/^PORT\s+STATE\s+SERVICE(?:\s+VERSION)?\s*$/.test(line)) {
+    const portHeader =
+      /^PORT\s+STATE\s+SERVICE(?:\s+(REASON))?(?:\s+(VERSION))?\s*$/.exec(line);
+    if (portHeader) {
+      tableHasReason = portHeader[1] !== undefined;
+      tableHasVersion = portHeader[2] !== undefined;
       phase = "ports";
       continue;
     }
@@ -386,7 +399,17 @@ export function parseNmapText(input: string): ParsedScan {
         serviceField && serviceField !== "?"
           ? serviceField.toLowerCase().trim()
           : undefined;
-      const { product, version, extrainfo } = splitVersionBlob(versionBlob);
+      let banner: string | undefined = versionBlob;
+      let reason: string | undefined;
+      let reasonTtl: number | undefined;
+      if (tableHasReason) {
+        const reasonMatch = REASON_LINE_RE.exec(versionBlob ?? "");
+        reason = reasonMatch?.[1];
+        const ttl = Number(reasonMatch?.[2]);
+        if (Number.isFinite(ttl)) reasonTtl = ttl;
+        banner = tableHasVersion ? reasonMatch?.[3] : undefined;
+      }
+      const { product, version, extrainfo } = splitVersionBlob(banner);
 
       const newPort: ParsedPort = {
         port: portNum,
@@ -399,6 +422,8 @@ export function parseNmapText(input: string): ParsedScan {
         scripts: [],
       };
       if (tunnel) newPort.tunnel = tunnel;
+      if (reason) newPort.reason = reason;
+      if (reasonTtl !== undefined) newPort.reasonTtl = reasonTtl;
       builder.ports.push(newPort);
       currentPort = newPort;
       phase = "ports";

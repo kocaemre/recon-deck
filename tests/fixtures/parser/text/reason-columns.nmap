@@ -1,0 +1,31 @@
+# Synthetic normal-output fixture covering Nmap's optional REASON column.
+Nmap scan report for ssh.example (192.0.2.10)
+Host is up, received echo-reply ttl 64 (0.001s latency).
+PORT     STATE         SERVICE  REASON                                         VERSION
+22/tcp   open          ssh      syn-ack ttl 64                                  OpenSSH 7.6p1 Ubuntu 4ubuntu0.3
+| ssh-hostkey:
+|_  256 00:11:22:33:44:55:66:77 (ED25519)
+53/udp   open          domain   udp-response from 192.0.2.53 ttl 55             ISC BIND 9.18 (Debian)
+80/tcp   filtered      http     admin-prohibited from 2001:db8::1 ttl 63
+443/tcp  open          ssl/http syn-ack                                         Apache httpd 2.4.52
+161/udp  open|filtered snmp     no-response
+
+Host script results:
+|_clock-skew: 0s
+
+Nmap scan report for 192.0.2.11
+Host is up.
+22/tcp open ssh OpenSSH 7.7p1
+
+Nmap scan report for 192.0.2.12
+Host is up.
+PORT   STATE         SERVICE REASON
+22/tcp open          ssh     syn-ack ttl 64
+53/udp open|filtered domain  no-response
+
+Nmap scan report for 192.0.2.13
+Host is up.
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 9.8p1
+
+# Nmap done: 4 IP addresses (4 hosts up) scanned.
